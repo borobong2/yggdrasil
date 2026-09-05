@@ -1,0 +1,810 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Paperclip의 역할, 대표 사용 방식, Yggdrasil 적용 방향을 정리한 리서치 문서">
+  <title>Paperclip 사용 방식과 Yggdrasil 적용 방향</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f5f4ef;
+      --surface: #ffffff;
+      --surface-muted: #eeece5;
+      --text: #1b1d1f;
+      --muted: #666963;
+      --line: #d9d6cc;
+      --accent: #365f4b;
+      --accent-soft: #dce9df;
+      --accent-text: #173b2b;
+      --warning: #835b1b;
+      --warning-soft: #f5e8cc;
+      --shadow: 0 12px 34px rgb(34 37 35 / 8%);
+      --radius: 18px;
+      --content: 1120px;
+    }
+
+    * { box-sizing: border-box; }
+
+    html {
+      scroll-behavior: smooth;
+      scroll-padding-top: 84px;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, Pretendard, "Noto Sans KR", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 16px;
+      line-height: 1.75;
+      word-break: keep-all;
+    }
+
+    a { color: inherit; }
+
+    .skip-link {
+      position: fixed;
+      top: 10px;
+      left: 10px;
+      z-index: 100;
+      padding: 10px 14px;
+      border-radius: 10px;
+      background: var(--text);
+      color: var(--surface);
+      transform: translateY(-150%);
+    }
+
+    .skip-link:focus { transform: translateY(0); }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      border-bottom: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
+      background: color-mix(in srgb, var(--bg) 88%, transparent);
+      backdrop-filter: blur(16px);
+    }
+
+    .topbar-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: min(calc(100% - 32px), var(--content));
+      min-height: 64px;
+      margin: 0 auto;
+      gap: 24px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      text-decoration: none;
+    }
+
+    .brand-mark {
+      display: grid;
+      width: 30px;
+      height: 30px;
+      place-items: center;
+      border-radius: 10px;
+      background: var(--accent);
+      color: white;
+      font-size: 14px;
+    }
+
+    nav {
+      display: flex;
+      gap: 18px;
+      overflow-x: auto;
+      font-size: 14px;
+      scrollbar-width: none;
+    }
+
+    nav a {
+      color: var(--muted);
+      text-decoration: none;
+      white-space: nowrap;
+    }
+
+    nav a:hover,
+    nav a:focus-visible { color: var(--text); }
+
+    main {
+      width: min(calc(100% - 32px), var(--content));
+      margin: 0 auto;
+      padding: 72px 0 100px;
+    }
+
+    .hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1.25fr) minmax(280px, 0.75fr);
+      gap: 32px;
+      align-items: end;
+      margin-bottom: 72px;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin: 0 0 16px;
+      color: var(--accent);
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    h1, h2, h3 {
+      margin-top: 0;
+      line-height: 1.25;
+      letter-spacing: -0.035em;
+    }
+
+    h1 {
+      max-width: 780px;
+      margin-bottom: 22px;
+      font-size: clamp(40px, 7vw, 76px);
+    }
+
+    h2 {
+      margin-bottom: 14px;
+      font-size: clamp(28px, 4vw, 42px);
+    }
+
+    h3 {
+      margin-bottom: 10px;
+      font-size: 21px;
+    }
+
+    p { margin: 0 0 16px; }
+
+    .lede {
+      max-width: 720px;
+      margin-bottom: 0;
+      color: var(--muted);
+      font-size: clamp(18px, 2vw, 22px);
+    }
+
+    .summary-card,
+    .card,
+    .callout,
+    .flow,
+    .table-wrap {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+      box-shadow: var(--shadow);
+    }
+
+    .summary-card { padding: 24px; }
+
+    .summary-card strong {
+      display: block;
+      margin-bottom: 10px;
+      color: var(--accent);
+      font-size: 14px;
+    }
+
+    .summary-card p {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 700;
+    }
+
+    section { margin-top: 88px; }
+
+    .section-head {
+      display: grid;
+      grid-template-columns: 1fr minmax(260px, 0.45fr);
+      gap: 32px;
+      align-items: end;
+      margin-bottom: 28px;
+    }
+
+    .section-head p {
+      margin: 0;
+      color: var(--muted);
+    }
+
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 18px;
+    }
+
+    .card { padding: 26px; }
+
+    .card-number {
+      display: inline-grid;
+      width: 36px;
+      height: 36px;
+      margin-bottom: 28px;
+      place-items: center;
+      border-radius: 50%;
+      background: var(--accent-soft);
+      color: var(--accent-text);
+      font-weight: 800;
+    }
+
+    .card p,
+    .card li { color: var(--muted); }
+
+    .card ul {
+      margin: 16px 0 0;
+      padding-left: 20px;
+    }
+
+    .flow {
+      display: flex;
+      align-items: stretch;
+      gap: 8px;
+      padding: 18px;
+      overflow-x: auto;
+      box-shadow: none;
+    }
+
+    .flow-step {
+      display: grid;
+      min-width: 150px;
+      min-height: 92px;
+      flex: 1;
+      place-items: center;
+      padding: 16px;
+      border-radius: 13px;
+      background: var(--surface-muted);
+      text-align: center;
+      font-weight: 750;
+      line-height: 1.4;
+    }
+
+    .flow-arrow {
+      display: grid;
+      place-items: center;
+      color: var(--muted);
+      font-weight: 800;
+    }
+
+    .callout {
+      padding: 28px;
+      border-color: color-mix(in srgb, var(--accent) 30%, var(--line));
+      background: var(--accent-soft);
+      box-shadow: none;
+    }
+
+    .callout.warning {
+      border-color: color-mix(in srgb, var(--warning) 30%, var(--line));
+      background: var(--warning-soft);
+    }
+
+    .callout p:last-child { margin-bottom: 0; }
+
+    .table-wrap {
+      overflow-x: auto;
+      box-shadow: none;
+    }
+
+    table {
+      width: 100%;
+      min-width: 720px;
+      border-collapse: collapse;
+      text-align: left;
+    }
+
+    th,
+    td {
+      padding: 18px 20px;
+      border-bottom: 1px solid var(--line);
+      vertical-align: top;
+    }
+
+    th {
+      background: var(--surface-muted);
+      font-size: 13px;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+    }
+
+    tr:last-child td { border-bottom: 0; }
+
+    .split {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 18px;
+    }
+
+    .architecture {
+      display: grid;
+      gap: 12px;
+      padding: 22px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+    }
+
+    .layer {
+      padding: 22px;
+      border-radius: 14px;
+      background: var(--surface-muted);
+    }
+
+    .layer strong {
+      display: block;
+      margin-bottom: 4px;
+      font-size: 18px;
+    }
+
+    .layer span { color: var(--muted); }
+
+    .layer.execution {
+      background: var(--accent);
+      color: white;
+    }
+
+    .layer.execution span { color: rgb(255 255 255 / 76%); }
+
+    .checklist {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .checklist li {
+      position: relative;
+      padding: 18px 18px 18px 52px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--surface);
+    }
+
+    .checklist li::before {
+      content: "✓";
+      position: absolute;
+      top: 17px;
+      left: 18px;
+      display: grid;
+      width: 24px;
+      height: 24px;
+      place-items: center;
+      border-radius: 50%;
+      background: var(--accent-soft);
+      color: var(--accent-text);
+      font-size: 13px;
+      font-weight: 900;
+    }
+
+    .source-list {
+      margin: 0;
+      padding-left: 20px;
+    }
+
+    .source-list li { margin-bottom: 10px; }
+
+    .source-list a {
+      color: var(--accent);
+      text-underline-offset: 3px;
+    }
+
+    footer {
+      margin-top: 88px;
+      padding-top: 24px;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    code {
+      padding: 2px 6px;
+      border-radius: 6px;
+      background: var(--surface-muted);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.9em;
+    }
+
+    :focus-visible {
+      outline: 3px solid color-mix(in srgb, var(--accent) 45%, transparent);
+      outline-offset: 3px;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #111412;
+        --surface: #191d1a;
+        --surface-muted: #232824;
+        --text: #f2f4ef;
+        --muted: #aeb5ae;
+        --line: #343a35;
+        --accent: #81b395;
+        --accent-soft: #20382b;
+        --accent-text: #bfe7cb;
+        --warning: #ddae63;
+        --warning-soft: #3d301c;
+        --shadow: 0 12px 34px rgb(0 0 0 / 22%);
+      }
+    }
+
+    @media (max-width: 860px) {
+      .topbar-inner { align-items: flex-start; padding: 14px 0; }
+      .brand { padding-top: 2px; }
+      nav { max-width: 60%; }
+      main { padding-top: 48px; }
+      .hero,
+      .section-head,
+      .split { grid-template-columns: 1fr; }
+      .cards { grid-template-columns: 1fr; }
+      .hero { align-items: start; }
+      .summary-card { max-width: 640px; }
+    }
+
+    @media (max-width: 560px) {
+      body { font-size: 15px; }
+      .topbar-inner { display: block; }
+      nav { max-width: none; margin-top: 12px; padding-bottom: 2px; }
+      main { width: min(calc(100% - 24px), var(--content)); }
+      .hero { gap: 24px; margin-bottom: 56px; }
+      section { margin-top: 64px; }
+      .card,
+      .callout,
+      .summary-card { padding: 20px; }
+      .checklist { grid-template-columns: 1fr; }
+      .flow { display: grid; }
+      .flow-step { min-width: 0; min-height: auto; }
+      .flow-arrow { transform: rotate(90deg); }
+    }
+
+    @media print {
+      :root { color-scheme: light; }
+      body { background: white; color: #111; }
+      .topbar,
+      .skip-link { display: none; }
+      main { width: 100%; padding: 0; }
+      section { break-inside: avoid; margin-top: 44px; }
+      .summary-card,
+      .card,
+      .callout,
+      .flow,
+      .table-wrap { box-shadow: none; }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#content">본문으로 바로가기</a>
+
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="#top" aria-label="문서 처음으로 이동">
+        <span class="brand-mark" aria-hidden="true">Y</span>
+        Yggdrasil Research
+      </a>
+      <nav aria-label="문서 목차">
+        <a href="#definition">정의</a>
+        <a href="#usage">사용 방식</a>
+        <a href="#heartbeat">Heartbeat</a>
+        <a href="#data">데이터</a>
+        <a href="#fit">적합성</a>
+        <a href="#recommendation">추천</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="content">
+    <div class="hero" id="top">
+      <div>
+        <p class="eyebrow">Paperclip capability research · 2026.09</p>
+        <h1>AI 에이전트의 일을 운영하는 Control Plane</h1>
+        <p class="lede">Paperclip이 무엇을 맡고, 사람들이 어떤 흐름으로 사용하며, Yggdrasil에서는 어디까지 재사용하는 것이 좋은지 정리했다.</p>
+      </div>
+      <aside class="summary-card" aria-label="핵심 결론">
+        <strong>핵심 결론</strong>
+        <p>Paperclip은 Yggdrasil 전체가 아니라 Agent 실행과 운영을 담당하는 하부 엔진으로 보는 것이 적절하다.</p>
+      </aside>
+    </div>
+
+    <section id="definition">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">01 · Definition</p>
+          <h2>Paperclip은 무엇인가</h2>
+        </div>
+        <p>Codex나 Claude Code 자체가 아니라, 여러 AI 에이전트에게 일을 배정하고 상태·결과·비용·승인을 관리하는 운영 계층이다.</p>
+      </div>
+
+      <div class="flow" aria-label="Paperclip의 기본 구조">
+        <div class="flow-step">사람<br>Board Operator</div>
+        <div class="flow-arrow" aria-hidden="true">→</div>
+        <div class="flow-step">Paperclip<br>Control Plane</div>
+        <div class="flow-arrow" aria-hidden="true">→</div>
+        <div class="flow-step">Adapter<br>호출·관찰·취소</div>
+        <div class="flow-arrow" aria-hidden="true">→</div>
+        <div class="flow-step">Codex · Claude<br>실제 작업 수행</div>
+      </div>
+    </section>
+
+    <section id="usage">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">02 · Common patterns</p>
+          <h2>대표적인 세 가지 사용 방식</h2>
+        </div>
+        <p>공개된 사용자 통계가 아니라, 공식 문서와 번들 팀 템플릿에서 확인되는 대표 운영 패턴이다.</p>
+      </div>
+
+      <div class="cards">
+        <article class="card">
+          <span class="card-number">1</span>
+          <h3>직접 작업 배정</h3>
+          <p>사람이 Issue를 만들고 Codex에게 할당한다. Paperclip은 실행, 세션, 결과와 비용을 기록하고 사람은 결과를 검토한다.</p>
+          <ul>
+            <li>여러 AI 터미널을 한곳에서 관리</li>
+            <li>작업별 문맥과 결과 유지</li>
+            <li>현재 우리에게 가장 적합한 시작점</li>
+          </ul>
+        </article>
+
+        <article class="card">
+          <span class="card-number">2</span>
+          <h3>CEO가 자동 위임</h3>
+          <p>사람이 목표만 정하면 CEO 에이전트가 전략을 제안하고, 승인 후 CTO·개발자·디자이너에게 작업을 분해해 배정한다.</p>
+          <ul>
+            <li>목표에서 작업까지 계층적으로 연결</li>
+            <li>전략과 채용에 인간 승인 적용</li>
+            <li>초기 개인 사용에는 다소 무거움</li>
+          </ul>
+        </article>
+
+        <article class="card">
+          <span class="card-number">3</span>
+          <h3>반복 업무 자동화</h3>
+          <p>Routine이 예약 시간마다 Issue를 생성하고 담당 에이전트를 깨운다. 실행 결과는 일반 작업과 동일하게 추적된다.</p>
+          <ul>
+            <li>주간 진행 상황 요약</li>
+            <li>GitHub Issue·품질 점검</li>
+            <li>리서치·콘텐츠 계획 반복</li>
+          </ul>
+        </article>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">03 · Strongest use cases</p>
+          <h2>현재 가장 강한 활용 영역</h2>
+        </div>
+        <p>공식 저장소에 포함된 팀 카탈로그를 보면 소프트웨어 개발이 가장 구체적으로 설계되어 있다.</p>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">활용 영역</th>
+              <th scope="col">대표 팀</th>
+              <th scope="col">주요 결과물</th>
+              <th scope="col">적합도</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>소프트웨어 개발</strong></td>
+              <td>CTO + Senior Coder + QA</td>
+              <td>코드, PR, 테스트, 검증 보고</td>
+              <td>매우 높음</td>
+            </tr>
+            <tr>
+              <td><strong>제품 디자인</strong></td>
+              <td>Principal Product Designer</td>
+              <td>와이어프레임, UX 검토</td>
+              <td>높음</td>
+            </tr>
+            <tr>
+              <td><strong>콘텐츠 운영</strong></td>
+              <td>Content Lead</td>
+              <td>콘텐츠 캘린더, 초안</td>
+              <td>보통</td>
+            </tr>
+            <tr>
+              <td><strong>반복 운영</strong></td>
+              <td>담당 Agent + Routine</td>
+              <td>정기 보고서, 점검 결과</td>
+              <td>높음</td>
+            </tr>
+            <tr>
+              <td><strong>다중 Agent 관리</strong></td>
+              <td>CEO + 전문 Agent</td>
+              <td>위임, 승인, 비용 통제</td>
+              <td>규모가 생기면 높음</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="heartbeat">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">04 · Runtime</p>
+          <h2>Heartbeat가 작업을 움직인다</h2>
+        </div>
+        <p>에이전트는 항상 실행되지 않는다. 할당, 예약, 호출, 댓글, 승인 처리 같은 사건이 생기면 짧은 실행 구간으로 깨어난다.</p>
+      </div>
+
+      <div class="flow" aria-label="Heartbeat 실행 흐름">
+        <div class="flow-step">역할과<br>지시사항 확인</div>
+        <div class="flow-arrow" aria-hidden="true">→</div>
+        <div class="flow-step">할당 작업<br>조회</div>
+        <div class="flow-arrow" aria-hidden="true">→</div>
+        <div class="flow-step">Issue<br>원자적 Checkout</div>
+        <div class="flow-arrow" aria-hidden="true">→</div>
+        <div class="flow-step">작업 실행과<br>결과 기록</div>
+        <div class="flow-arrow" aria-hidden="true">→</div>
+        <div class="flow-step">상태 변경 후<br>대기</div>
+      </div>
+
+      <div class="callout" style="margin-top: 18px">
+        <h3>Paperclip이 대신 해결하는 어려운 부분</h3>
+        <p>동일 작업의 중복 실행 방지, Codex·Claude 세션 재개, 실행 비용 귀속, 실패 복구, 승인 대기, 에이전트별 비밀값과 권한 관리를 한 흐름으로 묶는다.</p>
+      </div>
+    </section>
+
+    <section id="data">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">05 · Data</p>
+          <h2>쌓이는 것은 학습 데이터가 아니라 운영 기록</h2>
+        </div>
+        <p>오래 모아야 제품이 동작하는 데이터셋이 아니다. 첫날부터 쓰고, 기록이 늘수록 운영 판단의 근거가 생긴다.</p>
+      </div>
+
+      <ul class="checklist">
+        <li>회사, 목표, 프로젝트와 Issue</li>
+        <li>Agent 역할, 설정과 보고 체계</li>
+        <li>Run, Session과 실행 이벤트</li>
+        <li>댓글, 문서, 첨부와 결과물</li>
+        <li>모델·Agent·작업별 비용</li>
+        <li>승인, 거절, 실패와 재시도</li>
+      </ul>
+
+      <div class="split" style="margin-top: 18px">
+        <article class="card">
+          <h3>기록으로 알 수 있는 것</h3>
+          <p>어떤 작업을 AI가 잘 처리했는지, 어떤 지시에서 반복 실패했는지, 사람의 개입 지점과 작업당 비용이 어느 정도인지 파악할 수 있다.</p>
+        </article>
+        <article class="card">
+          <h3>기록이 해결하지 않는 것</h3>
+          <p>개인 메모의 의미 구조, 자유로운 문서 탐색, 장기 지식의 연결은 Paperclip 기록만 쌓는다고 자동으로 해결되지 않는다.</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="fit">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">06 · Product boundary</p>
+          <h2>Notion이나 Nexus를 그대로 대체하지는 않는다</h2>
+        </div>
+        <p>Paperclip은 task와 agent 실행 중심이다. 문서와 지식을 제품의 중심 객체로 다루는 경험은 상대적으로 얇다.</p>
+      </div>
+
+      <div class="split">
+        <article class="card">
+          <h3>Paperclip이 잘하는 것</h3>
+          <ul>
+            <li>Agent 등록과 역할 분리</li>
+            <li>작업 할당과 실행 상태 추적</li>
+            <li>Run·Session·Heartbeat 관리</li>
+            <li>비용·승인·감사 기록</li>
+            <li>Codex·Claude·외부 runtime 연결</li>
+          </ul>
+        </article>
+        <article class="card">
+          <h3>Yggdrasil이 보완할 것</h3>
+          <ul>
+            <li>문서 트리와 빠른 메모</li>
+            <li>개인 지식 검색과 연결</li>
+            <li>아이디어에서 의사결정까지의 흐름</li>
+            <li>제품 발견과 장기 맥락</li>
+            <li>사람 중심의 단순한 개인 UX</li>
+          </ul>
+        </article>
+      </div>
+    </section>
+
+    <section id="recommendation">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">07 · Yggdrasil direction</p>
+          <h2>추천 구조</h2>
+        </div>
+        <p>Paperclip을 전부 다시 만들거나 Yggdrasil 전체로 삼지 않고, 이미 잘 만든 실행 계층으로 활용한다.</p>
+      </div>
+
+      <div class="architecture" aria-label="Yggdrasil 권장 계층 구조">
+        <div class="layer">
+          <strong>Knowledge layer</strong>
+          <span>Notion 같은 문서 · 메모 · 검색 · 연결 · 의사결정</span>
+        </div>
+        <div class="layer">
+          <strong>Product layer</strong>
+          <span>Nexus·Linear 같은 Product · Goal · Issue · 진행 상황</span>
+        </div>
+        <div class="layer execution">
+          <strong>Execution layer · Paperclip</strong>
+          <span>Agent · Run · Session · Heartbeat · Approval · Cost · MCP</span>
+        </div>
+      </div>
+
+      <div class="callout warning" style="margin-top: 18px">
+        <h3>지금 만들지 않을 것</h3>
+        <p>Nexus 전체 복제, 자체 checkout·run·session 구현, 복잡한 CEO 조직도, 장기 확장을 위한 플러그인 시스템은 아직 필요하지 않다.</p>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">08 · First evaluation</p>
+          <h2>우리의 첫 사용 시나리오</h2>
+        </div>
+        <p>CEO·CTO·QA 조직부터 시작하지 않고, 사람과 한 명의 Builder 사이 작업 흐름을 먼저 검증한다.</p>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <tbody>
+            <tr>
+              <th scope="row">Company</th>
+              <td>Yggdrasil</td>
+            </tr>
+            <tr>
+              <th scope="row">Goal</th>
+              <td>개인용 AI-native workspace의 첫 버전을 정의한다</td>
+            </tr>
+            <tr>
+              <th scope="row">Agent</th>
+              <td>Builder · Codex adapter · Yggdrasil workspace</td>
+            </tr>
+            <tr>
+              <th scope="row">첫 작업</th>
+              <td>제품 정의, Notion 기능 분류, Paperclip 중복 영역 확인, 작은 기능 하나 구현</td>
+            </tr>
+            <tr>
+              <th scope="row">평가 기준</th>
+              <td>작업 생성부터 실행·검토·재개까지 자연스러운가, 직접 구현하지 않아도 될 영역이 무엇인가</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="sources">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">Sources</p>
+          <h2>공식 근거</h2>
+        </div>
+        <p>2026년 9월 2일 기준 로컬에 받은 Paperclip 저장소의 공식 문서와 팀 카탈로그를 사용했다.</p>
+      </div>
+
+      <ul class="source-list">
+        <li><a href="https://github.com/PaperclipAI/paperclip/blob/master/README.md">Paperclip README</a> · 제품 소개와 대표 사용 사례</li>
+        <li><a href="https://github.com/PaperclipAI/paperclip/blob/master/doc/PRODUCT.md">Product Definition</a> · 제품 범위와 non-goal</li>
+        <li><a href="https://github.com/PaperclipAI/paperclip/blob/master/docs/start/core-concepts.md">Core Concepts</a> · Company, Agent, Issue, Heartbeat</li>
+        <li><a href="https://github.com/PaperclipAI/paperclip/blob/master/docs/guides/board-operator/delegation.md">Delegation Guide</a> · CEO 중심 위임 흐름</li>
+        <li><a href="https://github.com/PaperclipAI/paperclip/tree/master/packages/teams-catalog/catalog">Teams Catalog</a> · 공식 번들 팀과 활용 영역</li>
+      </ul>
+    </section>
+
+    <footer>
+      <p><strong>Yggdrasil Research</strong> · Paperclip을 도입하기 전 사용 흐름과 제품 경계를 확인하기 위한 내부 문서.</p>
+    </footer>
+  </main>
+</body>
+</html>
