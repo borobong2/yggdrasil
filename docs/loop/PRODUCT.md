@@ -46,3 +46,7 @@ MVP 0.1 is complete only when the acceptance checks in the implementation plan p
 ## Delivery loop
 
 Each vertical loop has one user-visible outcome, automated checks, a manual acceptance check, and a small commit. Retry a failed check once after reading its direct cause; if it still fails, record the failure and next hypothesis in `STATE.md` and escalate with the command output. Do not hide failed verification behind a later loop.
+
+## Auto-continuation policy
+
+After independent checks pass, dispatch the next already-approved loop automatically. Stop only for external credentials or provisioning, deployment or cost, a second identical check failure, or a scope decision.

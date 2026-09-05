@@ -29,4 +29,14 @@ describe('owner auth boundary', () => {
     expect((await app.request('/owner')).status).toBe(401);
     expect((await app.request('/owner', { headers: { authorization: 'Bearer invalid' } })).status).toBe(401);
   });
+
+  it('rejects the development owner override in production', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('YGGDRASIL_DEV_OWNER_ID', '00000000-0000-4000-8000-000000000003');
+    const app = new Hono<AppEnv>();
+    app.use('*', ownerAuth);
+    app.get('/owner', (context) => context.json(context.get('user')));
+
+    expect((await app.request('/owner')).status).toBe(401);
+  });
 });

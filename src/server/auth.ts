@@ -3,17 +3,23 @@ import type { MiddlewareHandler } from 'hono';
 export type User = { id: string };
 export type AppEnv = { Variables: { user: User } };
 
-let testOwner: { token: string; user: User } | undefined;
+const testOwners = new Map<string, User>();
 
 export function installTestOwner(token: string, user: User): void {
-  if (process.env.NODE_ENV === 'test') testOwner = { token, user };
+  if (process.env.NODE_ENV === 'test') testOwners.set(token, user);
 }
 
 export async function requireUser(request: Request): Promise<User> {
   const authorization = request.headers.get('authorization');
   const token = authorization?.match(/^Bearer (.+)$/)?.[1];
-  if (!token) throw new UnauthorizedError();
-  if (testOwner?.token === token) return testOwner.user;
+  if (!token) {
+    const developmentOwner = process.env.YGGDRASIL_DEV_OWNER_ID;
+    if (process.env.NODE_ENV !== 'production' && developmentOwner && isUuid(developmentOwner)) {
+      return { id: developmentOwner };
+    }
+    throw new UnauthorizedError();
+  }
+  if (testOwners.has(token)) return testOwners.get(token)!;
 
   const url = process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_ANON_KEY;
@@ -40,3 +46,7 @@ export const ownerAuth: MiddlewareHandler<AppEnv> = async (context, next) => {
 };
 
 class UnauthorizedError extends Error {}
+
+function isUuid(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
