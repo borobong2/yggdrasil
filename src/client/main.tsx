@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
+import { CaptureSuggestions } from './CaptureSuggestions.js';
 import type { Capture } from '../contracts/items.js';
 
 function App() {
@@ -32,7 +33,7 @@ function App() {
       <textarea id="capture" value={text} onChange={(event) => setText(event.target.value)} required />
       <button>Capture</button>
     </form>
-    <ul>{captures.map((capture) => <li key={capture.id}>{capture.text}</li>)}</ul>
+    <ul>{captures.map((capture) => <li key={capture.id}>{capture.text}<CaptureSuggestions captureId={capture.id} /></li>)}</ul>
   </main>;
 }
 

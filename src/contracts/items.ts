@@ -6,3 +6,13 @@ export type Capture = {
   status: 'inbox';
   createdAt: string;
 };
+
+export type Suggestion = {
+  id: string;
+  captureId: string;
+  title: string;
+  type: CoreType;
+  targetId?: string;
+  status: 'pending';
+  model: { provider: string; name: string };
+};

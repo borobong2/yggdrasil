@@ -1,7 +1,7 @@
 # Execution state
 
-**Updated:** 2026-09-05
-**Phase:** Loop 2 capture inbox complete
+**Updated:** 2026-09-12
+**Phase:** Loop 3 reviewable AI suggestions complete
 
 ## Current objective
 
@@ -21,7 +21,7 @@ After independent checks pass, dispatch the next already-approved loop automatic
 
 ## Next loop
 
-Loop 3: add reviewable AI suggestions described in Task 3 of the plan.
+Loop 4: explicit suggestion acceptance/dismissal described in Task 4 of the plan. No acceptance or dismissal is implemented in Loop 3.
 
 ## Evidence ledger
 
@@ -42,3 +42,25 @@ Loop 3: add reviewable AI suggestions described in Task 3 of the plan.
 ## Retry and escalation
 
 For a failed loop check, retry once after fixing the identified cause. If the same check fails again, stop that loop, add the failing command, output, hypothesis, and owner decision needed to `INBOX.md`, then escalate. Resume only with a recorded decision or a materially different hypothesis.
+
+## Loop 3 evidence (2026-09-12)
+
+- Implemented owner-scoped `POST /api/captures/:id/suggestions` and `GET /api/captures/:id/suggestions`, a `suggestions` migration, and Inbox display of **Pending — unaccepted. No items have been changed.** Each successful generation stores exactly one pending record with title, one of the four core types, capture identity, and model metadata. There are no target candidates yet, so the structured schema requires `targetId: null`; the API omits the optional target ID. No destination is invented.
+- The production provider uses server-only `OPENAI_API_KEY`, optional `OPENAI_MODEL` (default `gpt-4o-mini`), native fetch, a 30-second timeout, and strict JSON Schema structured output. Output is validated again before persistence; refusal, incomplete output, malformed JSON, invalid proposals, and provider errors fail without storing a suggestion. Missing configuration returns HTTP 503 with `AI configuration required: set OPENAI_API_KEY on the server.` The Inbox displays that API error when generation is requested. Provider details and secrets are not returned in errors.
+- Official implementation reference: [OpenAI Structured Outputs](https://developers.openai.com/api/docs/guides/structured-outputs). No live model calls, credentials, or account were used for verification; production API access remains untested. The deterministic fake exists only under `test/` and is injected into the app factory; there is no environment switch enabling a fake in production.
+
+| Command / check | Exact evidence | Result |
+| --- | --- | --- |
+| `npm test -- test/suggestions.test.ts` before implementing the route | Initial generation assertion returned **404 instead of 201** (1 failed test). | Expected red. |
+| Full deterministic fake regression check with `registerSuggestionRoutes` temporarily disabled, then restored | `npm test -- test/suggestions.test.ts`: **15 failed**, including pending generation, list, ownership, invalid output, configuration, and all four core types. This expanded regression check was run after implementation; the initial pre-implementation test was the narrower route assertion above. | Expected red; restored before final checks. |
+| `docker compose up -d postgres` | `yggdrasil-postgres-1 Running` on local port 54330. | Passed. |
+| `DATABASE_URL=postgres://yggdrasil:yggdrasil@127.0.0.1:54330/yggdrasil npm run db:migrate` | `[✓] migrations applied successfully!`; applied `0002_suggestions`. | Passed first attempt. |
+| `npm test` | **5 test files, 29 tests passed**: 15 suggestion-route tests, 6 mocked OpenAI tests, 4 capture tests, 3 auth tests, 1 health test. No external network or real credentials required. | Passed. |
+| Mutation checks | Snapshot every existing public table except `suggestions` before and after generation; exact equality for `inbox`, `document`, `project`, and `issue` proposals. SQL verifies exactly one pending row for a generated capture. Public tables are `app_owners`, `captures`, `suggestions`; document/project/issue tables remain absent. | Passed. |
+| `npm run typecheck` | `tsc --noEmit`, exit 0. | Passed. |
+| `npm run build` | `tsc -b && vite build`, 28 modules; `dist/client/assets/index-D6WtIjsF.js` **196.49 kB**, gzip **61.69 kB**. | Passed. |
+| `DATABASE_URL=postgres://yggdrasil:yggdrasil@127.0.0.1:54330/yggdrasil npx tsx test/suggestions-flow.ts` | Real loopback HTTP server + Docker Postgres + test fake: built Inbox HTML 200; capture POST 201; suggestion POST 201; reloaded list exactly equals the generated pending record; SQL has one pending suggestion and unchanged capture. Capture `f7ade4a4-d456-4c25-a924-94fe4c01070c`; suggestion `352793ae-d410-46dd-b342-44feb90117de`. | Passed. |
+| HTTP-flow bundle check | Served client bundle includes the pending/unaccepted label and excludes `api.openai.com` and `process.env.OPENAI_API_KEY`. Client imports no server modules. | Passed. |
+| `git diff --check` | No whitespace errors. | Passed. |
+
+Verification used HTTP requests and built-asset inspection, not an interactive browser UI session. The UI disables generation until initial listing finishes, preventing the initial list response from overwriting a newly generated proposal. Route suites run sequentially because their database snapshots share local Postgres. No unexpected check failure or retry escalation occurred; deliberately failing red checks are recorded above. Acceptance, dismissal, core-item implementations, deployment, and all other later-loop features remain out of scope.
