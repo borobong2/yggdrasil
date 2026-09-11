@@ -1,7 +1,7 @@
 # Execution state
 
 **Updated:** 2026-09-12
-**Phase:** Loop 3 reviewable AI suggestions complete
+**Phase:** Paused after Loop 3; Loop 4 worker dispatch blocked
 
 ## Current objective
 
@@ -21,7 +21,7 @@ After independent checks pass, dispatch the next already-approved loop automatic
 
 ## Next loop
 
-Loop 4: explicit suggestion acceptance/dismissal described in Task 4 of the plan. No acceptance or dismissal is implemented in Loop 3.
+Recovery Loop 4: create document persistence and a plain document tree/editor before suggestion acceptance. The original plan ordered acceptance too early: no document, project, or issue destination table exists yet. The recovery worker is currently blocked before code execution because both Codex prompt injection attempts were rejected by Orca and Claude required an interactive local workspace-trust confirmation.
 
 ## Evidence ledger
 
@@ -64,3 +64,10 @@ For a failed loop check, retry once after fixing the identified cause. If the sa
 | `git diff --check` | No whitespace errors. | Passed. |
 
 Verification used HTTP requests and built-asset inspection, not an interactive browser UI session. The UI disables generation until initial listing finishes, preventing the initial list response from overwriting a newly generated proposal. Route suites run sequentially because their database snapshots share local Postgres. No unexpected check failure or retry escalation occurred; deliberately failing red checks are recorded above. Acceptance, dismissal, core-item implementations, deployment, and all other later-loop features remain out of scope.
+
+## Pause checkpoint (2026-09-12)
+
+- Durable repository state ends at commit `fdc1837` (`feat: add reviewable organization suggestions`). The worktree was clean before the worker dispatch attempts.
+- Loop 4 has made no repository changes. Its initial Codex task and one Codex retry both failed before prompt delivery with `agent_prompt_blocked`.
+- A Claude recovery worker also stopped before task execution at its interactive workspace-trust confirmation. The terminal was closed and the orchestration task is recorded as blocked.
+- Resume by resolving the local Claude/Codex worker prompt-delivery setup, then start a fresh document-loop task. Do not implement acceptance/dismissal until document and project/issue destination models exist.
