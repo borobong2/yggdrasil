@@ -1,11 +1,11 @@
 # Execution state
 
 **Updated:** 2026-09-12
-**Phase:** Paused after Loop 3; Loop 4 worker dispatch blocked
+**Phase:** YG-00 제품 계약 작업 진행 중
 
 ## Current objective
 
-Deliver Yggdrasil MVP 0.1 according to [PRODUCT.md](PRODUCT.md) and the [implementation plan](../superpowers/plans/2026-09-05-yggdrasil-mvp-0.1.md).
+AI-native 개발 워크스페이스 계약을 확정한 뒤, YG-01부터 기능 티켓 단위로 구현한다.
 
 ## Auto-continuation policy
 
@@ -19,9 +19,9 @@ After independent checks pass, dispatch the next already-approved loop automatic
 - Core item types: inbox, document, project, issue.
 - Stack: TypeScript, React/Vite, Hono, Supabase Postgres/Auth, Drizzle, one Cloud Run service.
 
-## Next loop
+## 현재 티켓
 
-Recovery Loop 4: create document persistence and a plain document tree/editor before suggestion acceptance. The original plan ordered acceptance too early: no document, project, or issue destination table exists yet. The recovery worker is currently blocked before code execution because both Codex prompt injection attempts were rejected by Orca and Claude required an interactive local workspace-trust confirmation.
+YG-00: [AI-native 제품 계약](../superpowers/specs/2026-09-15-ai-native-workspace-design.md)을 검토·확정한다. 구현 코드는 변경하지 않는다.
 
 ## Evidence ledger
 
