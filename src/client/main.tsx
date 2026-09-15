@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { CaptureSuggestions } from './CaptureSuggestions.js';
 import { LoginView } from './LoginView.js';
 import { PatSettings } from './PatSettings.js';
+import { DocumentsWorkspace } from './DocumentsWorkspace.js';
 import type { Capture } from '../contracts/items.js';
 
 function App() {
@@ -40,6 +41,7 @@ function App() {
     <h1>Inbox</h1>
     <LoginView token={token} onSave={saveToken} />
     <PatSettings token={token} />
+    <DocumentsWorkspace token={token} />
     <form onSubmit={capture}>
       <label htmlFor="capture">Capture a thought</label>
       <textarea id="capture" value={text} onChange={(event) => setText(event.target.value)} required />

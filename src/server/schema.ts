@@ -63,3 +63,19 @@ export const personalAccessTokens = pgTable('personal_access_tokens', {
   revokedAt: timestamp('revoked_at', { withTimezone: true }),
   lastUsedAt: timestamp('last_used_at', { withTimezone: true })
 });
+
+export const documents = pgTable('documents', {
+  id: uuid('id').primaryKey(),
+  ownerId: uuid('owner_id').notNull().references(() => appOwners.ownerId),
+  parentId: uuid('parent_id').references((): any => documents.id),
+  title: text('title').notNull(),
+  body: text('body').notNull().default(''),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull()
+});
+
+export const documentIssueLinks = pgTable('document_issue_links', {
+  documentId: uuid('document_id').notNull().references(() => documents.id, { onDelete: 'cascade' }),
+  issueId: uuid('issue_id').notNull().references(() => issues.id, { onDelete: 'cascade' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull()
+});
