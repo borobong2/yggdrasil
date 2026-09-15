@@ -4,6 +4,7 @@
   "entries": [
     { "idx": 0, "version": "7", "when": 1757030400000, "tag": "0000_app_owners", "breakpoints": true },
     { "idx": 1, "version": "7", "when": 1757030401000, "tag": "0001_captures", "breakpoints": true },
-    { "idx": 2, "version": "7", "when": 1757030402000, "tag": "0002_suggestions", "breakpoints": true }
+    { "idx": 2, "version": "7", "when": 1757030402000, "tag": "0002_suggestions", "breakpoints": true },
+    { "idx": 3, "version": "7", "when": 1789513200000, "tag": "0003_core_work", "breakpoints": true }
   ]
 }

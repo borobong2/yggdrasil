@@ -9,6 +9,10 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "db:migrate": "drizzle-kit migrate",
+    "db:up": "docker compose up -d postgres",
+    "db:down": "docker compose down",
+    "db:migrate:local": "DATABASE_URL=postgres://yggdrasil:yggdrasil@127.0.0.1:54330/yggdrasil npm run db:migrate",
+    "start:local": "PORT=3000 DATABASE_URL=postgres://yggdrasil:yggdrasil@127.0.0.1:54330/yggdrasil YGGDRASIL_DEV_OWNER_ID=00000000-0000-4000-8000-000000000001 npm start",
     "start": "tsx src/server/index.ts"
   },
   "dependencies": {

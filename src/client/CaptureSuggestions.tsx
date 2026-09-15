@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { Suggestion } from '../contracts/items.js';
 
-export function CaptureSuggestions({ captureId }: { captureId: string }) {
+export function CaptureSuggestions({ captureId, token }: { captureId: string; token: string }) {
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -10,7 +10,7 @@ export function CaptureSuggestions({ captureId }: { captureId: string }) {
 
   useEffect(() => {
     const controller = new AbortController();
-    fetch(path, { signal: controller.signal }).then(async (response) => {
+    fetch(path, { signal: controller.signal, headers: token ? { authorization: `Bearer ${token}` } : {} }).then(async (response) => {
       if (!response.ok) throw new Error('Could not load suggestions.');
       setSuggestions(await response.json());
     }).catch((error: Error) => {
@@ -19,13 +19,13 @@ export function CaptureSuggestions({ captureId }: { captureId: string }) {
       if (!controller.signal.aborted) setLoading(false);
     });
     return () => controller.abort();
-  }, [path]);
+  }, [path, token]);
 
   async function generate() {
     setBusy(true);
     setError('');
     try {
-      const response = await fetch(path, { method: 'POST' });
+      const response = await fetch(path, { method: 'POST', headers: token ? { authorization: `Bearer ${token}` } : {} });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || 'Could not generate a suggestion.');
       setSuggestions((previous) => [result, ...previous]);
