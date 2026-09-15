@@ -1,43 +1,42 @@
-# Yggdrasil product contract
+# Yggdrasil 제품 계약
 
-## Product
+## 제품
 
-Yggdrasil is an Inbox-first workspace for one person running their work. It keeps every capture, then lets the person deliberately organize it into documents, projects, and issues.
+Yggdrasil은 한 사람이 요구·결정·실행 근거를 연결하는 AI-native 개발 워크스페이스다. 모든 캡처를 보존하고, AI는 검토 가능한 계획만 제안하며 사람의 명시적 승인만 영속 작업을 만든다.
 
-## MVP 0.1 outcome
+## 티켓 실행 기준
 
-A signed-in person can capture an item, review an AI-proposed title/type/target, explicitly accept or dismiss that proposal, edit documents, manage projects and issues on a simple board, link related items, and find all of it through one search.
+티켓 하나는 하나의 사용자 결과를 끝까지 제공한다. 공통 계약·DB, BE route/service, FE 화면, API/DB/browser 검증을 같은 티켓에 포함한다. FE와 BE는 티켓 내부에서 병렬 구현할 수 있지만, 계약이 고정되기 전에는 시작하지 않는다.
 
-## Non-negotiable rules
+## 변경 불가 규칙
 
 1. Every capture is preserved; conversion or organization creates/updates structured records without deleting the source capture.
-2. AI may propose a title, core type, and target. It must not mutate persisted user data until the person explicitly accepts a specific proposal.
-3. Core types are `inbox`, `document`, `project`, and `issue`.
+2. AI/MCP는 캡처·검색·읽기·계획 제안만 할 수 있으며, 승인된 계획/작업을 직접 생성·수정·수락할 수 없다.
+3. AI 제안 수락은 한 DB transaction으로 적용하고, 재시도·부분 실패는 새 작업을 남기지 않는다.
 4. MVP scope is personal and single-user. Authorization must still isolate data by authenticated user.
 5. Product, copy, UI, and implementation are clean-room work. Do not copy source, wording, or design assets from external products.
 
-## In scope
+## 티켓 명세 형식
 
-- Inbox capture and retention
-- AI suggestion creation and explicit approval/dismissal
-- Document tree and editor
-- Project and issue CRUD
-- A simple issue board
-- Links between items
-- Unified search
+모든 티켓에는 아래를 명시한다.
 
-## Out of scope
+- 목표와 사용자 결과, 범위/비범위
+- 공통 계약: 타입, migration, 상태값, 권한 규칙
+- BE: service, route, 입력 검증, transaction 경계
+- FE: 화면 컴포넌트, 로딩/빈/오류/권한 상태
+- 검증: red test, API/DB assertion, browser acceptance 명령
+- 의존성, 병렬 가능 lane, 커밋 경계
+- AI/MCP/캡처/승인에 대한 trust rule
 
-- Teams, invitations, or shared workspaces
-- Sprints
-- Realtime notifications or presence
-- Monitoring dashboards
-- Direct third-party agent-runtime integration
-- Custom run, session, or checkout systems
+## 의도적 제외
 
-## Technical boundary
+- 팀, 초대, presence, 모니터링, Slack 연동
+- GitHub OAuth와 webhook 자동 동기화 (검증된 URL evidence만 우선)
+- SSE 실시간 알림 (활동 타임라인과 refetch로 대체)
 
-Use TypeScript, React with Vite, Hono, Supabase Postgres/Auth, Drizzle, and one Cloud Run service. Do not install dependencies or scaffold an application as part of this documentation contract.
+## 기술 경계
+
+TypeScript, React/Vite, Hono, Supabase Postgres/Auth, Drizzle, Cloud Run 단일 서비스. 새 의존성은 MCP SDK·인증·필수 기능처럼 표준 라이브러리로 대체할 수 없을 때만 티켓에 근거를 적는다.
 
 ## Completion evidence
 
