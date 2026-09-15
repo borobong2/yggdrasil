@@ -72,6 +72,22 @@ Verification used HTTP requests and built-asset inspection, not an interactive b
 - A Claude recovery worker also stopped before task execution at its interactive workspace-trust confirmation. The terminal was closed and the orchestration task is recorded as blocked.
 - Resume by resolving the local Claude/Codex worker prompt-delivery setup, then start a fresh document-loop task. Do not implement acceptance/dismissal until document and project/issue destination models exist.
 
+## Loop YG-02 evidence (2026-09-16)
+
+- Implemented owner-scoped plain-text documents with nullable self-parenting and typed document-to-Issue links. `documents.owner_id` has a DB FK to `app_owners`; document creation idempotently creates that owner row. Parent ownership and cycle checks run in the service; issue links require the same owner and are unique at the database boundary. YG-01 Goal/Epic/Issue contracts and migrations were not changed.
+- Added a minimal Documents workspace: nested tree, selected-document title/body editor, parent selector, Issue link picker, plus loading, empty, and error states. No rich-text editor, sharing, deletion policy, or generic polymorphic links were added.
+
+| Command / check | Exact evidence | Result |
+| --- | --- | --- |
+| Dedicated DB preparation | `yggdrasil_yg02` was created, then recreated after adding the owner FK, on the existing local PostgreSQL server. The shared `yggdrasil` DB and YG-01's `yggdrasil_yg01` DB were not migrated or tested. `DATABASE_URL=…/yggdrasil_yg02 npm run db:migrate` applied migrations only to YG-02's DB. | Passed. |
+| RED API test | `DATABASE_URL=…/yggdrasil_yg02 npm test -- test/documents.test.ts` before implementation: 3 failures, each expected `201` but received `404` for `POST /api/documents`; before the FK addition, the DB assertion expected one `documents → app_owners` FK but received zero. | Expected red. |
+| YG-02 migration | `DATABASE_URL=…/yggdrasil_yg02 npm run db:migrate` after adding `0004_documents` and recreating only this dedicated DB. Drizzle reported migrations applied successfully. | Passed. |
+| GREEN API test | `DATABASE_URL=…/yggdrasil_yg02 npm test -- test/documents.test.ts`: 4 tests passed for create/nest/edit/reload, cycle rejection, owner isolation, typed Issue links, and the owner FK. | Passed. |
+| Full verification | `DATABASE_URL=…/yggdrasil_yg02 npm test && npm run typecheck && npm run build && git diff --check`: 9 test files / 38 tests passed; typecheck, production build, and whitespace check passed. | Passed. |
+| Browser flow | Final local server with only `DATABASE_URL=…/yggdrasil_yg02` and `YGGDRASIL_DEV_OWNER_ID` at `http://127.0.0.1:3005`: loaded the persisted test document tree, created a document, and received the title/body editor, parent selector, and Issue picker. Earlier in the same dedicated-DB flow, a document was saved, nested under **Design**, reloaded, and linked to an Issue. | Passed. |
+
+The first full typecheck exposed only a client `HeadersInit` union annotation; it was corrected to `Record<string, string>` and all final checks above passed. The browser check uses the local development-owner override; real Supabase session verification remains deferred because no external credentials were supplied.
+
 ## Loop YG-01 evidence (2026-09-15)
 
 - Added owner-scoped `goals`, `epics`, `issues`, and `personal_access_tokens` through migration `0003_core_work`. Goal deletion cascades through its Epic/Issue children; every service read, update, delete, and parent lookup filters `owner_id`.

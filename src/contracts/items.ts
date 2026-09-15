@@ -9,6 +9,9 @@ export type Goal = WorkRecord;
 export type Epic = WorkRecord & { goalId: string };
 export type Issue = WorkRecord & { epicId: string; status: IssueStatus; priority: Priority; dueAt: string | null };
 
+export type Document = WorkRecord & { body: string; parentId: string | null };
+export type DocumentIssueLink = { documentId: string; issueId: string; createdAt: string };
+
 export type PersonalAccessToken = {
   id: string;
   label: string;
