@@ -71,3 +71,18 @@ Verification used HTTP requests and built-asset inspection, not an interactive b
 - Loop 4 has made no repository changes. Its initial Codex task and one Codex retry both failed before prompt delivery with `agent_prompt_blocked`.
 - A Claude recovery worker also stopped before task execution at its interactive workspace-trust confirmation. The terminal was closed and the orchestration task is recorded as blocked.
 - Resume by resolving the local Claude/Codex worker prompt-delivery setup, then start a fresh document-loop task. Do not implement acceptance/dismissal until document and project/issue destination models exist.
+
+## Loop YG-01 evidence (2026-09-15)
+
+- Added owner-scoped `goals`, `epics`, `issues`, and `personal_access_tokens` through migration `0003_core_work`. Goal deletion cascades through its Epic/Issue children; every service read, update, delete, and parent lookup filters `owner_id`.
+- Contracts now define `WorkKind`, Goal/Epic/Issue, Issue status/priority, and PAT response shapes. Issues default to `backlog` and `medium`; due dates are nullable ISO timestamps.
+- PAT issuance returns `ygpat_…` plaintext only in the create response. PostgreSQL stores SHA-256 `token_hash`; list responses never include plaintext. Revocation is owner-scoped. PAT authentication remains out of scope until YG-08.
+- The browser stores a supplied existing bearer session only in `sessionStorage`; this ticket does not add email/password or OAuth sign-in. Existing Inbox and suggestions requests now pass that bearer token.
+
+| Command / check | Exact evidence | Result |
+| --- | --- | --- |
+| `npm test -- test/work.test.ts test/pats.test.ts` before route implementation | 5 assertions failed with expected 404 routes rather than required 201/400 responses. | Expected red. |
+| `DATABASE_URL=postgres://yggdrasil:yggdrasil@127.0.0.1:54330/yggdrasil_yg01 npm run db:migrate` | Migration `0003_core_work` applied successfully in a worktree-specific local DB. The shared `yggdrasil` DB was not modified because it contained unrelated legacy `issues` data. | Passed. |
+| `DATABASE_URL=postgres://yggdrasil:yggdrasil@127.0.0.1:54330/yggdrasil_yg01 npm test -- test/work.test.ts test/pats.test.ts` | 2 test files, 5 tests passed: hierarchy CRUD/defaults/invalid parent/owner isolation and PAT hash/revocation. | Passed. |
+| `npm run typecheck && npm run build && DATABASE_URL=postgres://yggdrasil:yggdrasil@127.0.0.1:54330/yggdrasil_yg01 npm test` | Typecheck passed; Vite built 30 modules; 7 test files and 34 tests passed. | Passed. |
+| Browser at local `http://127.0.0.1:3001` with local dev owner | Issued PAT appears once, revoke changes it to revoked, and page refresh had zero `<code>` token elements. No console errors. A real Supabase bearer session could not be verified because no external credentials were supplied. | Local PAT flow passed; external-auth check deferred. |
