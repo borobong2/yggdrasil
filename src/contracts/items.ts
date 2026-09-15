@@ -15,6 +15,10 @@ export type IssueEvidence = { id: string; issueId: string; url: string; kind: Ev
 export type Document = WorkRecord & { body: string; parentId: string | null };
 export type DocumentIssueLink = { documentId: string; issueId: string; createdAt: string };
 
+export type Progress = { done: number; total: number; ratio: number };
+export type PlanningEpic = Epic & { progress: Progress; issues: Issue[] };
+export type PlanningGoal = Goal & { progress: Progress; epics: PlanningEpic[] };
+
 export type PersonalAccessToken = {
   id: string;
   label: string;
