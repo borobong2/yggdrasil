@@ -22,7 +22,7 @@ export function registerWorkRoutes(app: Hono<AppEnv>): void {
   app.delete('/api/epics/:id', (c) => destroy(c, (id) => deleteEpic(c.get('user').id, id)));
 
   app.post('/api/issues', async (c) => {
-    const body = await bodyOf(c); const title = text(body.title); const epicId = uuid(body.epicId); const priority = body.priority === undefined ? 'medium' : choice(body.priority, priorities); const dueAt = date(body.dueAt);
+    const body = await bodyOf(c); const title = text(body.title); const epicId = uuid(body.epicId); const priority = body.priority === undefined ? 'medium' : choice(body.priority, priorities); const dueAt = body.dueAt === undefined ? null : date(body.dueAt);
     return !title || !epicId || !priority || dueAt === undefined ? c.json({ error: 'Invalid issue' }, 400) : execute(c, () => createIssue(c.get('user').id, epicId, title, priority, dueAt), 201);
   });
   app.get('/api/issues', async (c) => c.json(await listIssues(c.get('user').id)));

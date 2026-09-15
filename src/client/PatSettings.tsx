@@ -27,7 +27,8 @@ export function PatSettings({ token }: { token: string }) {
       const response = await fetch('/api/pats', { method: 'POST', headers: { ...headers, 'content-type': 'application/json' }, body: JSON.stringify({ label }) });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || 'Could not issue token.');
-      setIssued(result); setTokens((current) => [result, ...current]);
+      const { token: plaintext, ...pat } = result as IssuedPersonalAccessToken;
+      setIssued({ ...pat, token: plaintext }); setTokens((current) => [pat, ...current]);
     } catch (error) { setError(error instanceof Error ? error.message : 'Could not issue token.'); }
   }
 

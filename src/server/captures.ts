@@ -1,9 +1,9 @@
 import { desc, eq } from 'drizzle-orm';
 import type { Capture } from '../contracts/items.js';
-import { createDb } from './db.js';
+import { getDb } from './db.js';
 import { captures } from './schema.js';
 
-const db = createDb();
+const db = getDb();
 
 export async function createCapture(ownerId: string, text: string): Promise<Capture> {
   const [capture] = await db

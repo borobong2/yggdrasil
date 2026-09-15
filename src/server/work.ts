@@ -1,9 +1,9 @@
 import { and, desc, eq } from 'drizzle-orm';
 import type { Epic, Goal, Issue, IssueStatus, Priority } from '../contracts/items.js';
-import { createDb } from './db.js';
+import { getDb } from './db.js';
 import { epics, goals, issues } from './schema.js';
 
-const db = createDb();
+const db = getDb();
 export class NotFoundError extends Error {}
 
 export async function createGoal(ownerId: string, title: string): Promise<Goal> { return goal((await db.insert(goals).values({ id: crypto.randomUUID(), ownerId, title }).returning())[0]!); }

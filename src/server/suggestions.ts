@@ -1,10 +1,10 @@
 import { and, desc, eq } from 'drizzle-orm';
 import type { Suggestion } from '../contracts/items.js';
-import { createDb } from './db.js';
+import { getDb } from './db.js';
 import { captures, suggestions } from './schema.js';
 import { validateProposal, type SuggestionProvider } from './openai.js';
 
-const db = createDb();
+const db = getDb();
 
 export async function findCapture(ownerId: string, captureId: string) {
   const [capture] = await db.select().from(captures).where(and(eq(captures.ownerId, ownerId), eq(captures.id, captureId)));

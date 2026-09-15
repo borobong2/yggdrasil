@@ -1,11 +1,11 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { and, desc, eq } from 'drizzle-orm';
 import type { IssuedPersonalAccessToken, PersonalAccessToken } from '../contracts/items.js';
-import { createDb } from './db.js';
+import { getDb } from './db.js';
 import { personalAccessTokens } from './schema.js';
 import { NotFoundError } from './work.js';
 
-const db = createDb();
+const db = getDb();
 
 export async function issuePat(ownerId: string, label: string): Promise<IssuedPersonalAccessToken> {
   const token = `ygpat_${randomBytes(32).toString('base64url')}`;

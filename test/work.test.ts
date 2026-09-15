@@ -14,11 +14,9 @@ describe('work routes', () => {
   it('creates, reads, updates, and deletes an owner-scoped Goal → Epic → Issue hierarchy', async () => {
     const goal = await create('/api/goals', { title: 'Ship core model' });
     const epic = await create('/api/epics', { title: 'Hierarchy API', goalId: goal.id });
-    const issue = await create('/api/issues', {
-      title: 'Validate parents', epicId: epic.id, priority: 'high', dueAt: '2026-10-01T00:00:00.000Z'
-    });
+    const issue = await create('/api/issues', { title: 'Validate parents', epicId: epic.id, priority: 'high' });
 
-    expect(issue).toMatchObject({ epicId: epic.id, status: 'backlog', priority: 'high', dueAt: '2026-10-01T00:00:00.000Z' });
+    expect(issue).toMatchObject({ epicId: epic.id, status: 'backlog', priority: 'high', dueAt: null });
     expect((await (await app.request('/api/goals', { headers })).json()).map((item: { id: string }) => item.id)).toContain(goal.id);
 
     const update = await app.request(`/api/issues/${issue.id}`, {
