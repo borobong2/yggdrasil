@@ -30,7 +30,7 @@ Yggdrasil은 한 사람이 요구·결정·실행 근거를 연결하는 AI-nati
 
 ## 작업지시서와 브랜치 규칙
 
-- 모든 구현 티켓은 코드를 바꾸기 전에 `docs/work-orders/YG-XX-<slug>.md` 작업지시서를 작성하고 승인받는다.
+- 모든 구현 티켓은 코드를 바꾸기 전에 `docs/yg-XX-<short-feature>.md` 작업지시서를 작성하고 승인받는다.
 - 작업지시서는 목표, 범위/비범위, 공통 계약·BE·FE lane, 정확한 파일, 검증 명령, 의존성, 승인/보존 규칙을 포함한다.
 - 구현은 `main`에서 하지 않는다. `feat/yg-XX` 브랜치와 `.worktrees/yg-XX` worktree에서만 진행한다.
 - 병렬 가능한 티켓은 각각 독립 worktree를 쓰고, 검증된 커밋만 `main`에 순차 병합한다.
