@@ -8,6 +8,7 @@ import { registerWorkRoutes } from './routes/work.js';
 import { registerPatRoutes } from './routes/pats.js';
 import { registerDocumentRoutes } from './routes/documents.js';
 import { registerEvidenceRoutes } from './routes/evidence.js';
+import { registerPlanningRoutes } from './routes/planning.js';
 
 export function createApp(provider?: SuggestionProvider) {
   const app = new Hono<AppEnv>();
@@ -18,6 +19,7 @@ export function createApp(provider?: SuggestionProvider) {
   registerEvidenceRoutes(app);
   registerPatRoutes(app);
   registerDocumentRoutes(app);
+  registerPlanningRoutes(app);
   return app;
 }
 

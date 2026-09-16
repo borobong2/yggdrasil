@@ -5,6 +5,7 @@ import { LoginView } from './LoginView.js';
 import { PatSettings } from './PatSettings.js';
 import { DocumentsWorkspace } from './DocumentsWorkspace.js';
 import { EvidenceList } from './EvidenceList.js';
+import { PlanningView } from './PlanningView.js';
 import type { Capture } from '../contracts/items.js';
 
 function App() {
@@ -50,6 +51,7 @@ function App() {
       <button>Capture</button>
     </form>
     <ul>{captures.map((capture) => <li key={capture.id}>{capture.text}<CaptureSuggestions captureId={capture.id} token={token} /></li>)}</ul>
+    <PlanningView token={token} />
   </main>;
 }
 

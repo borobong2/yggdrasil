@@ -43,6 +43,28 @@ YG-00: [AI-native 제품 계약](../superpowers/specs/2026-09-15-ai-native-works
 
 For a failed loop check, retry once after fixing the identified cause. If the same check fails again, stop that loop, add the failing command, output, hypothesis, and owner decision needed to `INBOX.md`, then escalate. Resume only with a recorded decision or a materially different hypothesis.
 
+## Loop YG-03 evidence (2026-09-16)
+
+- Added an owner-scoped, read-only planning tree for the existing Goal→Epic→Issue model. It returns server-calculated `{done,total,ratio}` at Goal and Epic levels; no migration, table, `WorkItem`, or `IssueStatus` contract changed.
+- The Planning UI creates only valid parent relationships, updates an existing Issue status endpoint, then reloads `/api/planning/tree`; loading, empty, and error states are explicit. Capture, AI proposal, and MCP mutation boundaries remain unchanged.
+- Rebased onto the YG-02/YG-09-integrated main branch. Documents, evidence, and planning views/routes/types are registered together; their existing STATE evidence remains preserved.
+
+| Command / check | Exact evidence | Result |
+| --- | --- | --- |
+| Initial dedicated-DB readiness check | No `psql` or running worktree Postgres was available; no DB command was run against shared `yggdrasil`. | Deferred safely. |
+| `docker compose up -d postgres` | Failed once because host port `54330` was already held by existing `yggdrasil-postgres-1`; shared DB was not contacted. | Replaced with isolated container. |
+| Isolated PostgreSQL | Started `yggdrasil-yg03-postgres` on `127.0.0.1:54331` with database `yggdrasil_yg03`. | Passed. |
+| `DATABASE_URL=...:54331/yggdrasil_yg03 npm run db:migrate` | Drizzle reported migrations applied successfully. | Passed. |
+| Mutation red check: temporarily unregister planning route, then `DATABASE_URL=... npm test -- test/planning.test.ts` | Both assertions failed as expected with `404` instead of required `200`; route registration was restored immediately. | Expected red. |
+| `DATABASE_URL=...:54331/yggdrasil_yg03 npm test -- test/planning.test.ts` | 1 file, 2 tests passed: server rollups and foreign-owner invisibility. | Passed. |
+| `DATABASE_URL=...:54331/yggdrasil_yg03 npm test` | 9 files, 37 tests passed. | Passed. |
+| `npm run typecheck && npm run build && git diff --check` | TypeScript passed; Vite built 32 modules; no whitespace errors. | Passed. |
+| Local HTTP flow on `127.0.0.1:43103` with the dedicated DB | Goal → Epic → Issue create, status `done`, and tree reload returned `{"done":1,"total":1,"ratio":1}` and status `done`; built bundle contains planning loading/empty UI strings. | Passed. |
+| Browser automation | gstack browse setup was approved but its advertised `./setup` script and `dist/browse` binary were absent, so a graphical browser run was unavailable. | HTTP/build substitute recorded. |
+| Post-rebase `DATABASE_URL=...:54331/yggdrasil_yg03 npm run db:migrate` | Latest journal entry `0006_issue_evidence_owner_fk` verified; migration completed against the dedicated DB only. | Passed. |
+| Post-rebase `DATABASE_URL=...:54331/yggdrasil_yg03 npm test` | 11 files, 46 tests passed, including document, evidence, and planning suites. | Passed. |
+| Post-rebase `npm run typecheck && npm run build && git diff --check` | TypeScript passed; Vite built 34 modules; no whitespace errors. | Passed. |
+
 ## Loop 3 evidence (2026-09-12)
 
 - Implemented owner-scoped `POST /api/captures/:id/suggestions` and `GET /api/captures/:id/suggestions`, a `suggestions` migration, and Inbox display of **Pending — unaccepted. No items have been changed.** Each successful generation stores exactly one pending record with title, one of the four core types, capture identity, and model metadata. There are no target candidates yet, so the structured schema requires `targetId: null`; the API omits the optional target ID. No destination is invented.
