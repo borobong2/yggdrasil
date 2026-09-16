@@ -46,3 +46,16 @@ export type Suggestion = {
   status: 'pending';
   model: { provider: string; name: string };
 };
+
+export type DeliveryPlanDesign = { title: string; body: string };
+export type DeliveryPlanLanes = { fe: string[]; be: string[]; docs: string[] };
+
+export type DeliveryPlanProposal = {
+  id: string;
+  captureId: string;
+  status: 'pending';
+  design: DeliveryPlanDesign;
+  lanes: DeliveryPlanLanes;
+  model: { provider: string; name: string };
+  createdAt: string;
+};

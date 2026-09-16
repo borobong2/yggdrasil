@@ -52,6 +52,22 @@ YG-00: [AI-native 제품 계약](../superpowers/specs/2026-09-15-ai-native-works
 | Full regression | `DATABASE_URL=.../yggdrasil_yg04 npm test`: 12 files / 49 tests passed. `npm run typecheck`, `npm run build`, and `git diff --check` passed. | Passed. |
 | Browser move/reload | Local `http://127.0.0.1:3004` used only `DATABASE_URL=.../yggdrasil_yg04` and `YGGDRASIL_DEV_OWNER_ID`. Browser selected **doing** for **Open work**, sent `PATCH /api/issues/:id/move` with `200`, showed it in Doing, and showed it there again after reload with no console errors. | Passed. |
 
+## Loop YG-06 evidence (2026-09-17)
+
+- Added `delivery_plan_proposals`: owner-scoped, capture-linked, strict JSON `design` and FE/BE/Docs lanes, model metadata, and a database-enforced `pending` state. Each lane is capped at 10 server-validated items.
+- Added owner-scoped `GET`/`POST /api/captures/:id/delivery-plan`. Provider, malformed-output, and missing-configuration paths fail closed; generation creates only one proposal. No acceptance/dismissal route or document/Goal/Epic/Issue mutation was added.
+- Added the capture-level generation control and read-only proposal preview. It explicitly states that no documents or work items have been created.
+
+| Command / check | Exact evidence | Result |
+| --- | --- | --- |
+| RED API test | `npm test -- test/delivery-plans.test.ts` before the route existed: 8 assertions failed with `404` instead of required delivery-plan responses. | Expected red. |
+| Dedicated DB migration | `DATABASE_URL=…:54331/yggdrasil_yg06 npm run db:migrate` applied `0000` through `0008_delivery_plan_proposals` only to `yggdrasil_yg06`. | Passed. |
+| GREEN API/DB test | `DATABASE_URL=…:54331/yggdrasil_yg06 npm test -- test/delivery-plans.test.ts`: 8 tests passed for pending-only persistence, owner isolation, reload listing, malformed provider output, and provider failure. SQL snapshots proved every public table except `delivery_plan_proposals` stayed unchanged. | Passed. |
+| Full verification | `DATABASE_URL=…:54331/yggdrasil_yg06 npm test && npm run typecheck && npm run build && git diff --check`: 12 files / 54 tests passed; typecheck, production build, and whitespace check passed. | Passed. |
+| Dedicated API/SQL | Local `GET /api/captures/…/delivery-plan` returned one pending preview; SQL confirmed one matching pending proposal; `POST /api/delivery-plan-proposals/:id/accept` returned `404`. | Passed. |
+| Browser | Local dev-owner browser at `127.0.0.1:3006` displayed the enabled generation trigger and seeded pending design/FE/BE/Docs preview; no accept/dismiss controls or console errors. | Passed. |
+| Post-YG-04 rebase | Fresh `yggdrasil_yg06_rebase` applied `0000` through `0008_delivery_plan_proposals`; `npm test` passed 13 files / 57 tests, including board and delivery-plan suites; typecheck and build passed. | Passed. |
+
 ## Retry and escalation
 
 For a failed loop check, retry once after fixing the identified cause. If the same check fails again, stop that loop, add the failing command, output, hypothesis, and owner decision needed to `INBOX.md`, then escalate. Resume only with a recorded decision or a materially different hypothesis.
