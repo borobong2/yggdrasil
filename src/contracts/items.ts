@@ -10,7 +10,10 @@ type WorkRecord = { id: string; title: string; createdAt: string; updatedAt: str
 export type Goal = WorkRecord;
 export type Epic = WorkRecord & { goalId: string };
 export type Issue = WorkRecord & { epicId: string; status: IssueStatus; position: number; priority: Priority; dueAt: string | null };
-export type Activity = { id: string; ownerId: string; actorId: string; kind: 'issue.moved'; subjectType: 'issue'; subjectId: string; payload: Record<string, unknown>; createdAt: string };
+export type DeliveryPlanStatus = 'pending' | 'accepted' | 'dismissed';
+export type DeliveryPlanAcceptance = { proposalId: string; captureId: string; documentId: string; goalId: string; epicId: string; issueIds: string[]; acceptedAt: string };
+export type DeliveryPlanActivityPayload = { proposalId: string; captureId: string; documentId?: string; goalId?: string; epicId?: string; issueIds?: string[] };
+export type Activity = { id: string; ownerId: string; actorId: string; kind: 'issue.moved' | 'delivery-plan.accepted' | 'delivery-plan.dismissed'; subjectType: 'issue' | 'delivery-plan-proposal'; subjectId: string; payload: Record<string, unknown>; createdAt: string };
 export type IssueEvidence = { id: string; issueId: string; url: string; kind: EvidenceKind; status: EvidenceStatus; createdAt: string };
 
 export type Document = WorkRecord & { body: string; parentId: string | null };
@@ -53,9 +56,10 @@ export type DeliveryPlanLanes = { fe: string[]; be: string[]; docs: string[] };
 export type DeliveryPlanProposal = {
   id: string;
   captureId: string;
-  status: 'pending';
+  status: DeliveryPlanStatus;
   design: DeliveryPlanDesign;
   lanes: DeliveryPlanLanes;
   model: { provider: string; name: string };
   createdAt: string;
+  acceptance?: DeliveryPlanAcceptance;
 };
