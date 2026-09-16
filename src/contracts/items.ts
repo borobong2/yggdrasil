@@ -9,7 +9,8 @@ export type EvidenceStatus = 'linked';
 type WorkRecord = { id: string; title: string; createdAt: string; updatedAt: string };
 export type Goal = WorkRecord;
 export type Epic = WorkRecord & { goalId: string };
-export type Issue = WorkRecord & { epicId: string; status: IssueStatus; priority: Priority; dueAt: string | null };
+export type Issue = WorkRecord & { epicId: string; status: IssueStatus; position: number; priority: Priority; dueAt: string | null };
+export type Activity = { id: string; ownerId: string; actorId: string; kind: 'issue.moved'; subjectType: 'issue'; subjectId: string; payload: Record<string, unknown>; createdAt: string };
 export type IssueEvidence = { id: string; issueId: string; url: string; kind: EvidenceKind; status: EvidenceStatus; createdAt: string };
 
 export type Document = WorkRecord & { body: string; parentId: string | null };
