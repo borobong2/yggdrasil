@@ -39,6 +39,19 @@ YG-00: [AI-native 제품 계약](../superpowers/specs/2026-09-15-ai-native-works
 | 2026-09-05 | 2 | `npm run typecheck && npm run build && git diff --check` | Passed. |
 | 2026-09-05 | 2 | Fresh `npm start` with local `DATABASE_URL` and `YGGDRASIL_DEV_OWNER_ID`, then HTTP POST `/api/captures`, GET `/api/captures`, and GET `/` | Passed against local Docker Postgres: `real db reload check after rebuild` was returned after reload; the built Inbox page returned HTML. |
 
+## Loop YG-04 evidence (2026-09-17)
+
+- Added owner-scoped ordered backlog and `todo|doing|done` board moves. `PATCH /api/issues/:id/move` locks the owner's issue set, reindexes affected siblings, and appends one `issue.moved` activity in the same transaction. It does not change the Goal→Epic→Issue hierarchy, captures, AI proposals, or MCP mutation boundary.
+- Added the minimal explicit BoardView controls with loading, empty, and error states. Drag-and-drop, sprint, SSE, and AI/MCP work mutation remain excluded.
+
+| Command / check | Exact evidence | Result |
+| --- | --- | --- |
+| Dedicated DB migration | `DATABASE_URL=postgres://yggdrasil:yggdrasil@127.0.0.1:54330/yggdrasil_yg04 npm run db:migrate` applied migrations `0000` through `0007_issue_board` only to `yggdrasil_yg04`. | Passed. |
+| RED API test | `DATABASE_URL=.../yggdrasil_yg04 npm test -- test/board.test.ts` before implementation: move requests returned `404` rather than `200`, and SQL reported missing relation `activities`. | Expected red. |
+| Board API/SQL green test | `DATABASE_URL=.../yggdrasil_yg04 npm test -- test/board.test.ts`: 3 tests passed for same-column reordering, backlog-to-board insertion, owner-two `404`, and exactly one activity for the tested move. | Passed. |
+| Full regression | `DATABASE_URL=.../yggdrasil_yg04 npm test`: 12 files / 49 tests passed. `npm run typecheck`, `npm run build`, and `git diff --check` passed. | Passed. |
+| Browser move/reload | Local `http://127.0.0.1:3004` used only `DATABASE_URL=.../yggdrasil_yg04` and `YGGDRASIL_DEV_OWNER_ID`. Browser selected **doing** for **Open work**, sent `PATCH /api/issues/:id/move` with `200`, showed it in Doing, and showed it there again after reload with no console errors. | Passed. |
+
 ## Retry and escalation
 
 For a failed loop check, retry once after fixing the identified cause. If the same check fails again, stop that loop, add the failing command, output, hypothesis, and owner decision needed to `INBOX.md`, then escalate. Resume only with a recorded decision or a materially different hypothesis.

@@ -1,4 +1,4 @@
-import { foreignKey, jsonb, pgTable, text, timestamp, unique, uuid } from 'drizzle-orm/pg-core';
+import { foreignKey, integer, jsonb, pgTable, text, timestamp, unique, uuid } from 'drizzle-orm/pg-core';
 
 export const appOwners = pgTable('app_owners', {
   ownerId: uuid('owner_id').primaryKey(),
@@ -48,11 +48,23 @@ export const issues = pgTable('issues', {
   epicId: uuid('epic_id').notNull().references(() => epics.id, { onDelete: 'cascade' }),
   title: text('title').notNull(),
   status: text('status').$type<import('../contracts/items.js').IssueStatus>().notNull().default('backlog'),
+  position: integer('position').notNull().default(0),
   priority: text('priority').$type<import('../contracts/items.js').Priority>().notNull().default('medium'),
   dueAt: timestamp('due_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull()
 }, (table) => [unique('issues_id_owner_key').on(table.id, table.ownerId)]);
+
+export const activities = pgTable('activities', {
+  id: uuid('id').primaryKey(),
+  ownerId: uuid('owner_id').notNull(),
+  actorId: uuid('actor_id').notNull(),
+  kind: text('kind').$type<import('../contracts/items.js').Activity['kind']>().notNull(),
+  subjectType: text('subject_type').$type<import('../contracts/items.js').Activity['subjectType']>().notNull(),
+  subjectId: uuid('subject_id').notNull(),
+  payload: jsonb('payload').$type<Record<string, unknown>>().notNull().default({}),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull()
+});
 
 export const issueEvidence = pgTable('issue_evidence', {
   id: uuid('id').primaryKey(),

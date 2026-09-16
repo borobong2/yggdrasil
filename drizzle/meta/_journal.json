@@ -8,6 +8,7 @@
     { "idx": 3, "version": "7", "when": 1789513200000, "tag": "0003_core_work", "breakpoints": true },
     { "idx": 4, "version": "7", "when": 1789599600000, "tag": "0004_documents", "breakpoints": true },
     { "idx": 5, "version": "7", "when": 1789603200000, "tag": "0005_issue_evidence", "breakpoints": true },
-    { "idx": 6, "version": "7", "when": 1789606800000, "tag": "0006_issue_evidence_owner_fk", "breakpoints": true }
+    { "idx": 6, "version": "7", "when": 1789606800000, "tag": "0006_issue_evidence_owner_fk", "breakpoints": true },
+    { "idx": 7, "version": "7", "when": 1789610400000, "tag": "0007_issue_board", "breakpoints": true }
   ]
 }
