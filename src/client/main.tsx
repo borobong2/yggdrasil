@@ -4,6 +4,7 @@ import { CaptureSuggestions } from './CaptureSuggestions.js';
 import { LoginView } from './LoginView.js';
 import { PatSettings } from './PatSettings.js';
 import { DocumentsWorkspace } from './DocumentsWorkspace.js';
+import { EvidenceList } from './EvidenceList.js';
 import type { Capture } from '../contracts/items.js';
 
 function App() {
@@ -42,6 +43,7 @@ function App() {
     <LoginView token={token} onSave={saveToken} />
     <PatSettings token={token} />
     <DocumentsWorkspace token={token} />
+    <EvidenceList token={token} />
     <form onSubmit={capture}>
       <label htmlFor="capture">Capture a thought</label>
       <textarea id="capture" value={text} onChange={(event) => setText(event.target.value)} required />

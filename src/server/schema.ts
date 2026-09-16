@@ -1,4 +1,4 @@
-import { jsonb, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { foreignKey, jsonb, pgTable, text, timestamp, unique, uuid } from 'drizzle-orm/pg-core';
 
 export const appOwners = pgTable('app_owners', {
   ownerId: uuid('owner_id').primaryKey(),
@@ -52,7 +52,17 @@ export const issues = pgTable('issues', {
   dueAt: timestamp('due_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull()
-});
+}, (table) => [unique('issues_id_owner_key').on(table.id, table.ownerId)]);
+
+export const issueEvidence = pgTable('issue_evidence', {
+  id: uuid('id').primaryKey(),
+  ownerId: uuid('owner_id').notNull(),
+  issueId: uuid('issue_id').notNull(),
+  url: text('url').notNull(),
+  kind: text('kind').$type<import('../contracts/items.js').EvidenceKind>().notNull(),
+  status: text('status').$type<import('../contracts/items.js').EvidenceStatus>().notNull().default('linked'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull()
+}, (table) => [foreignKey({ columns: [table.issueId, table.ownerId], foreignColumns: [issues.id, issues.ownerId], name: 'issue_evidence_issue_owner_fkey' }).onDelete('cascade')]);
 
 export const personalAccessTokens = pgTable('personal_access_tokens', {
   id: uuid('id').primaryKey(),
