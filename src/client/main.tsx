@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { CaptureSuggestions } from './CaptureSuggestions.js';
+import { CaptureDeliveryPlan } from './CaptureDeliveryPlan.js';
 import { LoginView } from './LoginView.js';
 import { PatSettings } from './PatSettings.js';
 import { DocumentsWorkspace } from './DocumentsWorkspace.js';
@@ -51,7 +52,7 @@ function App() {
       <textarea id="capture" value={text} onChange={(event) => setText(event.target.value)} required />
       <button>Capture</button>
     </form>
-    <ul>{captures.map((capture) => <li key={capture.id}>{capture.text}<CaptureSuggestions captureId={capture.id} token={token} /></li>)}</ul>
+    <ul>{captures.map((capture) => <li key={capture.id}>{capture.text}<CaptureSuggestions captureId={capture.id} token={token} /><CaptureDeliveryPlan captureId={capture.id} token={token} /></li>)}</ul>
     <PlanningView token={token} />
     <BoardView token={token} />
   </main>;

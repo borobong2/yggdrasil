@@ -25,6 +25,17 @@ export const suggestions = pgTable('suggestions', {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull()
 });
 
+export const deliveryPlanProposals = pgTable('delivery_plan_proposals', {
+  id: uuid('id').primaryKey(),
+  ownerId: uuid('owner_id').notNull(),
+  captureId: uuid('capture_id').notNull().references(() => captures.id),
+  status: text('status').$type<'pending'>().notNull().default('pending'),
+  design: jsonb('design').$type<import('../contracts/items.js').DeliveryPlanDesign>().notNull(),
+  lanes: jsonb('lanes').$type<import('../contracts/items.js').DeliveryPlanLanes>().notNull(),
+  model: jsonb('model').$type<import('../contracts/items.js').DeliveryPlanProposal['model']>().notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull()
+});
+
 export const goals = pgTable('goals', {
   id: uuid('id').primaryKey(),
   ownerId: uuid('owner_id').notNull(),
