@@ -68,6 +68,18 @@ YG-00: [AI-native 제품 계약](../superpowers/specs/2026-09-15-ai-native-works
 | Browser | Local dev-owner browser at `127.0.0.1:3006` displayed the enabled generation trigger and seeded pending design/FE/BE/Docs preview; no accept/dismiss controls or console errors. | Passed. |
 | Post-YG-04 rebase | Fresh `yggdrasil_yg06_rebase` applied `0000` through `0008_delivery_plan_proposals`; `npm test` passed 13 files / 57 tests, including board and delivery-plan suites; typecheck and build passed. | Passed. |
 
+## Loop YG-07 evidence (2026-09-17)
+
+- Added owner-scoped atomic acceptance and dismissal routes. Acceptance locks and revalidates the pending proposal, then creates one design document, Goal/Epic, lane Issues, typed document-to-Issue links, acceptance provenance, and one activity in one transaction. Dismissal changes only proposal status and adds one activity.
+
+| Command / check | Exact evidence | Result |
+| --- | --- | --- |
+| RED API test | `DATABASE_URL=…:54331/yggdrasil_yg07 npm test -- test/plan-acceptance.test.ts` before route implementation: accept/dismiss assertions returned `404` instead of `201`/`200`. | Expected red. |
+| Dedicated DB migration and API/SQL green | `DATABASE_URL=…:54331/yggdrasil_yg07 npm run db:migrate`; then `npm test -- test/plan-acceptance.test.ts`: 4 tests passed for owner isolation, duplicate-accept conflict, forced document insert rollback, capture preservation, dismissal side-effect boundary, and exact provenance/activity rows. | Passed. |
+| Full verification | `DATABASE_URL=…:54331/yggdrasil_yg07 npm test && npm run typecheck && npm run build && git diff --check`: 14 files / 61 tests passed; typecheck, production build, and whitespace check passed. | Passed. |
+| Dedicated SQL | Browser-created accepted proposal query returned `[{"status":"accepted","provenance":1,"activity":1}]`. | Passed. |
+| Browser capture → proposal → accept → reload | Test-provider local server at `127.0.0.1:3017`: created **Browser acceptance capture**, generated plan, clicked **Accept plan** (`201`), and reload retained **Accepted** plus document/Goal/Epic/three Issue links; browser console had no messages. | Passed. |
+
 ## Retry and escalation
 
 For a failed loop check, retry once after fixing the identified cause. If the same check fails again, stop that loop, add the failing command, output, hypothesis, and owner decision needed to `INBOX.md`, then escalate. Resume only with a recorded decision or a materially different hypothesis.

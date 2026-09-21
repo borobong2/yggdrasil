@@ -5,6 +5,7 @@ export function CaptureDeliveryPlan({ captureId, token }: { captureId: string; t
   const [plans, setPlans] = useState<DeliveryPlanProposal[]>([]);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [actionId, setActionId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const path = `/api/captures/${captureId}/delivery-plan`;
   const headers: Record<string, string> = token ? { authorization: `Bearer ${token}` } : {};
@@ -37,6 +38,21 @@ export function CaptureDeliveryPlan({ captureId, token }: { captureId: string; t
     }
   }
 
+  async function decide(plan: DeliveryPlanProposal, action: 'accept' | 'dismiss') {
+    setActionId(plan.id);
+    setError('');
+    try {
+      const response = await fetch(`/api/delivery-plan-proposals/${plan.id}/${action}`, { method: 'POST', headers });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || `Could not ${action} delivery plan.`);
+      setPlans((previous) => previous.map((item) => item.id === plan.id ? action === 'accept' ? { ...item, status: 'accepted', acceptance: result } : result : item));
+    } catch (error) {
+      setError(error instanceof Error ? error.message : `Could not ${action} delivery plan.`);
+    } finally {
+      setActionId(null);
+    }
+  }
+
   return <section aria-label="AI delivery plans">
     <button type="button" onClick={generate} disabled={busy || loading}>{busy ? 'Generating…' : 'Generate delivery plan'}</button>
     {error && <p role="alert">{error}</p>}
@@ -47,7 +63,10 @@ export function CaptureDeliveryPlan({ captureId, token }: { captureId: string; t
         <h4>{lane.toUpperCase()}</h4>
         <ul>{plan.lanes[lane].map((item) => <li key={item}>{item}</li>)}</ul>
       </section>)}
-      <p>Pending review — no documents or work items have been created.</p>
+      <p><a href={`#capture-${captureId}`}>Source capture</a></p>
+      {plan.status === 'pending' && <><p>Pending review — no documents or work items have been created.</p><button type="button" onClick={() => decide(plan, 'accept')} disabled={actionId !== null}>{actionId === plan.id ? 'Accepting…' : 'Accept plan'}</button><button type="button" onClick={() => decide(plan, 'dismiss')} disabled={actionId !== null}>Dismiss plan</button></>}
+      {plan.status === 'dismissed' && <p>Dismissed — no documents or work items were created.</p>}
+      {plan.status === 'accepted' && <><p>Accepted — generated work is linked below.</p>{plan.acceptance && <p><a href={`#document-${plan.acceptance.documentId}`}>Design document</a> · <a href={`#goal-${plan.acceptance.goalId}`}>Goal</a> · <a href={`#epic-${plan.acceptance.epicId}`}>Epic</a> · {plan.acceptance.issueIds.map((id, index) => <a key={id} href={`#issue-${id}`}>Issue {index + 1}</a>)}</p>}</>}
       <small>{plan.model.provider} · {plan.model.name}</small>
     </article>)}
   </section>;

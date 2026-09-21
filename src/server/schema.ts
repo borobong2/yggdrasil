@@ -29,11 +29,22 @@ export const deliveryPlanProposals = pgTable('delivery_plan_proposals', {
   id: uuid('id').primaryKey(),
   ownerId: uuid('owner_id').notNull(),
   captureId: uuid('capture_id').notNull().references(() => captures.id),
-  status: text('status').$type<'pending'>().notNull().default('pending'),
+  status: text('status').$type<import('../contracts/items.js').DeliveryPlanStatus>().notNull().default('pending'),
   design: jsonb('design').$type<import('../contracts/items.js').DeliveryPlanDesign>().notNull(),
   lanes: jsonb('lanes').$type<import('../contracts/items.js').DeliveryPlanLanes>().notNull(),
   model: jsonb('model').$type<import('../contracts/items.js').DeliveryPlanProposal['model']>().notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull()
+});
+
+export const deliveryPlanAcceptances = pgTable('delivery_plan_acceptances', {
+  proposalId: uuid('proposal_id').primaryKey().references(() => deliveryPlanProposals.id),
+  ownerId: uuid('owner_id').notNull(),
+  captureId: uuid('capture_id').notNull().references(() => captures.id),
+  documentId: uuid('document_id').notNull().references(() => documents.id),
+  goalId: uuid('goal_id').notNull().references(() => goals.id),
+  epicId: uuid('epic_id').notNull().references(() => epics.id),
+  issueIds: jsonb('issue_ids').$type<string[]>().notNull(),
+  acceptedAt: timestamp('accepted_at', { withTimezone: true }).defaultNow().notNull()
 });
 
 export const goals = pgTable('goals', {

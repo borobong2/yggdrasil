@@ -52,7 +52,7 @@ function App() {
       <textarea id="capture" value={text} onChange={(event) => setText(event.target.value)} required />
       <button>Capture</button>
     </form>
-    <ul>{captures.map((capture) => <li key={capture.id}>{capture.text}<CaptureSuggestions captureId={capture.id} token={token} /><CaptureDeliveryPlan captureId={capture.id} token={token} /></li>)}</ul>
+    <ul>{captures.map((capture) => <li id={`capture-${capture.id}`} key={capture.id}>{capture.text}<CaptureSuggestions captureId={capture.id} token={token} /><CaptureDeliveryPlan captureId={capture.id} token={token} /></li>)}</ul>
     <PlanningView token={token} />
     <BoardView token={token} />
   </main>;
