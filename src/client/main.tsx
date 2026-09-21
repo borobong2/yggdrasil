@@ -7,6 +7,7 @@ import { PatSettings } from './PatSettings.js';
 import { DocumentsWorkspace } from './DocumentsWorkspace.js';
 import { EvidenceList } from './EvidenceList.js';
 import { PlanningView } from './PlanningView.js';
+import { SearchCommand } from './SearchCommand.js';
 import { BoardView } from './BoardView.js';
 import type { Capture } from '../contracts/items.js';
 
@@ -45,6 +46,7 @@ function App() {
     <h1>Inbox</h1>
     <LoginView token={token} onSave={saveToken} />
     <PatSettings token={token} />
+    <SearchCommand token={token} />
     <DocumentsWorkspace token={token} />
     <EvidenceList token={token} />
     <form onSubmit={capture}>
