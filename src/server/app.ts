@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { registerActivityRoutes } from './routes/activity.js';
 import type { AppEnv } from './auth.js';
 import type { DeliveryPlanProvider, SuggestionProvider } from './openai.js';
 import { registerCaptureRoutes } from './routes/captures.js';
@@ -26,6 +27,7 @@ export function createApp(provider?: SuggestionProvider, deliveryPlanProvider?: 
   registerDocumentRoutes(app);
   registerPlanningRoutes(app);
   registerBoardRoutes(app);
+  registerActivityRoutes(app);
   return app;
 }
 

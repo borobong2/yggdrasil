@@ -1,7 +1,8 @@
 import { and, asc, eq, sql } from 'drizzle-orm';
 import type { Issue, IssueStatus } from '../contracts/items.js';
 import { getDb } from './db.js';
-import { activities, issues } from './schema.js';
+import { appendActivity } from './activity.js';
+import { issues } from './schema.js';
 import { NotFoundError } from './work.js';
 
 const db = getDb();
@@ -17,7 +18,7 @@ export async function moveIssue(ownerId: string, id: string, status: IssueStatus
     target.splice(Math.min(position, target.length), 0, { ...current, status });
     for (const [index, item] of source.entries()) await tx.update(issues).set({ position: index, updatedAt: new Date() }).where(eq(issues.id, item.id));
     for (const [index, item] of target.entries()) await tx.update(issues).set({ status, position: index, updatedAt: new Date() }).where(eq(issues.id, item.id));
-    await tx.insert(activities).values({ id: crypto.randomUUID(), ownerId, actorId: ownerId, kind: 'issue.moved', subjectType: 'issue', subjectId: id, payload: { from: current.status, to: status, position } });
+    await appendActivity(tx, ownerId, { kind: 'issue.moved', subjectType: 'issue', subjectId: id, payload: { from: current.status, to: status, position } });
     return asIssue({ ...current, status, position: target.findIndex((item) => item.id === id), updatedAt: new Date() });
   });
 }

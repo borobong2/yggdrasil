@@ -13,7 +13,7 @@ export type Issue = WorkRecord & { epicId: string; status: IssueStatus; position
 export type DeliveryPlanStatus = 'pending' | 'accepted' | 'dismissed';
 export type DeliveryPlanAcceptance = { proposalId: string; captureId: string; documentId: string; goalId: string; epicId: string; issueIds: string[]; acceptedAt: string };
 export type DeliveryPlanActivityPayload = { proposalId: string; captureId: string; documentId?: string; goalId?: string; epicId?: string; issueIds?: string[] };
-export type Activity = { id: string; ownerId: string; actorId: string; kind: 'issue.moved' | 'delivery-plan.accepted' | 'delivery-plan.dismissed'; subjectType: 'issue' | 'delivery-plan-proposal'; subjectId: string; payload: Record<string, unknown>; createdAt: string };
+export type Activity = { id: string; ownerId: string; actorId: string; kind: 'issue.moved' | 'delivery-plan.created' | 'delivery-plan.accepted' | 'delivery-plan.dismissed' | 'evidence.added'; subjectType: 'issue' | 'delivery-plan-proposal'; subjectId: string; payload: Record<string, unknown>; createdAt: string };
 export type IssueEvidence = { id: string; issueId: string; url: string; kind: EvidenceKind; status: EvidenceStatus; createdAt: string };
 
 export type Document = WorkRecord & { body: string; parentId: string | null };

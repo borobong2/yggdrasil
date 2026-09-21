@@ -1,6 +1,8 @@
 import { and, desc, eq } from 'drizzle-orm';
 import type { DeliveryPlanProposal } from '../contracts/items.js';
 import { getDb } from './db.js';
+import { appendActivity } from './activity.js';
+import { NotFoundError } from './work.js';
 import { type DeliveryPlanProvider, validateDeliveryPlan } from './openai.js';
 import { captures, deliveryPlanAcceptances, deliveryPlanProposals } from './schema.js';
 
@@ -12,11 +14,16 @@ export async function findDeliveryPlanCapture(ownerId: string, captureId: string
 }
 
 export async function generateDeliveryPlan(ownerId: string, capture: typeof captures.$inferSelect, provider: DeliveryPlanProvider): Promise<DeliveryPlanProposal> {
-  const result = await provider(capture.text);
+  const source = await findDeliveryPlanCapture(ownerId, capture.id);
+  if (!source) throw new NotFoundError();
+  const result = await provider(source.text);
   const plan = validateDeliveryPlan(result.output);
   if (!result.model || typeof result.model.provider !== 'string' || !result.model.provider.trim() || typeof result.model.name !== 'string' || !result.model.name.trim()) throw new Error('Invalid model metadata');
-  const [proposal] = await db.insert(deliveryPlanProposals).values({ id: crypto.randomUUID(), ownerId, captureId: capture.id, status: 'pending', ...plan, model: { provider: result.model.provider, name: result.model.name } }).returning();
-  return serialize(proposal!);
+  return db.transaction(async (tx) => {
+    const [proposal] = await tx.insert(deliveryPlanProposals).values({ id: crypto.randomUUID(), ownerId, captureId: source.id, status: 'pending', ...plan, model: { provider: result.model.provider, name: result.model.name } }).returning();
+    await appendActivity(tx, ownerId, { kind: 'delivery-plan.created', subjectType: 'delivery-plan-proposal', subjectId: proposal!.id, payload: { proposalId: proposal!.id, captureId: source.id } });
+    return serialize(proposal!);
+  });
 }
 
 export async function listDeliveryPlans(ownerId: string, captureId: string): Promise<DeliveryPlanProposal[]> {

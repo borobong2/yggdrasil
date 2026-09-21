@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useState } from 'react';
 import type { Issue, IssueEvidence } from '../contracts/items.js';
 
-export function EvidenceList({ token }: { token: string }) {
+export function EvidenceList({ token, onActivity }: { token: string; onActivity?: () => void }) {
   const [issues, setIssues] = useState<Issue[]>([]);
   const [issueId, setIssueId] = useState('');
   const [items, setItems] = useState<IssueEvidence[]>([]);
@@ -36,6 +36,7 @@ export function EvidenceList({ token }: { token: string }) {
     try {
       const response = await fetch(`/api/issues/${issueId}/evidence`, { method: 'POST', headers: { ...headers, 'content-type': 'application/json' }, body: JSON.stringify({ url }) });
       if (!response.ok) throw new Error((await response.json()).error || 'Could not add evidence.');
+      onActivity?.();
       setUrl(''); await loadEvidence();
     } catch (error) { setError(error instanceof Error ? error.message : 'Could not add evidence.'); }
   }

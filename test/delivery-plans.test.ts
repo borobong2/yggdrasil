@@ -13,20 +13,20 @@ async function capture(app = createApp()) {
   return (await app.request('/api/captures', { method: 'POST', headers, body: JSON.stringify({ text: 'Plan a garden' }) })).json();
 }
 
-async function unchangedTables() {
+async function unchangedTables(allowActivity = false) {
   const { rows } = await pool.query("SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename <> 'delivery_plan_proposals' ORDER BY tablename");
-  return Promise.all(rows.map(async ({ tablename }) => ({ table: tablename, rows: (await pool.query(`SELECT row_to_json(t) AS row FROM \"${tablename.replaceAll('\"', '\"\"')}\" t ORDER BY row_to_json(t)::text`)).rows })));
+  return Promise.all(rows.filter(({ tablename }) => !allowActivity || tablename !== 'activities').map(async ({ tablename }) => ({ table: tablename, rows: (await pool.query(`SELECT row_to_json(t) AS row FROM \"${tablename.replaceAll('\"', '\"\"')}\" t ORDER BY row_to_json(t)::text`)).rows })));
 }
 
 it('stores exactly one pending delivery plan and changes no capture, document, or work row', async () => {
   const app = createApp(undefined, async () => ({ output: plan, model: { provider: 'fake', name: 'delivery-v1' } }));
   const source = await capture(app);
-  const before = await unchangedTables();
+  const before = await unchangedTables(true);
   const response = await app.request(`/api/captures/${source.id}/delivery-plan`, { method: 'POST', headers });
   expect(response.status).toBe(201);
   expect(await response.json()).toMatchObject({ captureId: source.id, status: 'pending', ...plan, model: { provider: 'fake', name: 'delivery-v1' } });
   expect((await pool.query('SELECT count(*)::int AS count FROM delivery_plan_proposals WHERE capture_id = $1', [source.id])).rows).toEqual([{ count: 1 }]);
-  expect(await unchangedTables()).toEqual(before);
+  expect(await unchangedTables(true)).toEqual(before);
 });
 
 it('lists only the owner capture proposals after a fresh app load', async () => {

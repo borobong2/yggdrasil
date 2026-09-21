@@ -30,7 +30,7 @@ it('accepts a pending proposal once and records one provenance and activity', as
   expect(accepted.issueIds).toHaveLength(3);
   expect((await pool.query('SELECT status FROM delivery_plan_proposals WHERE id = $1', [created.id])).rows).toEqual([{ status: 'accepted' }]);
   expect((await pool.query('SELECT proposal_id, capture_id, document_id, goal_id, epic_id, jsonb_array_length(issue_ids) AS issue_count FROM delivery_plan_acceptances WHERE proposal_id = $1', [created.id])).rows).toEqual([{ proposal_id: created.id, capture_id: capture.id, document_id: accepted.documentId, goal_id: accepted.goalId, epic_id: accepted.epicId, issue_count: 3 }]);
-  expect((await pool.query("SELECT kind, subject_type, subject_id, payload->>'proposalId' AS proposal_id FROM activities WHERE subject_id = $1", [created.id])).rows).toEqual([{ kind: 'delivery-plan.accepted', subject_type: 'delivery-plan-proposal', subject_id: created.id, proposal_id: created.id }]);
+  expect((await pool.query("SELECT kind, subject_type, subject_id, payload->>'proposalId' AS proposal_id FROM activities WHERE subject_id = $1 AND kind = 'delivery-plan.accepted'", [created.id])).rows).toEqual([{ kind: 'delivery-plan.accepted', subject_type: 'delivery-plan-proposal', subject_id: created.id, proposal_id: created.id }]);
   expect((await pool.query('SELECT text, status FROM captures WHERE id = $1', [capture.id])).rows).toEqual([{ text: 'Plan a garden', status: 'inbox' }]);
   expect((await (await app.request(`/api/captures/${capture.id}/delivery-plan`, { headers })).json())[0]).toMatchObject({ id: created.id, status: 'accepted', acceptance: { documentId: accepted.documentId, issueIds: accepted.issueIds } });
   expect((await app.request(`/api/delivery-plan-proposals/${created.id}/accept`, { method: 'POST', headers })).status).toBe(409);
@@ -67,5 +67,5 @@ it('dismisses without creating plan work or provenance', async () => {
   expect(after.document_issue_links).toBe(before.document_issue_links);
   expect(after.delivery_plan_acceptances).toBe(before.delivery_plan_acceptances);
   expect(after.activities).toBe(before.activities + 1);
-  expect((await pool.query("SELECT kind FROM activities WHERE subject_id = $1", [created.id])).rows).toEqual([{ kind: 'delivery-plan.dismissed' }]);
+  expect((await pool.query("SELECT kind FROM activities WHERE subject_id = $1 AND kind = 'delivery-plan.dismissed'", [created.id])).rows).toEqual([{ kind: 'delivery-plan.dismissed' }]);
 });
