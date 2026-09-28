@@ -1,5 +1,7 @@
 import { Hono } from 'hono';
 import { registerActivityRoutes } from './routes/activity.js';
+import { registerMcpRoutes } from './routes/mcp.js';
+import { registerSearchRoutes } from './routes/search.js';
 import type { AppEnv } from './auth.js';
 import type { DeliveryPlanProvider, SuggestionProvider } from './openai.js';
 import { registerCaptureRoutes } from './routes/captures.js';
@@ -17,6 +19,8 @@ import { registerPlanAcceptanceRoutes } from './routes/plan-acceptance.js';
 export function createApp(provider?: SuggestionProvider, deliveryPlanProvider?: DeliveryPlanProvider) {
   const app = new Hono<AppEnv>();
   registerHealthRoute(app);
+  registerSearchRoutes(app);
+  registerMcpRoutes(app, deliveryPlanProvider);
   registerCaptureRoutes(app);
   registerSuggestionRoutes(app, provider);
   registerDeliveryPlanRoutes(app, deliveryPlanProvider);
