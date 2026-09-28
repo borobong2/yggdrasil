@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto';
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, isNull } from 'drizzle-orm';
 import type { IssuedPersonalAccessToken, PersonalAccessToken } from '../contracts/items.js';
 import { getDb } from './db.js';
 import { personalAccessTokens } from './schema.js';
@@ -25,4 +25,13 @@ export async function revokePat(ownerId: string, id: string): Promise<PersonalAc
 
 function pat(row: typeof personalAccessTokens.$inferSelect): PersonalAccessToken {
   return { id: row.id, label: row.label, createdAt: row.createdAt.toISOString(), revokedAt: row.revokedAt?.toISOString() ?? null, lastUsedAt: row.lastUsedAt?.toISOString() ?? null };
+}
+
+export async function authenticatePat(token: string): Promise<{ id: string } | undefined> {
+  if (!/^ygpat_[A-Za-z0-9_-]{43}$/.test(token)) return;
+  const tokenHash = createHash('sha256').update(token).digest('hex');
+  const [row] = await db.update(personalAccessTokens).set({ lastUsedAt: new Date() })
+    .where(and(eq(personalAccessTokens.tokenHash, tokenHash), isNull(personalAccessTokens.revokedAt)))
+    .returning({ id: personalAccessTokens.ownerId });
+  return row;
 }
