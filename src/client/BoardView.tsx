@@ -3,7 +3,7 @@ import type { Issue, IssueStatus } from '../contracts/items.js';
 
 const statuses: IssueStatus[] = ['backlog', 'todo', 'doing', 'done'];
 
-export function BoardView({ token }: { token: string }) {
+export function BoardView({ token, onActivity }: { token: string; onActivity?: () => void }) {
   const [issues, setIssues] = useState<Issue[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -27,6 +27,7 @@ export function BoardView({ token }: { token: string }) {
     try {
       const response = await fetch(`/api/issues/${issue.id}/move`, { method: 'PATCH', headers: { ...headers, 'content-type': 'application/json' }, body: JSON.stringify({ status, position }) });
       if (!response.ok) throw new Error();
+      onActivity?.();
       await load();
     } catch { setError('Issue could not be moved.'); }
   }

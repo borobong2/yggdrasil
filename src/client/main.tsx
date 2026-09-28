@@ -9,11 +9,14 @@ import { EvidenceList } from './EvidenceList.js';
 import { PlanningView } from './PlanningView.js';
 import { SearchCommand } from './SearchCommand.js';
 import { BoardView } from './BoardView.js';
+import { ActivityTimeline } from './ActivityTimeline.js';
 import type { Capture } from '../contracts/items.js';
 
 function App() {
   const [captures, setCaptures] = useState<Capture[]>([]);
   const [text, setText] = useState('');
+  const [activityRevision, setActivityRevision] = useState(0);
+  const refreshActivity = () => setActivityRevision((revision) => revision + 1);
   const [token, setToken] = useState(() => sessionStorage.getItem('yggdrasil-session') ?? '');
   const headers: Record<string, string> = token ? { authorization: `Bearer ${token}` } : {};
 
@@ -48,15 +51,16 @@ function App() {
     <PatSettings token={token} />
     <SearchCommand token={token} />
     <DocumentsWorkspace token={token} />
-    <EvidenceList token={token} />
+    <EvidenceList token={token} onActivity={refreshActivity} />
     <form onSubmit={capture}>
       <label htmlFor="capture">Capture a thought</label>
       <textarea id="capture" value={text} onChange={(event) => setText(event.target.value)} required />
       <button>Capture</button>
     </form>
-    <ul>{captures.map((capture) => <li id={`capture-${capture.id}`} key={capture.id}>{capture.text}<CaptureSuggestions captureId={capture.id} token={token} /><CaptureDeliveryPlan captureId={capture.id} token={token} /></li>)}</ul>
+    <ul>{captures.map((capture) => <li id={`capture-${capture.id}`} key={capture.id}>{capture.text}<CaptureSuggestions captureId={capture.id} token={token} /><CaptureDeliveryPlan captureId={capture.id} token={token} onActivity={refreshActivity} /></li>)}</ul>
     <PlanningView token={token} />
-    <BoardView token={token} />
+    <BoardView token={token} onActivity={refreshActivity} />
+    <ActivityTimeline token={token} revision={activityRevision} />
   </main>;
 }
 

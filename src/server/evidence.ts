@@ -1,6 +1,7 @@
 import { and, desc, eq } from 'drizzle-orm';
 import type { EvidenceKind, IssueEvidence } from '../contracts/items.js';
 import { getDb } from './db.js';
+import { appendActivity } from './activity.js';
 import { getIssue, NotFoundError } from './work.js';
 import { issueEvidence } from './schema.js';
 
@@ -10,7 +11,11 @@ export async function createEvidence(ownerId: string, issueId: string, value: un
   await getIssue(ownerId, issueId);
   const parsed = parseEvidenceUrl(value);
   if (!parsed) throw new InvalidEvidenceError();
-  return evidence((await db.insert(issueEvidence).values({ id: crypto.randomUUID(), ownerId, issueId, ...parsed }).returning())[0]!);
+  return db.transaction(async (tx) => {
+    const [row] = await tx.insert(issueEvidence).values({ id: crypto.randomUUID(), ownerId, issueId, ...parsed }).returning();
+    await appendActivity(tx, ownerId, { kind: 'evidence.added', subjectType: 'issue', subjectId: issueId, payload: { evidenceId: row!.id, url: row!.url, kind: row!.kind } });
+    return evidence(row!);
+  });
 }
 
 export async function listEvidence(ownerId: string, issueId: string): Promise<IssueEvidence[]> {

@@ -1,8 +1,9 @@
 import { and, eq, sql } from 'drizzle-orm';
 import type { DeliveryPlanAcceptance, DeliveryPlanProposal } from '../contracts/items.js';
 import { getDb } from './db.js';
+import { appendActivity } from './activity.js';
 import { validateDeliveryPlan } from './openai.js';
-import { activities, appOwners, captures, deliveryPlanAcceptances, deliveryPlanProposals, documentIssueLinks, documents, epics, goals, issues } from './schema.js';
+import { appOwners, captures, deliveryPlanAcceptances, deliveryPlanProposals, documentIssueLinks, documents, epics, goals, issues } from './schema.js';
 
 const db = getDb();
 export class PlanNotFoundError extends Error {}
@@ -27,7 +28,7 @@ export async function acceptDeliveryPlan(ownerId: string, proposalId: string): P
     if (issueRows.length) await tx.insert(documentIssueLinks).values(issueRows.map((issue) => ({ documentId: document!.id, issueId: issue.id })));
     const issueIds = issueRows.map((issue) => issue.id);
     const [acceptance] = await tx.insert(deliveryPlanAcceptances).values({ proposalId, ownerId, captureId: capture.id, documentId: document!.id, goalId: goal!.id, epicId: epic!.id, issueIds }).returning();
-    await tx.insert(activities).values({ id: crypto.randomUUID(), ownerId, actorId: ownerId, kind: 'delivery-plan.accepted', subjectType: 'delivery-plan-proposal', subjectId: proposalId, payload: { proposalId, captureId: capture.id, documentId: document!.id, goalId: goal!.id, epicId: epic!.id, issueIds } });
+    await appendActivity(tx, ownerId, { kind: 'delivery-plan.accepted', subjectType: 'delivery-plan-proposal', subjectId: proposalId, payload: { proposalId, captureId: capture.id, documentId: document!.id, goalId: goal!.id, epicId: epic!.id, issueIds } });
     await tx.update(deliveryPlanProposals).set({ status: 'accepted' }).where(eq(deliveryPlanProposals.id, proposalId));
     return accepted(acceptance!);
   });
@@ -40,7 +41,7 @@ export async function dismissDeliveryPlan(ownerId: string, proposalId: string): 
     if (!proposal) throw new PlanNotFoundError();
     if (proposal.status !== 'pending') throw new PlanConflictError();
     const [dismissed] = await tx.update(deliveryPlanProposals).set({ status: 'dismissed' }).where(eq(deliveryPlanProposals.id, proposalId)).returning();
-    await tx.insert(activities).values({ id: crypto.randomUUID(), ownerId, actorId: ownerId, kind: 'delivery-plan.dismissed', subjectType: 'delivery-plan-proposal', subjectId: proposalId, payload: { proposalId, captureId: proposal.captureId } });
+    await appendActivity(tx, ownerId, { kind: 'delivery-plan.dismissed', subjectType: 'delivery-plan-proposal', subjectId: proposalId, payload: { proposalId, captureId: proposal.captureId } });
     return proposalFor(dismissed!);
   });
 }

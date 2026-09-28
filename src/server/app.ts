@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { registerActivityRoutes } from './routes/activity.js';
 import { registerMcpRoutes } from './routes/mcp.js';
 import { registerSearchRoutes } from './routes/search.js';
 import type { AppEnv } from './auth.js';
@@ -30,6 +31,7 @@ export function createApp(provider?: SuggestionProvider, deliveryPlanProvider?: 
   registerDocumentRoutes(app);
   registerPlanningRoutes(app);
   registerBoardRoutes(app);
+  registerActivityRoutes(app);
   return app;
 }
 

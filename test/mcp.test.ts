@@ -94,10 +94,17 @@ it('runs the complete SDK client flow with exactly five tools, shared search and
     const before = await snapshot();
     const proposal = data(await client.callTool({ name: 'request_delivery_plan', arguments: { captureId: capture.id } }));
     expect(proposal).toMatchObject({ captureId: capture.id, status: 'pending', ...plan });
-    expect(await snapshot()).toEqual(before);
+    const after = await snapshot();
+    const events = after.find(({ table }) => table === 'activities')!.rows.filter(({ row }) => row.subject_id === proposal.id);
+    expect(events).toEqual([{ row: {
+      id: expect.any(String), created_at: expect.any(String), owner_id: owner, actor_id: owner,
+      kind: 'delivery-plan.created', subject_type: 'delivery-plan-proposal', subject_id: proposal.id,
+      payload: { proposalId: proposal.id, captureId: capture.id }
+    } }]);
+    expect(after.map(({ table, rows }) => ({ table, rows: table === 'activities' ? rows.filter(({ row }) => row.id !== events[0]!.row.id) : rows }))).toEqual(before);
     expect((await client.callTool({ name: 'request_delivery_plan', arguments: { captureId: foreignCapture.id } })).isError).toBe(true);
     for (const name of ['accept_delivery_plan', 'update_issue', 'delete_capture']) expect((await client.callTool({ name, arguments: {} })).isError).toBe(true);
-    expect(await snapshot()).toEqual(before);
+    expect(await snapshot()).toEqual(after);
     expect((await pool.query('SELECT last_used_at, token_hash FROM personal_access_tokens WHERE id = $1', [pat.id])).rows[0]).toMatchObject({ last_used_at: expect.any(Date), token_hash: expect.not.stringContaining(pat.token) });
     await revokePat(owner, pat.id);
     await expect(client.listTools()).rejects.toMatchObject({ code: 401 });

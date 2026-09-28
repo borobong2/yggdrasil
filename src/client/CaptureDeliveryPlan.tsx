@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { DeliveryPlanProposal } from '../contracts/items.js';
 
-export function CaptureDeliveryPlan({ captureId, token }: { captureId: string; token: string }) {
+export function CaptureDeliveryPlan({ captureId, token, onActivity }: { captureId: string; token: string; onActivity?: () => void }) {
   const [plans, setPlans] = useState<DeliveryPlanProposal[]>([]);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -28,6 +28,7 @@ export function CaptureDeliveryPlan({ captureId, token }: { captureId: string; t
     setError('');
     try {
       const response = await fetch(path, { method: 'POST', headers });
+      if (response.ok) onActivity?.();
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || 'Could not generate a delivery plan.');
       setPlans((previous) => [result, ...previous]);
@@ -43,6 +44,7 @@ export function CaptureDeliveryPlan({ captureId, token }: { captureId: string; t
     setError('');
     try {
       const response = await fetch(`/api/delivery-plan-proposals/${plan.id}/${action}`, { method: 'POST', headers });
+      if (response.ok) onActivity?.();
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || `Could not ${action} delivery plan.`);
       setPlans((previous) => previous.map((item) => item.id === plan.id ? action === 'accept' ? { ...item, status: 'accepted', acceptance: result } : result : item));

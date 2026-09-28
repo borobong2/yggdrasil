@@ -1,5 +1,6 @@
 import type { Hono } from 'hono';
 import type { AppEnv } from '../auth.js';
+import { NotFoundError } from '../work.js';
 import { AIConfigurationRequired, generateOpenAIDeliveryPlan, type DeliveryPlanProvider } from '../openai.js';
 import { findDeliveryPlanCapture, generateDeliveryPlan, listDeliveryPlans } from '../delivery-plans.js';
 
@@ -14,6 +15,7 @@ export function registerDeliveryPlanRoutes(app: Hono<AppEnv>, provider: Delivery
     try {
       return context.json(await generateDeliveryPlan(ownerId, capture, provider), 201);
     } catch (error) {
+      if (error instanceof NotFoundError) return context.json({ error: 'Capture not found' }, 404);
       if (error instanceof AIConfigurationRequired) return context.json({ error: 'AI configuration required: set OPENAI_API_KEY on the server.' }, 503);
       return context.json({ error: 'Delivery plan generation failed. Please try again.' }, 502);
     }
