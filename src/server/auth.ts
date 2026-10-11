@@ -30,9 +30,17 @@ export async function requireUser(request: Request): Promise<User> {
   });
   if (!response.ok) throw new UnauthorizedError();
 
-  const user = (await response.json()) as { id?: unknown };
-  if (typeof user.id !== 'string' || !user.id) throw new UnauthorizedError();
+  const user = (await response.json()) as { id?: unknown; email?: unknown };
+  if (typeof user.id !== 'string' || !user.id || !isAllowedEmail(user.email)) throw new UnauthorizedError();
   return { id: user.id };
+}
+
+// YGGDRASIL_ALLOWED_EMAILS is comma-separated and case-insensitive. An empty list denies everyone in
+// production and allows any verified Supabase user elsewhere (local development).
+function isAllowedEmail(email: unknown): boolean {
+  const allowed = (process.env.YGGDRASIL_ALLOWED_EMAILS ?? '').split(',').map((entry) => entry.trim().toLowerCase()).filter(Boolean);
+  if (allowed.length === 0) return process.env.NODE_ENV !== 'production';
+  return typeof email === 'string' && allowed.includes(email.toLowerCase());
 }
 
 export const ownerAuth: MiddlewareHandler<AppEnv> = async (context, next) => {
