@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Template: __REPO__ and __HOME__ are replaced by the install command in docs/deploy/README.md. -->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>dev.yggdrasil.backup</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>__REPO__/scripts/backup/backup.sh</string>
+  </array>
+  <!-- Daily 04:00; if the Mac was asleep, launchd runs it on wake. -->
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key>
+    <integer>4</integer>
+    <key>Minute</key>
+    <integer>0</integer>
+  </dict>
+  <key>StandardOutPath</key>
+  <string>__HOME__/yggdrasil-backups/backup.log</string>
+  <key>StandardErrorPath</key>
+  <string>__HOME__/yggdrasil-backups/backup.log</string>
+</dict>
+</plist>
