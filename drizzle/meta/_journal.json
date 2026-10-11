@@ -11,6 +11,7 @@
     { "idx": 6, "version": "7", "when": 1789606800000, "tag": "0006_issue_evidence_owner_fk", "breakpoints": true },
     { "idx": 7, "version": "7", "when": 1789610400000, "tag": "0007_issue_board", "breakpoints": true },
     { "idx": 8, "version": "7", "when": 1789693200000, "tag": "0008_delivery_plan_proposals", "breakpoints": true },
-    { "idx": 9, "version": "7", "when": 1789779600000, "tag": "0009_delivery_plan_acceptance", "breakpoints": true }
+    { "idx": 9, "version": "7", "when": 1789779600000, "tag": "0009_delivery_plan_acceptance", "breakpoints": true },
+    { "idx": 10, "version": "7", "when": 1791720000000, "tag": "0010_issue_todo_fields", "breakpoints": true }
   ]
 }

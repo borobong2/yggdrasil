@@ -2,6 +2,9 @@ import { useEffect, useState } from 'react';
 import type { Activity } from '../contracts/items.js';
 
 const labels: Record<Activity['kind'], string> = {
+  'issue.created': 'Issue created',
+  'issue.updated': 'Issue updated',
+  'issue.completed': 'Issue completed',
   'issue.moved': 'Issue moved',
   'delivery-plan.created': 'Delivery plan created',
   'delivery-plan.accepted': 'Delivery plan accepted',

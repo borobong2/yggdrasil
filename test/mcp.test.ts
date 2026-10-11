@@ -68,12 +68,12 @@ it('runs the complete SDK client flow with exactly five tools, shared search and
   const doc = await createDocument(owner, q, 'Body', null);
   const goal = await createGoal(owner, q);
   const epic = await createEpic(owner, goal.id, q);
-  const issue = await createIssue(owner, epic.id, q, 'medium', null);
+  const issue = await createIssue(owner, epic.id, q, 'p3', null);
   const foreign = await createDocument(other, q, 'private', null);
   const foreignCapture = await createCapture(other, q);
   const foreignGoal = await createGoal(other, q);
   const foreignEpic = await createEpic(other, foreignGoal.id, q);
-  const foreignIssue = await createIssue(other, foreignEpic.id, q, 'medium', null);
+  const foreignIssue = await createIssue(other, foreignEpic.id, q, 'p3', null);
   const pat = await issuePat(owner, 'client');
   await pool.query("UPDATE personal_access_tokens SET created_at = now() - interval '48 hours' WHERE id = $1", [pat.id]);
   const { client, close } = await connect(pat.token);
