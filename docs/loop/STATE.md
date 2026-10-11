@@ -265,6 +265,23 @@ All DB commands used **`DATABASE_URL=postgres://yggdrasil:yggdrasil@127.0.0.1:54
 | Existing `test/mcp.test.ts` | Tool allowlist assertion updated from five to eight tools; `accept_delivery_plan`/`update_issue`/`delete_capture` still rejected. | Passed. |
 | Final `npm test && npm run typecheck && npm run build && git diff --check` | 19 files / 87 tests; typecheck exit 0; Vite 38 modules; whitespace clean. | Passed. |
 
+## Loop YG-16 evidence (2026-10-11)
+
+- Scope: GitHub #26, design `10x-life/decisions/venture/yggdrasil-todo-port-plan-2026-10-11.md` §4·§6·§7. Branch `feat/yg-16-import` rebased on `feat/yg-13-todo-fields` (uses its `createTodo(owner, input, 'import')`), worktree `.worktrees/yg-16`.
+- `scripts/one-thing/parse.ts` (pure): checkbox lines (`- [ ] 🟡 P2 · \`next\` · **Title** (마감 …)`, bold or unbolded, plain no-metadata lines → p3 todo) and `### 🔴 [P1] Title` blocks with `- **필드**:` lines. Area by file name = Goal, Epic always `일반`. inbox→backlog, next→todo, waiting/blocked/scheduled→todo+hold, done/completed/`[x]`→skipped. Unconsumed fields/free text kept in `notes`; vague dates/estimates kept in notes and reported as warnings.
+- `scripts/import-one-thing.ts`: `--dry-run` prints the table, counts, skipped and low-confidence list. Without it, `--owner <uuid>` + `DATABASE_URL` imports, skipping any issue with the same owner+source+title. Source md files are read only.
+
+All DB commands used **`DATABASE_URL=postgres://yggdrasil:yggdrasil@127.0.0.1:54330/yggdrasil_yg16`** (created with `docker exec yggdrasil-postgres-1 createdb -U yggdrasil yggdrasil_yg16`, then `npm run db:migrate` incl. `0010`). Shared `yggdrasil` was never touched.
+
+| Command / check | Exact evidence | Result |
+| --- | --- | --- |
+| `npx vitest run test/import-one-thing.test.ts` | 3/3: both formats, done skip (`[x]`, `done`, `completed`), waiting/blocked/scheduled + hold reason, scheduled date from `예정`/bare date, estimate parsing, unknown file. | Passed. |
+| `--dry-run` on real `execution/one-thing/todos` | 54 todos (커리어 18, 개인 19, 수익화 11, 잡일 2, 부동산 2, 루틴 2, 결혼 0), 2 skipped done, 7 warnings. Saved to `10x-life/tmp/yg16-dry-run.md`. | Passed. |
+| Import twice, owner `…016001` | Run 1: `created 54, skipped existing 0`; run 2: `created 0, skipped existing 54`. SQL: 54 issues across 6 area Goals / `일반` Epics, 54 `issue.created` activities with `via=import`; 8 holds with expected reasons/scheduled dates. `git status` on the md files: clean. | Idempotent. |
+| Final `npm test && npm run typecheck && npm run build && git diff --check` | 19 files / 87 tests; typecheck exit 0; Vite 38 modules; whitespace clean. | Passed. |
+
+Limits: no per-section Epics; recurring routine items import as scheduled with no date; relative links in notes stay relative to the md file.
+
 ## Loop YG-15 evidence (2026-10-11)
 
 - Scope: GitHub #25. Branch `feat/yg-15-mcp-todo-resources` stacked on `feat/yg-14-mcp-todo-write`, worktree `.worktrees/yg-15`.
