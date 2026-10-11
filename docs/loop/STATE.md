@@ -281,3 +281,16 @@ All DB commands used **`DATABASE_URL=postgres://yggdrasil:yggdrasil@127.0.0.1:54
 | Final `npm test && npm run typecheck && npm run build && git diff --check` | 19 files / 87 tests; typecheck exit 0; Vite 38 modules; whitespace clean. | Passed. |
 
 Limits: no per-section Epics; recurring routine items import as scheduled with no date; relative links in notes stay relative to the md file.
+
+## Loop YG-15 evidence (2026-10-11)
+
+- Scope: GitHub #25. Branch `feat/yg-15-mcp-todo-resources` stacked on `feat/yg-14-mcp-todo-write`, worktree `.worktrees/yg-15`.
+- Read-only MCP resources (markdown, `text/markdown`): `todo://today`, `todo://overdue`, `todo://waiting`, template `todo://area/{name}` (listed per owner area, URL-encoded name) and `todo://issue/{id}`. Lists come from `todayView`/`listAreaTodos`; today = open, not waiting/blocked, and due ≤ today, p1, or scheduled ≤ today (Asia/Seoul). Lines show P-level, area/epic, status, KST due/scheduled dates, hold reason and id; detail adds estimate, source and notes. Unknown/foreign/invalid ids return a `Todo not found` error; empty lists render `_없음_`.
+
+All DB commands used **`DATABASE_URL=postgres://yggdrasil:yggdrasil@127.0.0.1:54330/yggdrasil_yg15`** (dedicated, migrated `0000`–`0010`).
+
+| Command / check | Exact evidence | Result |
+| --- | --- | --- |
+| RED `npx vitest run test/mcp-todo-resources.test.ts` | 2 failed: `MCP error -32601: Method not found` (no resources). | Expected red. |
+| GREEN same command | 2/2 over SDK client + PAT: clock fixed at 2026-10-12 00:30 KST (15:30Z); due 10-12 and 10-11 23:59 KST in today, overdue lists only the latter, tomorrow/waiting/done/foreign excluded; waiting shows reason; area lists its epics; issue detail shows notes and P2; zero activity rows written. New owner: all lists `없음`, foreign area not listed, foreign and malformed issue ids rejected. | Passed. |
+| Final `npm test && npm run typecheck && npm run build && git diff --check` | 20 files / 89 tests; typecheck exit 0; Vite 38 modules; whitespace clean. | Passed. |

@@ -1,4 +1,4 @@
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { McpServer, ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { createCapture } from './captures.js';
 import { getDocument } from './documents.js';
@@ -7,7 +7,8 @@ import { searchWorkspace } from './search.js';
 import { findDeliveryPlanCapture, generateDeliveryPlan } from './delivery-plans.js';
 import { AIConfigurationRequired, generateOpenAIDeliveryPlan, type DeliveryPlanProvider } from './openai.js';
 import { NotFoundError } from './work.js';
-import { completeTodo, createTodo, updateTodo } from './todos.js';
+import type { Todo } from '../contracts/items.js';
+import { completeTodo, createTodo, getTodo, listAreas, listAreaTodos, seoulDate, todayView, updateTodo } from './todos.js';
 
 const name = z.string().trim().min(1).max(200);
 const day = z.union([z.iso.date(), z.iso.datetime({ offset: true })]).describe("'YYYY-MM-DD' (Asia/Seoul) or ISO timestamp");
@@ -68,7 +69,43 @@ export function createMcpServer(ownerId: string, provider: DeliveryPlanProvider 
     description: 'Mark your todo done. Completing a done todo changes nothing.',
     inputSchema: z.object({ id: z.string().uuid() }).strict(), annotations: { ...todoWrite, idempotentHint: true }
   }, ({ id }) => result(() => completeTodo(ownerId, id, 'mcp')));
+  registerTodoResources(server, ownerId);
   return server;
+}
+
+// Read-only markdown for @-mentions (todo://today etc.). Dates shown in Asia/Seoul.
+function registerTodoResources(server: McpServer, ownerId: string) {
+  const views = [['today', '오늘 할 일'], ['overdue', '마감 지남'], ['waiting', '대기·막힘']] as const;
+  for (const [key, title] of views) {
+    server.registerResource(`todo-${key}`, `todo://${key}`, { title, mimeType: 'text/markdown' }, async (uri) => {
+      const view = await todayView(ownerId);
+      return markdown(uri, list(`${title} (${view.date})`, view[key]));
+    });
+  }
+  const area = new ResourceTemplate('todo://area/{name}', {
+    list: async () => ({ resources: (await listAreas(ownerId)).map((name) => ({ uri: `todo://area/${encodeURIComponent(name)}`, name: `todo-area-${name}`, title: `영역: ${name}`, mimeType: 'text/markdown' })) })
+  });
+  server.registerResource('todo-area', area, { title: '영역별 할 일', mimeType: 'text/markdown' }, async (uri, { name }) => {
+    const value = decodeURIComponent(String(name));
+    return markdown(uri, list(`영역: ${value}`, await listAreaTodos(ownerId, value)));
+  });
+  server.registerResource('todo-issue', new ResourceTemplate('todo://issue/{id}', { list: undefined }), { title: '할 일 상세', mimeType: 'text/markdown' }, async (uri, { id }) => {
+    const todo = z.string().uuid().safeParse(id).success ? await getTodo(ownerId, String(id)).catch(() => undefined) : undefined;
+    if (!todo) throw new Error('Todo not found');
+    return markdown(uri, detail(todo));
+  });
+}
+
+const kst = (value: string | null) => value && seoulDate(new Date(value));
+function markdown(uri: URL, text: string) { return { contents: [{ uri: uri.href, mimeType: 'text/markdown', text }] }; }
+function list(title: string, todos: Todo[]) { return `# ${title}\n\n${todos.length ? todos.map(line).join('\n') : '_없음_'}\n`; }
+function line(todo: Todo) {
+  const parts = [todo.priority.toUpperCase(), `${todo.area}/${todo.epic}`, todo.status, todo.dueAt && `마감 ${kst(todo.dueAt)}`, todo.scheduledAt && `예정 ${kst(todo.scheduledAt)}`, todo.hold && [todo.hold, todo.holdReason].filter(Boolean).join(': ')];
+  return `- [${todo.status === 'done' ? 'x' : ' '}] ${todo.title} — ${parts.filter(Boolean).join(' · ')} (id: ${todo.id})`;
+}
+function detail(todo: Todo) {
+  const rows = [['id', todo.id], ['영역', `${todo.area}/${todo.epic}`], ['상태', todo.status], ['우선순위', todo.priority.toUpperCase()], ['마감', kst(todo.dueAt)], ['예정', kst(todo.scheduledAt)], ['보류', todo.hold && [todo.hold, todo.holdReason].filter(Boolean).join(': ')], ['예상', todo.estimateMinutes && `${todo.estimateMinutes}분`], ['출처', todo.source]];
+  return `# ${todo.title}\n\n${rows.filter(([, value]) => value).map(([label, value]) => `- ${label}: ${value}`).join('\n')}\n${todo.notes ? `\n## 메모\n\n${todo.notes}\n` : ''}`;
 }
 
 async function result(run: () => Promise<unknown>) {

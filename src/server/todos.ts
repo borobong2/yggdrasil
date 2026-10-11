@@ -70,6 +70,15 @@ export async function getTodo(ownerId: string, id: string): Promise<Todo> {
   return todo;
 }
 
+/** Open todos in one area (Goal title), any hold. */
+export async function listAreaTodos(ownerId: string, area: string): Promise<Todo[]> {
+  return todoRows(and(eq(issues.ownerId, ownerId), ne(issues.status, 'done'), eq(goals.title, area.trim()))!);
+}
+
+export async function listAreas(ownerId: string): Promise<string[]> {
+  return (await db.selectDistinct({ title: goals.title }).from(goals).where(eq(goals.ownerId, ownerId)).orderBy(asc(goals.title))).map((row) => row.title);
+}
+
 /** today = open, not waiting/blocked (scheduled only once its day arrives), and due ≤ today, p1, or scheduled ≤ today — all in Asia/Seoul. */
 export async function todayView(ownerId: string, now = new Date()): Promise<TodayView> {
   const date = seoulDate(now);
