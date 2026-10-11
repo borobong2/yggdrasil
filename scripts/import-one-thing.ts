@@ -1,4 +1,6 @@
-// Usage (from products/yggdrasil): tsx scripts/import-one-thing.ts --dry-run [--dir <todos dir>]
+// Usage (from products/yggdrasil):
+//   tsx scripts/import-one-thing.ts --dry-run [--dir <todos dir>]
+//   DATABASE_URL=... tsx scripts/import-one-thing.ts --owner <uuid> [--dir <todos dir>]   (skips existing source+title, safe to rerun)
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
@@ -6,6 +8,7 @@ import { parseOneThing, type ParseResult } from './one-thing/parse.js';
 
 const { values } = parseArgs({ options: {
   'dry-run': { type: 'boolean', default: false },
+  owner: { type: 'string' },
   dir: { type: 'string', default: resolve('../../execution/one-thing/todos') }
 } });
 
@@ -30,6 +33,26 @@ function report({ todos, skipped, warnings }: ParseResult): string {
   return out.join('\n');
 }
 
+async function importAll(ownerId: string, { todos }: ParseResult) {
+  // Loaded lazily: these modules connect to DATABASE_URL on import, which --dry-run must not need.
+  const { and, eq } = await import('drizzle-orm');
+  const { getDb } = await import('../src/server/db.js');
+  const { issues } = await import('../src/server/schema.js');
+  const { createTodo } = await import('../src/server/todos.js');
+  const db = getDb();
+  let created = 0; let existing = 0;
+  try {
+    for (const { area, epic, title, status, hold, holdReason, priority, dueAt, scheduledAt, estimateMinutes, notes, source } of todos) {
+      const found = await db.select({ id: issues.id }).from(issues).where(and(eq(issues.ownerId, ownerId), eq(issues.source, source), eq(issues.title, title.trim()))).limit(1);
+      if (found.length) { existing++; continue; }
+      await createTodo(ownerId, { area, epic, title, status, hold, holdReason, priority, dueAt, scheduledAt, estimateMinutes, notes, source }, 'import');
+      created++;
+    }
+  } finally { await db.$client.end(); }
+  console.log(`created ${created}, skipped existing ${existing}, total parsed ${todos.length}`);
+}
+
 const parsed = readAll(values.dir);
 if (values['dry-run']) console.log(report(parsed));
-else { console.error('Only --dry-run is supported until YG-13 lands.'); process.exit(1); }
+else if (values.owner && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(values.owner)) await importAll(values.owner, parsed);
+else { console.error('Pass --dry-run, or --owner <uuid> with DATABASE_URL set.'); process.exit(1); }
