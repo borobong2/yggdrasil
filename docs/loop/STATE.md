@@ -251,6 +251,20 @@ All DB commands used **`DATABASE_URL=postgres://yggdrasil:yggdrasil@127.0.0.1:54
 
 Limits: no `GET /api/todos/today` route yet (dashboard is after YG-12). Existing `work.test.ts` priority fixtures updated to p-values; no other test semantics changed.
 
+## Loop YG-14 evidence (2026-10-11)
+
+- Scope: GitHub #24. Branch `feat/yg-14-mcp-todo-write` stacked on `feat/yg-13-todo-fields` (`2d8f587`), worktree `.worktrees/yg-14`. PRODUCT rule 2 now records the user-approved exception: spoken todo requests may create/update/complete Issues over MCP; delivery-plan acceptance still requires UI approval; no delete tool.
+- MCP tools `create_todo` (area/epic by name, auto-created; defaults todo/p3), `update_todo` (partial; area/epic move; null clears), `complete_todo` (idempotent). Strict Zod schemas: p1–p4, hold enum, `YYYY-MM-DD` or offset ISO dates, positive integer minutes, trimmed 1–200 names; unknown keys (`ownerId`, `source`) and empty updates rejected. All call `todos.ts` with `via='mcp'`; owner comes only from the PAT.
+
+All DB commands used **`DATABASE_URL=postgres://yggdrasil:yggdrasil@127.0.0.1:54330/yggdrasil_yg14`** (dedicated, migrated `0000`–`0010`).
+
+| Command / check | Exact evidence | Result |
+| --- | --- | --- |
+| RED `npx vitest run test/mcp-todos.test.ts` | 1 failed: tool list lacked `create_todo`/`update_todo`/`complete_todo`. | Expected red. |
+| GREEN same command | 3/3: SDK client create→update→complete with 3 activity rows `via=mcp`, area Goal created once, no delete/remove tool; revoked PAT → SDK code 401 and raw POST 401 with zero owner rows; foreign owner update/complete/forged ownerId rejected with owner rows unchanged; 12 invalid inputs (missing area, blank names, `high`, bad hold/date, negative minutes, `source`, bad id, empty update, `delete_todo`) rejected without writes. | Passed. |
+| Existing `test/mcp.test.ts` | Tool allowlist assertion updated from five to eight tools; `accept_delivery_plan`/`update_issue`/`delete_capture` still rejected. | Passed. |
+| Final `npm test && npm run typecheck && npm run build && git diff --check` | 19 files / 87 tests; typecheck exit 0; Vite 38 modules; whitespace clean. | Passed. |
+
 ## Loop YG-16 evidence (2026-10-11)
 
 - Scope: GitHub #26, design `10x-life/decisions/venture/yggdrasil-todo-port-plan-2026-10-11.md` §4·§6·§7. Branch `feat/yg-16-import` rebased on `feat/yg-13-todo-fields` (uses its `createTodo(owner, input, 'import')`), worktree `.worktrees/yg-16`.

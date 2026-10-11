@@ -11,7 +11,7 @@ Yggdrasil은 한 사람이 요구·결정·실행 근거를 연결하는 AI-nati
 ## 변경 불가 규칙
 
 1. Every capture is preserved; conversion or organization creates/updates structured records without deleting the source capture.
-2. AI/MCP는 캡처·검색·읽기·계획 제안만 할 수 있으며, 승인된 계획/작업을 직접 생성·수정·수락할 수 없다.
+2. AI/MCP는 캡처·검색·읽기·계획 제안만 할 수 있으며, 승인된 계획/작업을 직접 생성·수정·수락할 수 없다. 예외(YG-14): 사용자가 말로 요청한 할 일(Issue)은 MCP `create_todo`·`update_todo`·`complete_todo`로 직접 생성·수정·완료할 수 있다. 모든 변경은 활동 로그에 `payload.via = 'mcp'`로 남기고, 삭제 도구는 두지 않으며, 납품 계획 수락은 여전히 UI 승인이 필요하다.
 3. AI 제안 수락은 한 DB transaction으로 적용하고, 재시도·부분 실패는 새 작업을 남기지 않는다.
 4. MVP scope is personal and single-user. Authorization must still isolate data by authenticated user.
 5. Product, copy, UI, and implementation are clean-room work. Do not copy source, wording, or design assets from external products.
