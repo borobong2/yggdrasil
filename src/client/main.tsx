@@ -2,7 +2,7 @@ import { FormEvent, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { CaptureSuggestions } from './CaptureSuggestions.js';
 import { CaptureDeliveryPlan } from './CaptureDeliveryPlan.js';
-import { LoginView } from './LoginView.js';
+import { LoginView, readSession } from './LoginView.js';
 import { PatSettings } from './PatSettings.js';
 import { DocumentsWorkspace } from './DocumentsWorkspace.js';
 import { EvidenceList } from './EvidenceList.js';
@@ -17,14 +17,8 @@ function App() {
   const [text, setText] = useState('');
   const [activityRevision, setActivityRevision] = useState(0);
   const refreshActivity = () => setActivityRevision((revision) => revision + 1);
-  const [token, setToken] = useState(() => sessionStorage.getItem('yggdrasil-session') ?? '');
+  const [token, setToken] = useState(() => readSession()?.access_token ?? '');
   const headers: Record<string, string> = token ? { authorization: `Bearer ${token}` } : {};
-
-  function saveToken(next: string) {
-    setToken(next);
-    if (next) sessionStorage.setItem('yggdrasil-session', next);
-    else sessionStorage.removeItem('yggdrasil-session');
-  }
 
   async function load() {
     const response = await fetch('/api/captures', { headers });
@@ -47,7 +41,7 @@ function App() {
 
   return <main>
     <h1>Inbox</h1>
-    <LoginView token={token} onSave={saveToken} />
+    <LoginView token={token} onToken={setToken} />
     <PatSettings token={token} />
     <SearchCommand token={token} />
     <DocumentsWorkspace token={token} />
