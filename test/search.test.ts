@@ -20,7 +20,7 @@ it('searches all five kinds and document body case-insensitively without leaking
   const doc = await createDocument(owner, 'body match', q.toUpperCase(), null);
   const goal = await createGoal(owner, q);
   const epic = await createEpic(owner, goal.id, q);
-  const issue = await createIssue(owner, epic.id, q, 'medium', null);
+  const issue = await createIssue(owner, epic.id, q, 'p3', null);
   const capture = await createCapture(owner, q);
   await createCapture(other, q);
   await createDocument(other, q, q, null);

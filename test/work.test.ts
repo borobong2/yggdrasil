@@ -14,16 +14,16 @@ describe('work routes', () => {
   it('creates, reads, updates, and deletes an owner-scoped Goal → Epic → Issue hierarchy', async () => {
     const goal = await create('/api/goals', { title: 'Ship core model' });
     const epic = await create('/api/epics', { title: 'Hierarchy API', goalId: goal.id });
-    const issue = await create('/api/issues', { title: 'Validate parents', epicId: epic.id, priority: 'high' });
+    const issue = await create('/api/issues', { title: 'Validate parents', epicId: epic.id, priority: 'p2' });
 
-    expect(issue).toMatchObject({ epicId: epic.id, status: 'backlog', priority: 'high', dueAt: null });
+    expect(issue).toMatchObject({ epicId: epic.id, status: 'backlog', priority: 'p2', dueAt: null });
     expect((await (await app.request('/api/goals', { headers })).json()).map((item: { id: string }) => item.id)).toContain(goal.id);
 
     const update = await app.request(`/api/issues/${issue.id}`, {
-      method: 'PATCH', headers, body: JSON.stringify({ title: 'Validate hierarchy', status: 'doing', priority: 'low', dueAt: null })
+      method: 'PATCH', headers, body: JSON.stringify({ title: 'Validate hierarchy', status: 'doing', priority: 'p4', dueAt: null })
     });
     expect(update.status).toBe(200);
-    expect(await update.json()).toMatchObject({ title: 'Validate hierarchy', status: 'doing', priority: 'low', dueAt: null });
+    expect(await update.json()).toMatchObject({ title: 'Validate hierarchy', status: 'doing', priority: 'p4', dueAt: null });
 
     expect((await app.request(`/api/goals/${goal.id}`, { method: 'DELETE', headers })).status).toBe(204);
     expect((await app.request(`/api/epics/${epic.id}`, { headers })).status).toBe(404);

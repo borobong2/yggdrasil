@@ -71,8 +71,14 @@ export const issues = pgTable('issues', {
   title: text('title').notNull(),
   status: text('status').$type<import('../contracts/items.js').IssueStatus>().notNull().default('backlog'),
   position: integer('position').notNull().default(0),
-  priority: text('priority').$type<import('../contracts/items.js').Priority>().notNull().default('medium'),
+  priority: text('priority').$type<import('../contracts/items.js').Priority>().notNull().default('p3'),
   dueAt: timestamp('due_at', { withTimezone: true }),
+  hold: text('hold').$type<import('../contracts/items.js').Hold>(),
+  holdReason: text('hold_reason'),
+  scheduledAt: timestamp('scheduled_at', { withTimezone: true }),
+  notes: text('notes').notNull().default(''),
+  estimateMinutes: integer('estimate_minutes'),
+  source: text('source'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull()
 }, (table) => [unique('issues_id_owner_key').on(table.id, table.ownerId)]);

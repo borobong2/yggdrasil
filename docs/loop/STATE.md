@@ -232,3 +232,21 @@ Limits/deferred verification: no live Supabase, OpenAI credentials, deployed HTT
 - Merged `origin/main` at `fb93b70` into `feat/yg-10`, preserving activity, search and MCP registrations and both tickets' evidence sections.
 - Updated the MCP successful-proposal test to require exactly one matching `delivery-plan.created` activity while preserving every pre-existing activity and source/work row. Rejected calls still leave all snapshots unchanged. The original assertion failed on that single expected event before the update.
 - Verification used a fresh isolated PostgreSQL container/database `yggdrasil_yg10_merge` on `127.0.0.1:54339`: migrations passed; `npm test` passed 17 files / 79 tests; `npm run typecheck`, `npm run build`, and `git diff --check` passed. No shared database or external provider was used.
+
+## Loop YG-13 evidence (2026-10-11)
+
+- Scope: GitHub #23, design `10x-life/decisions/venture/yggdrasil-todo-port-plan-2026-10-11.md` §4·§7 (user-approved decisions: Goal=area, default Epic `일반`, p1–p4, hold fields, MCP todo writes logged). Branch `feat/yg-13-todo-fields` from main `4bac6ec`, worktree `.worktrees/yg-13`.
+- Migration `0010_issue_todo_fields`: priority `high→p2, medium→p3, low→p4`, default `p3`, check `p1..p4`; adds `hold` (waiting|blocked|scheduled|null), `hold_reason`, `scheduled_at`, `notes` (default `''`), `estimate_minutes` (>0), `source`. `status` unchanged for board compatibility.
+- `src/server/todos.ts`: `createTodo`/`updateTodo`/`completeTodo`/`getTodo`/`todayView`. Owner-scoped, one transaction per mutation incl. area Goal/Epic auto-create (per-owner advisory lock) and one activity row (`issue.created|issue.updated|issue.completed`, `payload.via`). Date-only input = Asia/Seoul midnight; today/overdue use Asia/Seoul dates. Issue mappers deduplicated (`board.ts` reuses `work.ts`). UI: only new activity labels; REST `/api/issues` accepts p1–p4.
+
+All DB commands used **`DATABASE_URL=postgres://yggdrasil:yggdrasil@127.0.0.1:54330/yggdrasil_yg13`** (created with `docker exec yggdrasil-postgres-1 createdb -U yggdrasil yggdrasil_yg13`). Shared `yggdrasil` was only read via `pg_dump` for a rehearsal copy; never migrated or tested.
+
+| Command / check | Exact evidence | Result |
+| --- | --- | --- |
+| Baseline `npm test` | 17 files / 79 tests passed. | Passed. |
+| RED `npx vitest run test/todos.test.ts` | Failed: `Failed to load url ../src/server/todos.js`. | Expected red. |
+| GREEN same command | 5/5 passed: constraint/default migration, area/Epic auto-create + reuse, update/complete activity rows with `via` and changed fields, idempotent complete, foreign owner rejected with no write, rollback on activity failure trigger (no orphan Goal), today/overdue/waiting at a KST midnight boundary, empty state, foreign owner excluded. | Passed. |
+| Migration rehearsal | Fresh DB at `0009` seeded with high/medium/low issues, then `0010` via psql: rows became p2/p3/p4, `notes=''`, `hold` null. Rehearsal DB dropped. A `pg_dump` copy of live `yggdrasil` also migrated cleanly (0 issues). | Passed. |
+| Final `npm test && npm run typecheck && npm run build && git diff --check` | 18 files / 84 tests; typecheck exit 0; Vite 38 modules; whitespace clean. | Passed. |
+
+Limits: no `GET /api/todos/today` route yet (dashboard is after YG-12). Existing `work.test.ts` priority fixtures updated to p-values; no other test semantics changed.

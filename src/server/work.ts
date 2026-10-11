@@ -43,4 +43,4 @@ async function removed(table: typeof goals | typeof epics | typeof issues, owner
 
 function goal(row: typeof goals.$inferSelect): Goal { return { id: row.id, title: row.title, createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString() }; }
 function epic(row: typeof epics.$inferSelect): Epic { return { ...goal(row), goalId: row.goalId }; }
-function issue(row: typeof issues.$inferSelect): Issue { return { id: row.id, title: row.title, epicId: row.epicId, status: row.status, position: row.position, priority: row.priority, dueAt: row.dueAt?.toISOString() ?? null, createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString() }; }
+export function issue(row: typeof issues.$inferSelect): Issue { return { id: row.id, title: row.title, epicId: row.epicId, status: row.status, position: row.position, priority: row.priority, dueAt: row.dueAt?.toISOString() ?? null, hold: row.hold, holdReason: row.holdReason, scheduledAt: row.scheduledAt?.toISOString() ?? null, notes: row.notes, estimateMinutes: row.estimateMinutes, source: row.source, createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString() }; }

@@ -3,7 +3,7 @@ import type { Issue, IssueStatus } from '../contracts/items.js';
 import { getDb } from './db.js';
 import { appendActivity } from './activity.js';
 import { issues } from './schema.js';
-import { NotFoundError } from './work.js';
+import { NotFoundError, issue as asIssue } from './work.js';
 
 const db = getDb();
 
@@ -22,5 +22,3 @@ export async function moveIssue(ownerId: string, id: string, status: IssueStatus
     return asIssue({ ...current, status, position: target.findIndex((item) => item.id === id), updatedAt: new Date() });
   });
 }
-
-function asIssue(row: typeof issues.$inferSelect): Issue { return { id: row.id, title: row.title, epicId: row.epicId, status: row.status, position: row.position, priority: row.priority, dueAt: row.dueAt?.toISOString() ?? null, createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString() }; }
