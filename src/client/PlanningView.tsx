@@ -3,6 +3,7 @@ import type { Issue, PlanningEpic, PlanningGoal } from '../contracts/items.js';
 import { Plus } from 'lucide-react';
 import { PlanningTree } from './PlanningTree.js';
 import { DueBadge, formatDate, HoldBadge, PriorityBadge, ProgressBar, statusLabels } from './format.js';
+import { GitHubChips } from './GitHubChips.js';
 
 export function PlanningView({ token }: { token: string }) {
   const [goals, setGoals] = useState<PlanningGoal[]>([]);
@@ -32,7 +33,7 @@ export function PlanningView({ token }: { token: string }) {
     const title = String(form.get('title'));
     const parentId = String(form.get('parentId'));
     const path = kind === 'goal' ? '/api/goals' : kind === 'epic' ? '/api/epics' : '/api/issues';
-    const body = kind === 'goal' ? { title } : kind === 'epic' ? { title, goalId: parentId } : { title, epicId: parentId };
+    const body = kind === 'goal' ? { title } : kind === 'epic' ? { title, goalId: parentId } : { title, epicId: parentId, prefix: String(form.get('prefix') ?? '') };
     const response = await fetch(path, { method: 'POST', headers: { ...headers, 'content-type': 'application/json' }, body: JSON.stringify(body) });
     if (!response.ok) { setError('기획 항목을 만들지 못했습니다.'); return; }
     element.reset();
@@ -54,6 +55,7 @@ export function PlanningView({ token }: { token: string }) {
       <label className="sm:w-28"><span className="label">유형</span><select name="kind" className="field" value={kind} onChange={(event) => setKind(event.target.value as typeof kind)}>{(['goal', 'epic', 'issue'] as const).map((value) => <option key={value} value={value}>{kindLabels[value]}</option>)}</select></label>
       <label className="min-w-0 flex-1"><span className="label">제목</span><input name="title" className="field" required maxLength={200} placeholder={`새 ${kindLabels[kind]} 제목`} /></label>
       {kind !== 'goal' && <label className="min-w-0 sm:w-56"><span className="label">상위 항목</span><select name="parentId" className="field" required><option value="">{kind === 'epic' ? '목표 선택' : '에픽 선택'}</option>{kind === 'epic' ? goals.map((goal) => <option key={goal.id} value={goal.id}>{goal.title}</option>) : epics.map((epic) => <option key={epic.id} value={epic.id}>{epic.title}</option>)}</select></label>}
+      {kind === 'issue' && <label className="sm:w-20"><span className="label">키 접두어</span><input name="prefix" className="field font-mono uppercase" maxLength={10} pattern="[A-Za-z][A-Za-z0-9]*" placeholder="YG" /></label>}
       <button className="btn btn-primary h-8"><Plus />만들기</button>
     </form>
     <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
@@ -68,11 +70,12 @@ export function PlanningView({ token }: { token: string }) {
 function Detail({ item }: { item: PlanningGoal | PlanningEpic | Issue }) {
   const kind = 'epics' in item ? '목표' : 'issues' in item ? '에픽' : '이슈';
   return <div className="space-y-3">
-    <div><p className="eyebrow">{kind}</p><h2 className="mt-1 break-words text-lg font-semibold">{item.title}</h2></div>
+    <div><p className="eyebrow">{kind}{'key' in item && item.key && ` · ${item.key}`}</p><h2 className="mt-1 break-words text-lg font-semibold">{item.title}</h2></div>
     {'progress' in item && <ProgressBar {...item.progress} />}
     {'status' in item && <>
       <dl className="grid grid-cols-[72px_1fr] gap-y-2 text-sm">
         <dt className="text-muted">상태</dt><dd>{statusLabels[item.status]}</dd>
+        {item.github && <><dt className="text-muted">GitHub</dt><dd className="flex flex-wrap gap-1"><GitHubChips issue={{ key: null, github: item.github }} /></dd></>}
         <dt className="text-muted">우선순위</dt><dd><PriorityBadge priority={item.priority} /></dd>
         <dt className="text-muted">마감</dt><dd>{item.dueAt ? <DueBadge issue={item} /> : <span className="text-faint">없음</span>}</dd>
         {item.hold && <><dt className="text-muted">보류</dt><dd className="space-y-1"><HoldBadge hold={item.hold} reason={item.holdReason} />{item.holdReason && <p className="text-xs text-muted">{item.holdReason}</p>}{item.scheduledAt && <p className="text-xs text-muted">예정일 {formatDate(item.scheduledAt)}</p>}</dd></>}

@@ -4,6 +4,7 @@ import { appendActivity, type Transaction } from './activity.js';
 import { getDb } from './db.js';
 import { epics, goals, issues } from './schema.js';
 import { NotFoundError, issue } from './work.js';
+import { allocateKey } from './ticket-keys.js';
 
 const db = getDb();
 export const DEFAULT_EPIC = '일반';
@@ -13,6 +14,8 @@ export type DateInput = Date | string | null;
 export type TodoInput = {
   area: string; epic?: string; title: string; status?: IssueStatus; priority?: Priority; dueAt?: DateInput;
   hold?: Hold | null; holdReason?: string | null; scheduledAt?: DateInput; notes?: string; estimateMinutes?: number | null; source?: string | null;
+  /** Ticket key prefix (e.g. 'YG'): assigns the next key on create, or on update when the todo has none. */
+  prefix?: string;
 };
 /** `area` alone moves the todo to that area's default Epic; `epic` alone moves it within its current area. */
 export type TodoChanges = Partial<TodoInput>;
@@ -34,7 +37,7 @@ export async function createTodo(ownerId: string, input: TodoInput, via: TodoVia
   return db.transaction(async (tx) => {
     const place = await resolveEpic(tx, ownerId, input.area, input.epic ?? DEFAULT_EPIC);
     const status = input.status ?? 'todo';
-    const [row] = await tx.insert(issues).values({ ...columns(input), id: crypto.randomUUID(), ownerId, epicId: place.epicId, title: input.title.trim(), status, position: await nextPosition(tx, ownerId, status) }).returning();
+    const [row] = await tx.insert(issues).values({ ...columns(input), id: crypto.randomUUID(), ownerId, epicId: place.epicId, title: input.title.trim(), status, position: await nextPosition(tx, ownerId, status), key: input.prefix ? await allocateKey(tx, ownerId, input.prefix) : null }).returning();
     await appendActivity(tx, ownerId, { kind: 'issue.created', subjectType: 'issue', subjectId: row!.id, payload: { via, area: place.area, epic: place.epic } });
     return { ...issue(row!), area: place.area, epic: place.epic };
   });
@@ -50,6 +53,7 @@ export async function updateTodo(ownerId: string, id: string, changes: TodoChang
       ? { epicId: current.epicId, area: current.area, epic: current.epic }
       : await resolveEpic(tx, ownerId, changes.area ?? current.area, changes.epic ?? (changes.area === undefined ? current.epic : DEFAULT_EPIC));
     const set = columns(changes);
+    if (changes.prefix && !current.key) set.key = await allocateKey(tx, ownerId, changes.prefix);
     if (set.status && set.status !== current.status) set.position = await nextPosition(tx, ownerId, set.status);
     const [row] = await tx.update(issues).set({ ...set, epicId: place.epicId, updatedAt: new Date() }).where(and(eq(issues.id, id), eq(issues.ownerId, ownerId))).returning();
     const kind = set.status === 'done' && current.status !== 'done' ? 'issue.completed' : 'issue.updated';

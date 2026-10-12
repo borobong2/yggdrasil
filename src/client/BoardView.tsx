@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { ArrowRight } from 'lucide-react';
 import type { Issue, IssueStatus } from '../contracts/items.js';
 import { DueBadge, HoldBadge, PriorityBadge, statusLabels } from './format.js';
+import { GitHubChips } from './GitHubChips.js';
 
 const statuses: IssueStatus[] = ['backlog', 'todo', 'doing', 'done'];
 const dots: Record<IssueStatus, string> = { backlog: 'bg-line-strong', todo: 'bg-faint', doing: 'bg-info', done: 'bg-accent' };
@@ -69,6 +70,7 @@ function BoardCard({ issue, onMove }: { issue: Issue; onMove: (issue: Issue, sta
       <PriorityBadge priority={issue.priority} />
       {issue.hold && <HoldBadge hold={issue.hold} reason={issue.holdReason} />}
       <DueBadge issue={issue} />
+      <GitHubChips issue={issue} />
     </div>
     <div className="mt-2 flex items-center gap-1.5 border-t border-line pt-2">
       <select aria-label={`${issue.title} destination`} className="field h-7 flex-1 text-xs" value={status} onChange={(event) => setStatus(event.target.value as IssueStatus)}>

@@ -35,10 +35,14 @@ Yggdrasil은 한 사람이 요구·결정·실행 근거를 연결하는 AI-nati
 - 구현은 `main`에서 하지 않는다. `feat/yg-XX` 브랜치와 `.worktrees/yg-XX` worktree에서만 진행한다.
 - 병렬 가능한 티켓은 각각 독립 worktree를 쓰고, 검증된 커밋만 `main`에 순차 병합한다.
 
+## 티켓 키와 GitHub
+
+Yggdrasil 티켓은 Yggdrasil에서 만든다(MCP `create_todo` + `prefix: "YG"` → `YG-<n>`). 브랜치는 `feat/yg-<n>-slug`, PR 제목은 `YG-<n>: …`. 규칙과 자동 반영 내용은 [docs/github-tracking.md](../github-tracking.md).
+
 ## 의도적 제외
 
 - 팀, 초대, presence, 모니터링, Slack 연동
-- GitHub OAuth와 webhook 자동 동기화 (검증된 URL evidence만 우선)
+- GitHub OAuth (webhook 기반 티켓 키 추적은 YG-24에서 추가: [github-tracking.md](../github-tracking.md))
 - SSE 실시간 알림 (활동 타임라인과 refetch로 대체)
 
 ## 기술 경계
