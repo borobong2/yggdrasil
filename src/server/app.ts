@@ -16,6 +16,7 @@ import { registerBoardRoutes } from './routes/board.js';
 import { registerTodoRoutes } from './routes/todos.js';
 import { registerDeliveryPlanRoutes } from './routes/delivery-plans.js';
 import { registerPlanAcceptanceRoutes } from './routes/plan-acceptance.js';
+import { registerGitHubRoutes } from './routes/github.js';
 
 export function createApp(provider?: SuggestionProvider, deliveryPlanProvider?: DeliveryPlanProvider) {
   const app = new Hono<AppEnv>();
@@ -34,6 +35,7 @@ export function createApp(provider?: SuggestionProvider, deliveryPlanProvider?: 
   registerBoardRoutes(app);
   registerTodoRoutes(app);
   registerActivityRoutes(app);
+  registerGitHubRoutes(app);
   return app;
 }
 

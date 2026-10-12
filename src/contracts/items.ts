@@ -4,14 +4,14 @@ export type WorkKind = 'goal' | 'epic' | 'issue';
 export type IssueStatus = 'backlog' | 'todo' | 'doing' | 'done';
 export type Priority = 'p1' | 'p2' | 'p3' | 'p4';
 export type Hold = 'waiting' | 'blocked' | 'scheduled';
-export type EvidenceKind = 'github_pr' | 'github_commit' | 'deployment';
+export type EvidenceKind = 'github_pr' | 'github_commit' | 'github_branch' | 'deployment';
 export type EvidenceStatus = 'linked';
 
 type WorkRecord = { id: string; title: string; createdAt: string; updatedAt: string };
 export type Goal = WorkRecord;
 export type Epic = WorkRecord & { goalId: string };
 export type Issue = WorkRecord & { epicId: string; status: IssueStatus; position: number; priority: Priority; dueAt: string | null;
-  hold: Hold | null; holdReason: string | null; scheduledAt: string | null; notes: string; estimateMinutes: number | null; source: string | null };
+  hold: Hold | null; holdReason: string | null; scheduledAt: string | null; notes: string; estimateMinutes: number | null; source: string | null; key: string | null; github?: GitHubSummary | null };
 export type Todo = Issue & { area: string; epic: string };
 export type TodoVia = 'ui' | 'mcp' | 'import';
 export type TodayView = { date: string; today: Todo[]; overdue: Todo[]; waiting: Todo[] };
@@ -19,7 +19,11 @@ export type DeliveryPlanStatus = 'pending' | 'accepted' | 'dismissed';
 export type DeliveryPlanAcceptance = { proposalId: string; captureId: string; documentId: string; goalId: string; epicId: string; issueIds: string[]; acceptedAt: string };
 export type DeliveryPlanActivityPayload = { proposalId: string; captureId: string; documentId?: string; goalId?: string; epicId?: string; issueIds?: string[] };
 export type Activity = { id: string; ownerId: string; actorId: string; kind: 'issue.created' | 'issue.updated' | 'issue.completed' | 'issue.moved' | 'delivery-plan.created' | 'delivery-plan.accepted' | 'delivery-plan.dismissed' | 'evidence.added'; subjectType: 'issue' | 'delivery-plan-proposal'; subjectId: string; payload: Record<string, unknown>; createdAt: string };
-export type IssueEvidence = { id: string; issueId: string; url: string; kind: EvidenceKind; status: EvidenceStatus; createdAt: string };
+export type IssueEvidence = { id: string; issueId: string; url: string; kind: EvidenceKind; status: EvidenceStatus; createdAt: string;
+  state: string | null; ci: string | null; prNumber: number | null; metadata: Record<string, unknown> };
+/** Latest GitHub state per issue for card/detail chips (YG-24). */
+export type GitHubSummary = { pr: { number: number; url: string; state: string; ci: string | null } | null; deploy: { url: string; state: string } | null };
+export type GitHubRepo = { id: string; fullName: string; prefix: string; createdAt: string; lastEventAt: string | null; lastStatus: string | null };
 
 export type Document = WorkRecord & { body: string; parentId: string | null; position: number; archivedAt: string | null; icon: string | null };
 export type DocumentIssueLink = { documentId: string; issueId: string; createdAt: string };

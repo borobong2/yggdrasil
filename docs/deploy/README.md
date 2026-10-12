@@ -82,6 +82,7 @@ scripts/deploy.sh $P secret SUPABASE_URL
 scripts/deploy.sh $P secret SUPABASE_ANON_KEY
 scripts/deploy.sh $P secret YGGDRASIL_ALLOWED_EMAILS     # 예: me@gmail.com (쉼표 구분)
 scripts/deploy.sh $P secret OPENAI_API_KEY               # 선택. 없으면 AI 제안만 꺼진다
+openssl rand -hex 32 | scripts/deploy.sh $P secret GITHUB_WEBHOOK_SECRET   # 선택. 없으면 /api/webhooks/github가 503
 scripts/deploy.sh $P
 ```
 
@@ -148,6 +149,22 @@ tail ~/yggdrasil-backups/backup.log
 - 복원: `pg_restore --no-owner --clean --if-exists -d "$DATABASE_URL" ~/yggdrasil-backups/<파일>.dump`
 - 제거: `launchctl bootout gui/$(id -u)/dev.yggdrasil.backup && rm ~/Library/LaunchAgents/dev.yggdrasil.backup.plist`
 
+## 7. GitHub 티켓 추적 연결 (YG-24, 선택)
+
+규칙: [docs/github-tracking.md](../github-tracking.md).
+
+```sh
+export CLOUDSDK_ACTIVE_CONFIG_NAME=personal
+openssl rand -hex 32 | scripts/deploy.sh $P secret GITHUB_WEBHOOK_SECRET   # 값은 화면에 나오지 않음
+scripts/deploy.sh $P                                                       # 새 비밀 반영
+scripts/connect-repo.sh borobong2/yggdrasil YG 24                          # 다음 키가 YG-24부터
+```
+
+`connect-repo.sh`는 Secret Manager(`yggdrasil-ws`)에서 비밀을 읽고, 로컬 `gh` 인증으로 저장소 웹훅(push, pull_request, check_suite, workflow_run, deployment_status → `<URL>/api/webhooks/github`, JSON)을 만들거나 갱신한 뒤, 키체인 `yggdrasil-claude-pat` PAT로 앱에 저장소·접두어를 등록한다. 다시 실행해도 웹훅이 중복되지 않는다. 회사 조직 저장소는 거부한다.
+
+이미 있는 YG-24 티켓에 키를 붙이려면 연결 후 MCP `update_todo { id, prefix: "YG" }`(키가 없을 때만 다음 번호 = YG-24 부여).
+비밀을 바꾸면 재배포 후 `connect-repo.sh`를 다시 실행해 웹훅 비밀도 갱신한다.
+
 ## 검증 체크리스트
 
 - [ ] `curl -fsS <URL>/api/health` → `{"ok":true}`
@@ -156,6 +173,7 @@ tail ~/yggdrasil-backups/backup.log
 - [ ] `claude mcp get yggdrasil` Connected, `todo://today` 응답
 - [ ] `~/yggdrasil-backups`에 오늘 날짜 `.dump` 생성
 - [ ] 예산 알림 5,000원 존재
+- [ ] (YG-24) 설정 → GitHub 연결에 저장소가 보이고 마지막 이벤트가 `ping`
 
 ## 예상 비용 (월)
 

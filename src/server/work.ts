@@ -1,7 +1,8 @@
-import { and, asc, desc, eq } from 'drizzle-orm';
-import type { Epic, Goal, Issue, IssueStatus, Priority } from '../contracts/items.js';
+import { and, asc, desc, eq, inArray } from 'drizzle-orm';
+import type { Epic, GitHubSummary, Goal, Issue, IssueStatus, Priority } from '../contracts/items.js';
 import { getDb } from './db.js';
-import { epics, goals, issues } from './schema.js';
+import { epics, goals, issueEvidence, issues } from './schema.js';
+import { allocateKey } from './ticket-keys.js';
 
 const db = getDb();
 export class NotFoundError extends Error {}
@@ -18,8 +19,31 @@ export async function getEpic(ownerId: string, id: string): Promise<Epic> { retu
 export async function updateEpic(ownerId: string, id: string, title: string): Promise<Epic> { return epic(await changed(epics, ownerId, id, { title })); }
 export async function deleteEpic(ownerId: string, id: string): Promise<void> { await removed(epics, ownerId, id); }
 
-export async function createIssue(ownerId: string, epicId: string, title: string, priority: Priority, dueAt: Date | null): Promise<Issue> { await epicRow(ownerId, epicId); const last = (await db.select({ position: issues.position }).from(issues).where(and(eq(issues.ownerId, ownerId), eq(issues.status, 'backlog'))).orderBy(desc(issues.position)).limit(1))[0]; return issue((await db.insert(issues).values({ id: crypto.randomUUID(), ownerId, epicId, title, priority, dueAt, position: (last?.position ?? -1) + 1 }).returning())[0]!); }
-export async function listIssues(ownerId: string): Promise<Issue[]> { return (await db.select().from(issues).where(eq(issues.ownerId, ownerId)).orderBy(asc(issues.status), asc(issues.position), asc(issues.id))).map(issue); }
+export async function createIssue(ownerId: string, epicId: string, title: string, priority: Priority, dueAt: Date | null, prefix?: string): Promise<Issue> {
+  await epicRow(ownerId, epicId);
+  return db.transaction(async (tx) => {
+    const last = (await tx.select({ position: issues.position }).from(issues).where(and(eq(issues.ownerId, ownerId), eq(issues.status, 'backlog'))).orderBy(desc(issues.position)).limit(1))[0];
+    const key = prefix ? await allocateKey(tx, ownerId, prefix) : null;
+    return issue((await tx.insert(issues).values({ id: crypto.randomUUID(), ownerId, epicId, title, priority, dueAt, key, position: (last?.position ?? -1) + 1 }).returning())[0]!);
+  });
+}
+export async function listIssues(ownerId: string): Promise<Issue[]> {
+  const [rows, github] = await Promise.all([db.select().from(issues).where(eq(issues.ownerId, ownerId)).orderBy(asc(issues.status), asc(issues.position), asc(issues.id)), githubSummaries(ownerId)]);
+  return rows.map((row) => ({ ...issue(row), github: github.get(row.id) ?? null }));
+}
+
+/** Latest PR and successful deploy per issue, from webhook-written evidence (YG-24). */
+async function githubSummaries(ownerId: string): Promise<Map<string, GitHubSummary>> {
+  const rows = await db.select().from(issueEvidence).where(and(eq(issueEvidence.ownerId, ownerId), inArray(issueEvidence.kind, ['github_pr', 'deployment']))).orderBy(desc(issueEvidence.createdAt), desc(issueEvidence.id));
+  const out = new Map<string, GitHubSummary>();
+  for (const row of rows) {
+    const summary = out.get(row.issueId) ?? { pr: null, deploy: null };
+    if (row.kind === 'github_pr' && !summary.pr && row.prNumber && row.state) summary.pr = { number: row.prNumber, url: row.url, state: row.state, ci: row.ci };
+    if (row.kind === 'deployment' && !summary.deploy && row.state === 'success') summary.deploy = { url: row.url, state: row.state };
+    if (summary.pr || summary.deploy) out.set(row.issueId, summary);
+  }
+  return out;
+}
 export async function getIssue(ownerId: string, id: string): Promise<Issue> { return issue(await issueRow(ownerId, id)); }
 export async function updateIssue(ownerId: string, id: string, changes: Partial<{ title: string; status: IssueStatus; priority: Priority; dueAt: Date | null }>): Promise<Issue> { return issue(await changed(issues, ownerId, id, changes)); }
 export async function deleteIssue(ownerId: string, id: string): Promise<void> { await removed(issues, ownerId, id); }
@@ -43,4 +67,4 @@ async function removed(table: typeof goals | typeof epics | typeof issues, owner
 
 function goal(row: typeof goals.$inferSelect): Goal { return { id: row.id, title: row.title, createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString() }; }
 function epic(row: typeof epics.$inferSelect): Epic { return { ...goal(row), goalId: row.goalId }; }
-export function issue(row: typeof issues.$inferSelect): Issue { return { id: row.id, title: row.title, epicId: row.epicId, status: row.status, position: row.position, priority: row.priority, dueAt: row.dueAt?.toISOString() ?? null, hold: row.hold, holdReason: row.holdReason, scheduledAt: row.scheduledAt?.toISOString() ?? null, notes: row.notes, estimateMinutes: row.estimateMinutes, source: row.source, createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString() }; }
+export function issue(row: typeof issues.$inferSelect): Issue { return { id: row.id, title: row.title, epicId: row.epicId, status: row.status, position: row.position, priority: row.priority, dueAt: row.dueAt?.toISOString() ?? null, hold: row.hold, holdReason: row.holdReason, scheduledAt: row.scheduledAt?.toISOString() ?? null, notes: row.notes, estimateMinutes: row.estimateMinutes, source: row.source, key: row.key, createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString() }; }

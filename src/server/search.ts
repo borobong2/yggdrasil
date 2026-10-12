@@ -16,7 +16,7 @@ export async function searchWorkspace(ownerId: string, query: string): Promise<S
         WHERE owner_id = ${ownerId} AND archived_at IS NULL AND (title ILIKE ${pattern} OR body ILIKE ${pattern})
       UNION ALL SELECT 'goal', id, title, title FROM goals WHERE owner_id = ${ownerId} AND title ILIKE ${pattern}
       UNION ALL SELECT 'epic', id, title, title FROM epics WHERE owner_id = ${ownerId} AND title ILIKE ${pattern}
-      UNION ALL SELECT 'issue', id, title, title FROM issues WHERE owner_id = ${ownerId} AND title ILIKE ${pattern}
+      UNION ALL SELECT 'issue', id, concat_ws(': ', key, title), title FROM issues WHERE owner_id = ${ownerId} AND (title ILIKE ${pattern} OR key ILIKE ${pattern})
       UNION ALL SELECT 'capture', id, text, text FROM captures WHERE owner_id = ${ownerId} AND text ILIKE ${pattern}
     ) matches ORDER BY kind, id LIMIT 50
   `);

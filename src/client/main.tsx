@@ -4,6 +4,7 @@ import { Activity, FileText, Inbox, ListTree, Settings, SquareKanban } from 'luc
 import './styles.css';
 import { LoginScreen, SessionPanel, TreeMark, useAuth } from './LoginView.js';
 import { PatSettings } from './PatSettings.js';
+import { GitHubSettings } from './GitHubSettings.js';
 import { DocumentsWorkspace } from './DocumentsWorkspace.js';
 import { EvidenceList } from './EvidenceList.js';
 import { PlanningView } from './PlanningView.js';
@@ -72,7 +73,7 @@ function App() {
         {tab === 'planning' && <PlanningView token={token} />}
         {tab === 'board' && <div className="space-y-6"><BoardView token={token} onActivity={refreshActivity} /><EvidenceList token={token} onActivity={refreshActivity} /></div>}
         {tab === 'activity' && <ActivityTimeline token={token} revision={activityRevision} />}
-        {tab === 'settings' && <div className="max-w-2xl space-y-4"><SessionPanel auth={auth} /><PatSettings token={token} /></div>}
+        {tab === 'settings' && <div className="max-w-2xl space-y-4"><SessionPanel auth={auth} /><PatSettings token={token} /><GitHubSettings token={token} /></div>}
       </main>
     </div>
     <nav aria-label="주 메뉴 (모바일)" className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-6 border-t border-line bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">

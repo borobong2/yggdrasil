@@ -47,4 +47,4 @@ function parseEvidenceUrl(value: unknown): { url: string; kind: EvidenceKind } |
 }
 
 function withoutTrailingSlash(url: URL): string { url.pathname = url.pathname.replace(/\/$/, ''); return url.toString(); }
-function evidence(row: typeof issueEvidence.$inferSelect): IssueEvidence { return { id: row.id, issueId: row.issueId, url: row.url, kind: row.kind, status: row.status, createdAt: row.createdAt.toISOString() }; }
+function evidence(row: typeof issueEvidence.$inferSelect): IssueEvidence { return { id: row.id, issueId: row.issueId, url: row.url, kind: row.kind, status: row.status, createdAt: row.createdAt.toISOString(), state: row.state, ci: row.ci, prNumber: row.prNumber, metadata: row.metadata }; }

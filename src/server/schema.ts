@@ -1,4 +1,4 @@
-import { foreignKey, integer, jsonb, pgTable, text, timestamp, unique, uuid } from 'drizzle-orm/pg-core';
+import { foreignKey, integer, jsonb, pgTable, primaryKey, text, timestamp, unique, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 
 export const appOwners = pgTable('app_owners', {
   ownerId: uuid('owner_id').primaryKey(),
@@ -79,9 +79,10 @@ export const issues = pgTable('issues', {
   notes: text('notes').notNull().default(''),
   estimateMinutes: integer('estimate_minutes'),
   source: text('source'),
+  key: text('key'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull()
-}, (table) => [unique('issues_id_owner_key').on(table.id, table.ownerId)]);
+}, (table) => [unique('issues_id_owner_key').on(table.id, table.ownerId), uniqueIndex('issues_owner_key_idx').on(table.ownerId, table.key)]);
 
 export const activities = pgTable('activities', {
   id: uuid('id').primaryKey(),
@@ -101,6 +102,10 @@ export const issueEvidence = pgTable('issue_evidence', {
   url: text('url').notNull(),
   kind: text('kind').$type<import('../contracts/items.js').EvidenceKind>().notNull(),
   status: text('status').$type<import('../contracts/items.js').EvidenceStatus>().notNull().default('linked'),
+  state: text('state'),
+  ci: text('ci'),
+  prNumber: integer('pr_number'),
+  metadata: jsonb('metadata').$type<Record<string, unknown>>().notNull().default({}),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull()
 }, (table) => [foreignKey({ columns: [table.issueId, table.ownerId], foreignColumns: [issues.id, issues.ownerId], name: 'issue_evidence_issue_owner_fkey' }).onDelete('cascade')]);
 
@@ -131,4 +136,26 @@ export const documentIssueLinks = pgTable('document_issue_links', {
   documentId: uuid('document_id').notNull().references(() => documents.id, { onDelete: 'cascade' }),
   issueId: uuid('issue_id').notNull().references(() => issues.id, { onDelete: 'cascade' }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull()
+});
+
+export const ticketCounters = pgTable('ticket_counters', {
+  ownerId: uuid('owner_id').notNull(),
+  prefix: text('prefix').notNull(),
+  nextNumber: integer('next_number').notNull()
+}, (table) => [primaryKey({ columns: [table.ownerId, table.prefix] })]);
+
+export const githubRepos = pgTable('github_repos', {
+  id: uuid('id').primaryKey(),
+  ownerId: uuid('owner_id').notNull(),
+  fullName: text('full_name').notNull(),
+  prefix: text('prefix').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  lastEventAt: timestamp('last_event_at', { withTimezone: true }),
+  lastStatus: text('last_status')
+}, (table) => [unique('github_repos_owner_id_full_name_key').on(table.ownerId, table.fullName)]);
+
+export const githubDeliveries = pgTable('github_deliveries', {
+  deliveryId: text('delivery_id').primaryKey(),
+  event: text('event').notNull(),
+  receivedAt: timestamp('received_at', { withTimezone: true }).defaultNow().notNull()
 });

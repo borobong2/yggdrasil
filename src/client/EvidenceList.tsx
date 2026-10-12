@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useState } from 'react';
 import type { EvidenceKind, Issue, IssueEvidence } from '../contracts/items.js';
 
-const kindLabels: Record<EvidenceKind, string> = { github_pr: 'PR', github_commit: '커밋', deployment: '배포' };
+const kindLabels: Record<EvidenceKind, string> = { github_pr: 'PR', github_commit: '커밋', github_branch: '브랜치', deployment: '배포' };
 
 export function EvidenceList({ token, onActivity }: { token: string; onActivity?: () => void }) {
   const [issues, setIssues] = useState<Issue[]>([]);

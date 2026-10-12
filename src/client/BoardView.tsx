@@ -5,6 +5,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { Ellipsis, X } from 'lucide-react';
 import type { Epic, Goal, Hold, Issue, IssueStatus, Priority } from '../contracts/items.js';
 import { DueBadge, HoldBadge, PriorityBadge, statusLabels } from './format.js';
+import { GitHubChips } from './GitHubChips.js';
 import { TodoDetail } from './TodoDetail.js';
 
 // Backlog sits last so the first column on a phone is the work that matters now.
@@ -201,6 +202,7 @@ function SortableCard({ issue, onOpen, onMove }: { issue: Issue; onOpen: (id: st
       className="block w-full cursor-grab touch-manipulation rounded-[inherit] p-3 pr-9 text-left active:cursor-grabbing">
       <CardBody issue={issue} />
     </button>
+    {(issue.key || issue.github?.pr || issue.github?.deploy) && <div className="-mt-1.5 flex flex-wrap gap-1 px-3 pb-3"><GitHubChips issue={issue} /></div>}
     <CardMenu issue={issue} onMove={onMove} />
   </li>;
 }
