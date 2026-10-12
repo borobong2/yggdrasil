@@ -108,7 +108,7 @@ scripts/deploy.sh $P
 ## 5. PAT 발급 + Claude MCP 주소 교체
 
 1. 배포된 앱의 PAT 설정에서 토큰 발급(원문은 한 번만 보인다).
-2. Claude Code 등록 교체:
+2. Claude Code + Codex 한 번에: `scripts/connect-mcp.sh` (PAT를 클라이언트별로 물어보고 키체인 저장 → 두 클라이언트 등록 → 토큰 확인). 아래는 Claude만 수동으로 할 때:
 
 ```sh
 claude mcp remove yggdrasil -s user
