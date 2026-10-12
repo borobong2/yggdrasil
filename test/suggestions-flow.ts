@@ -23,7 +23,7 @@ try {
   const script = html.match(/src="([^"]+\.js)"/);
   assert(script);
   const bundle = await (await fetch(base + script[1])).text();
-  assert(bundle.includes('Pending — unaccepted. No items have been changed.'));
+  assert(bundle.includes('대기 중 — 아직 승인되지 않았습니다. 변경된 항목이 없습니다.'));
   assert(!bundle.includes('api.openai.com') && !bundle.includes('process.env.OPENAI_API_KEY'));
   const created = await fetch(`${base}/api/captures`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text: 'HTTP flow: Plan a garden' }) });
   assert.equal(created.status, 201);
