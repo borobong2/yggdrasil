@@ -13,6 +13,7 @@
   - `{action:'hold', ids, hold:'waiting'|'blocked', holdReason?}`
   - `{action:'restore', items: TodoSnapshot[]}` — 직전 응답의 `previous`를 그대로 보내면 되돌린다(되돌리기 토스트).
   - 응답 `BulkResult { todos, previous }`. 다른 사용자 id가 하나라도 있으면 404, 아무것도 쓰지 않는다. 바뀐 이슈마다 활동 `payload.via='ui'`, `payload.bulk=<action>`. 변화 없는 항목은 기록하지 않는다.
+- 반복 할 일(YG-28): 일괄 완료는 같은 transaction에서 `spawnNext`로 다음 회차를 만든다. `restore`는 다음 회차가 이미 열린 반복 회차를 다시 열지 않고 `skipped`로 돌려준다(시리즈당 열린 회차 1개 유지, 삭제 없음).
 - migration 없음.
 
 ## FE

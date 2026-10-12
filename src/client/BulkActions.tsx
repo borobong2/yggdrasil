@@ -64,7 +64,10 @@ export function BulkActions({ selection, headers, onApplied }: { selection: Sele
   }
 
   async function revert() {
-    if (undo && await post({ action: 'restore', items: undo.previous })) setUndo(null);
+    const result = undo && await post({ action: 'restore', items: undo.previous });
+    if (!result) return;
+    setUndo(null);
+    if (result.skipped.length) setError(`반복 할 일 ${result.skipped.length}개는 다음 회차가 이미 생겨 완료 상태로 두었습니다.`);
   }
 
   const dock = 'fixed inset-x-4 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-30 mx-auto max-w-xl md:bottom-6 md:left-[calc(208px+1.5rem)]';

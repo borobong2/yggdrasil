@@ -111,3 +111,31 @@ it('accepts 200 ids in one transaction', async () => {
   expect(response.status).toBe(200);
   expect((await pool.query('SELECT count(*)::int AS n FROM issues WHERE id = ANY($1) AND due_at = $2', [todos.map((todo) => todo.id), new Date('2026-10-20T15:00:00Z')])).rows[0].n).toBe(200);
 });
+
+// YG-28 interplay: bulk 완료 rolls a recurring series exactly once; undo leaves it done (skipped) so the series keeps one open occurrence.
+const openInSeries = async (recurrenceId: string) => (await pool.query("SELECT id FROM issues WHERE recurrence_id = $1 AND status <> 'done'", [recurrenceId])).rows.map((r) => r.id);
+
+it('bulk complete spawns exactly one next occurrence of a recurring todo', async () => {
+  const daily = await createTodo(owner, { area: area(), title: '물 마시기', recurrence: { freq: 'daily' } });
+  const plain = await createTodo(owner, { area: area(), title: '일반 할 일' });
+  const result = await (await bulk({ action: 'complete', ids: [daily.id, plain.id] })).json();
+  expect(result.skipped).toEqual([]);
+  const open = await openInSeries(daily.recurrence!.id);
+  expect(open).toHaveLength(1);
+  expect(open[0]).not.toBe(daily.id);
+  expect((await bulk({ action: 'complete', ids: [daily.id] })).status).toBe(200); // retry: no second occurrence
+  expect(await openInSeries(daily.recurrence!.id)).toEqual(open);
+  expect((await activities(open[0])).at(0)).toMatchObject({ kind: 'issue.created', payload: { via: 'ui', bulk: 'complete', previousId: daily.id } });
+});
+
+it('undo of a bulk complete skips a recurring todo whose next occurrence exists', async () => {
+  const weekly = await createTodo(owner, { area: area(), title: '주간 회고', recurrence: { freq: 'weekly', weekdays: ['fri'] } });
+  const plain = await createTodo(owner, { area: area(), title: '되돌릴 일반' });
+  const { previous } = await (await bulk({ action: 'complete', ids: [weekly.id, plain.id] })).json();
+  const undo = await (await bulk({ action: 'restore', items: previous })).json();
+  expect(undo.skipped).toEqual([weekly.id]);
+  expect(undo.previous.map((item: { id: string }) => item.id)).toEqual([plain.id]);
+  expect((await row(weekly.id)).status).toBe('done');
+  expect((await row(plain.id)).status).toBe('todo');
+  expect(await openInSeries(weekly.recurrence!.id)).toHaveLength(1);
+});

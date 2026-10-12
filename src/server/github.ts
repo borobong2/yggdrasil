@@ -5,6 +5,7 @@ import { appendActivity, type Transaction } from './activity.js';
 import { getDb } from './db.js';
 import { githubDeliveries, githubRepos, issueEvidence, issues } from './schema.js';
 import { ensureCounterStart, normalizePrefix } from './ticket-keys.js';
+import { spawnNext } from './recurrences.js';
 import { NotFoundError } from './work.js';
 
 const db = getDb();
@@ -134,6 +135,7 @@ class Context {
     const notes = note ? `${issue.notes}${issue.notes ? '\n' : ''}${note}` : issue.notes;
     await this.tx.update(issues).set({ status, position: next, notes, updatedAt: new Date() }).where(and(eq(issues.id, issue.id), eq(issues.ownerId, this.ownerId)));
     await appendActivity(this.tx, this.ownerId, { kind: status === 'done' ? 'issue.completed' : 'issue.updated', subjectType: 'issue', subjectId: issue.id, payload: { ...this.via, changes: note ? ['status', 'notes'] : ['status'], from: issue.status, to: status } });
+    if (status === 'done') await spawnNext(this.tx, { ...issue, status, notes }, this.via);
   }
 }
 

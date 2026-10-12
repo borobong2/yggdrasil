@@ -1,7 +1,8 @@
 import { and, asc, desc, eq, inArray } from 'drizzle-orm';
 import type { Epic, GitHubSummary, Goal, Issue, IssueStatus, Priority } from '../contracts/items.js';
 import { getDb } from './db.js';
-import { epics, goals, issueEvidence, issues } from './schema.js';
+import { epics, goals, issueEvidence, issues, recurrences } from './schema.js';
+import { spawnNext, toRecurrence } from './recurrences.js';
 import { allocateKey } from './ticket-keys.js';
 
 const db = getDb();
@@ -28,8 +29,8 @@ export async function createIssue(ownerId: string, epicId: string, title: string
   });
 }
 export async function listIssues(ownerId: string): Promise<Issue[]> {
-  const [rows, github] = await Promise.all([db.select().from(issues).where(eq(issues.ownerId, ownerId)).orderBy(asc(issues.status), asc(issues.position), asc(issues.id)), githubSummaries(ownerId)]);
-  return rows.map((row) => ({ ...issue(row), github: github.get(row.id) ?? null }));
+  const [rows, github] = await Promise.all([db.select({ issue: issues, recurrence: recurrences }).from(issues).leftJoin(recurrences, eq(issues.recurrenceId, recurrences.id)).where(eq(issues.ownerId, ownerId)).orderBy(asc(issues.status), asc(issues.position), asc(issues.id)), githubSummaries(ownerId)]);
+  return rows.map((row) => ({ ...issue(row.issue), github: github.get(row.issue.id) ?? null, recurrence: toRecurrence(row.recurrence) }));
 }
 
 /** Latest PR and successful deploy per issue, from webhook-written evidence (YG-24). */
@@ -45,7 +46,17 @@ async function githubSummaries(ownerId: string): Promise<Map<string, GitHubSumma
   return out;
 }
 export async function getIssue(ownerId: string, id: string): Promise<Issue> { return issue(await issueRow(ownerId, id)); }
-export async function updateIssue(ownerId: string, id: string, changes: Partial<{ title: string; status: IssueStatus; priority: Priority; dueAt: Date | null }>): Promise<Issue> { return issue(await changed(issues, ownerId, id, changes)); }
+export async function updateIssue(ownerId: string, id: string, changes: Partial<{ title: string; status: IssueStatus; priority: Priority; dueAt: Date | null }>): Promise<Issue> {
+  if (changes.status !== 'done') return issue(await changed(issues, ownerId, id, changes));
+  // Completing here must also roll a recurring series forward (YG-28), atomically with the status change.
+  return db.transaction(async (tx) => {
+    const before = (await tx.select({ status: issues.status }).from(issues).where(and(eq(issues.id, id), eq(issues.ownerId, ownerId))).for('update'))[0];
+    const row = (await tx.update(issues).set({ ...changes, updatedAt: new Date() }).where(and(eq(issues.id, id), eq(issues.ownerId, ownerId))).returning())[0];
+    if (!before || !row) throw new NotFoundError();
+    if (before.status !== 'done') await spawnNext(tx, row, { via: 'ui' });
+    return issue(row);
+  });
+}
 export async function deleteIssue(ownerId: string, id: string): Promise<void> { await removed(issues, ownerId, id); }
 
 async function goalRow(ownerId: string, id: string) { const row = (await db.select().from(goals).where(and(eq(goals.id, id), eq(goals.ownerId, ownerId))).limit(1))[0]; if (!row) throw new NotFoundError(); return row; }

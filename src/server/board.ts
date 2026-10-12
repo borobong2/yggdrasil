@@ -4,6 +4,7 @@ import { getDb } from './db.js';
 import { appendActivity } from './activity.js';
 import { issues } from './schema.js';
 import { NotFoundError, issue as asIssue } from './work.js';
+import { spawnNext } from './recurrences.js';
 
 const db = getDb();
 
@@ -19,6 +20,7 @@ export async function moveIssue(ownerId: string, id: string, status: IssueStatus
     for (const [index, item] of source.entries()) await tx.update(issues).set({ position: index, updatedAt: new Date() }).where(eq(issues.id, item.id));
     for (const [index, item] of target.entries()) await tx.update(issues).set({ status, position: index, updatedAt: new Date() }).where(eq(issues.id, item.id));
     await appendActivity(tx, ownerId, { kind: 'issue.moved', subjectType: 'issue', subjectId: id, payload: { from: current.status, to: status, position } });
+    if (status === 'done' && current.status !== 'done') await spawnNext(tx, { ...current, status }, { via: 'ui' });
     return asIssue({ ...current, status, position: target.findIndex((item) => item.id === id), updatedAt: new Date() });
   });
 }

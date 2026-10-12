@@ -1,5 +1,6 @@
-import { CalendarClock, CircleAlert, Hourglass } from 'lucide-react';
-import type { Hold, Issue, IssueStatus, Priority } from '../contracts/items.js';
+import { CalendarClock, CircleAlert, Hourglass, Repeat } from 'lucide-react';
+import type { Hold, Issue, IssueStatus, Priority, Recurrence } from '../contracts/items.js';
+import { recurrenceLabel } from '../contracts/recurrence.js';
 
 export const statusLabels: Record<IssueStatus, string> = { backlog: '백로그', todo: '할 일', doing: '진행 중', done: '완료' };
 const holdLabels: Record<Hold, string> = { waiting: '대기', blocked: '막힘', scheduled: '예정' };
@@ -31,6 +32,10 @@ export function DueBadge({ issue }: { issue: Pick<Issue, 'dueAt' | 'status'> }) 
   return <span className={`badge ${overdue ? 'bg-danger-soft text-danger' : ''}`} data-overdue={overdue || undefined}>
     {overdue ? '기한 지남 · ' : '마감 '}{formatDate(issue.dueAt)}
   </span>;
+}
+
+export function RecurrenceBadge({ recurrence }: { recurrence: Recurrence }) {
+  return <span className={`badge ${recurrence.paused ? '' : 'bg-accent-soft text-accent-ink'}`} title={recurrenceLabel(recurrence)}><Repeat />{recurrence.paused ? '반복 정지' : '반복'}</span>;
 }
 
 export function ProgressBar({ done, total }: { done: number; total: number }) {
