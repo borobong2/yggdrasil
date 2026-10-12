@@ -1,4 +1,5 @@
 import { and, asc, eq, inArray, isNull, ne, or, sql, type SQL } from 'drizzle-orm';
+import { z } from 'zod';
 import type { Hold, IssueStatus, Priority, TodayView, Todo, TodoVia } from '../contracts/items.js';
 import { appendActivity, type Transaction } from './activity.js';
 import { getDb } from './db.js';
@@ -8,6 +9,23 @@ import { allocateKey } from './ticket-keys.js';
 
 const db = getDb();
 export const DEFAULT_EPIC = '일반';
+
+// Shared input validation for every todo write surface (MCP tools, HTTP routes).
+export const todoName = z.string().trim().min(1).max(200);
+const day = z.union([z.iso.date(), z.iso.datetime({ offset: true })]).describe("'YYYY-MM-DD' (Asia/Seoul) or ISO timestamp");
+export const todoFields = {
+  epic: todoName.describe("Group inside the area; defaults to '일반'"),
+  title: todoName,
+  status: z.enum(['backlog', 'todo', 'doing', 'done']),
+  priority: z.enum(['p1', 'p2', 'p3', 'p4']),
+  dueAt: day.nullable(),
+  hold: z.enum(['waiting', 'blocked', 'scheduled']).nullable(),
+  holdReason: z.string().trim().max(500).nullable(),
+  scheduledAt: day.nullable(),
+  notes: z.string().max(20_000),
+  estimateMinutes: z.number().int().positive().max(100_000).nullable()
+};
+export const todoChanges = z.object({ area: todoName, ...todoFields }).partial().strict().refine((input) => Object.keys(input).length > 0, 'No changes');
 
 /** Date-only strings ('YYYY-MM-DD') are midnight in Asia/Seoul; anything else must be an ISO timestamp. */
 export type DateInput = Date | string | null;
@@ -54,7 +72,7 @@ export async function updateTodo(ownerId: string, id: string, changes: TodoChang
       : await resolveEpic(tx, ownerId, changes.area ?? current.area, changes.epic ?? (changes.area === undefined ? current.epic : DEFAULT_EPIC));
     const set = columns(changes);
     if (changes.prefix && !current.key) set.key = await allocateKey(tx, ownerId, changes.prefix);
-    if (set.status && set.status !== current.status) set.position = await nextPosition(tx, ownerId, set.status);
+    if (set.status && set.status !== current.status) set.position = await nextPosition(tx, ownerId, set.status, set.status === 'done');
     const [row] = await tx.update(issues).set({ ...set, epicId: place.epicId, updatedAt: new Date() }).where(and(eq(issues.id, id), eq(issues.ownerId, ownerId))).returning();
     const kind = set.status === 'done' && current.status !== 'done' ? 'issue.completed' : 'issue.updated';
     await appendActivity(tx, ownerId, { kind, subjectType: 'issue', subjectId: id, payload: { via, changes: changed } });
@@ -114,8 +132,10 @@ async function resolveEpic(tx: Transaction, ownerId: string, area: string, epic:
   return { epicId: found.id, area: areaTitle, epic: epicTitle };
 }
 
-async function nextPosition(tx: Transaction, ownerId: string, status: IssueStatus): Promise<number> {
-  const [row] = await tx.select({ next: sql<number>`coalesce(max(${issues.position}), -1)::int + 1` }).from(issues).where(and(eq(issues.ownerId, ownerId), eq(issues.status, status)));
+// `top` places the todo above the column (just-completed todos lead the 완료 column); positions may go negative until the next board move renumbers them.
+async function nextPosition(tx: Transaction, ownerId: string, status: IssueStatus, top = false): Promise<number> {
+  const next = top ? sql<number>`coalesce(min(${issues.position}), 1)::int - 1` : sql<number>`coalesce(max(${issues.position}), -1)::int + 1`;
+  const [row] = await tx.select({ next }).from(issues).where(and(eq(issues.ownerId, ownerId), eq(issues.status, status)));
   return row!.next;
 }
 

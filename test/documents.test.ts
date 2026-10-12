@@ -54,3 +54,86 @@ it('enforces document ownership with a database foreign key', async () => {
   await client.end();
   expect(result.rowCount).toBe(1);
 });
+
+describe('YG-23 page tree', () => {
+  const post = (path: string, body: object = {}, requestHeaders = headers) => app.request(path, { method: 'POST', headers: requestHeaders, body: JSON.stringify(body) });
+  const live = async () => (await (await app.request('/api/documents', { headers })).json()) as { id: string; parentId: string | null; position: number }[];
+  const childrenOf = async (parentId: string | null) => (await live()).filter((d) => d.parentId === parentId).map((d) => d.id);
+
+  it('appends new pages, then reorders and reparents them with move', async () => {
+    const root = await create('/api/documents', { title: 'Tree root', icon: '🌳' });
+    const a = await create('/api/documents', { title: 'A', parentId: root.id });
+    const b = await create('/api/documents', { title: 'B', parentId: root.id });
+    const c = await create('/api/documents', { title: 'C', parentId: root.id });
+    expect(root.icon).toBe('🌳');
+    expect(await childrenOf(root.id)).toEqual([a.id, b.id, c.id]);
+
+    const reorder = await post(`/api/documents/${c.id}/move`, { parentId: root.id, index: 0 });
+    expect(reorder.status).toBe(200);
+    expect(await childrenOf(root.id)).toEqual([c.id, a.id, b.id]);
+
+    const reparent = await post(`/api/documents/${b.id}/move`, { parentId: a.id, index: 99 });
+    expect(await reparent.json()).toMatchObject({ id: b.id, parentId: a.id, position: 0 });
+    expect(await childrenOf(root.id)).toEqual([c.id, a.id]);
+    expect((await post(`/api/documents/${a.id}/move`, { parentId: null, index: 0 })).status).toBe(200);
+    expect((await childrenOf(null))[0]).toBe(a.id);
+  });
+
+  it('prevents cycles, foreign parents, and bad input on move', async () => {
+    const root = await create('/api/documents', { title: 'Cycle root' });
+    const child = await create('/api/documents', { title: 'Cycle child', parentId: root.id });
+    const grandchild = await create('/api/documents', { title: 'Cycle grandchild', parentId: child.id });
+    const foreign = await create('/api/documents', { title: 'Foreign' }, other);
+
+    expect((await post(`/api/documents/${root.id}/move`, { parentId: grandchild.id, index: 0 })).status).toBe(400);
+    expect((await post(`/api/documents/${root.id}/move`, { parentId: root.id, index: 0 })).status).toBe(400);
+    expect((await post(`/api/documents/${root.id}/move`, { parentId: foreign.id, index: 0 })).status).toBe(404);
+    expect((await post(`/api/documents/${root.id}/move`, { parentId: null, index: 0 }, other)).status).toBe(404);
+    expect((await post(`/api/documents/${root.id}/move`, { parentId: null, index: -1 })).status).toBe(400);
+    expect((await post(`/api/documents/${root.id}/move`, { parentId: null, index: 'x' })).status).toBe(400);
+    expect((await app.request(`/api/documents/${child.id}`, { headers })).status).toBe(200);
+    expect((await (await app.request(`/api/documents/${child.id}`, { headers })).json()).parentId).toBe(root.id);
+  });
+
+  it('archives a subtree to the trash and restores exactly that batch', async () => {
+    const root = await create('/api/documents', { title: 'Trash root' });
+    const marker = `Trash child ${crypto.randomUUID()}`;
+    const child = await create('/api/documents', { title: marker, parentId: root.id });
+    const earlier = await create('/api/documents', { title: 'Trashed earlier', parentId: root.id });
+    await post(`/api/documents/${earlier.id}/archive`);
+
+    expect((await post(`/api/documents/${root.id}/archive`, {}, other)).status).toBe(404);
+    const archived = await post(`/api/documents/${root.id}/archive`);
+    expect((await archived.json()).archivedAt).toEqual(expect.any(String));
+    expect((await live()).map((d) => d.id)).not.toEqual(expect.arrayContaining([root.id]));
+    expect((await live()).map((d) => d.id)).not.toContain(child.id);
+    const trash = (await (await app.request('/api/documents?archived=true', { headers })).json()) as { id: string }[];
+    expect(trash.map((d) => d.id)).toEqual(expect.arrayContaining([root.id, child.id, earlier.id]));
+    expect((await (await app.request('/api/documents?archived=true', { headers: other })).json()).map((d: { id: string }) => d.id)).not.toContain(root.id);
+    expect((await post(`/api/documents/${child.id}/move`, { parentId: null, index: 0 })).status).toBe(400);
+    await expect((await app.request(`/api/search?q=${encodeURIComponent(marker)}`, { headers })).json()).resolves.toEqual([]);
+
+    expect((await post(`/api/documents/${root.id}/restore`)).status).toBe(200);
+    const ids = (await live()).map((d) => d.id);
+    expect(ids).toEqual(expect.arrayContaining([root.id, child.id]));
+    expect(ids).not.toContain(earlier.id); // trashed separately, stays in the trash
+
+    // Restoring a child whose parent is still trashed brings it back at the top level.
+    await post(`/api/documents/${root.id}/archive`);
+    expect(await (await post(`/api/documents/${child.id}/restore`)).json()).toMatchObject({ id: child.id, parentId: null, archivedAt: null });
+  });
+
+  it('updates icons and rejects markup in them', async () => {
+    const page = await create('/api/documents', { title: 'Icon page' });
+    const patch = (icon: unknown) => app.request(`/api/documents/${page.id}`, { method: 'PATCH', headers, body: JSON.stringify({ icon }) });
+    expect(await (await patch('📘')).json()).toMatchObject({ icon: '📘' });
+    expect(await (await patch(null)).json()).toMatchObject({ icon: null });
+    expect((await patch('<script>')).status).toBe(400);
+  });
+
+  it('stores and returns the editor markdown unchanged for MCP read_document', async () => {
+    const body = '# Plan\n\n- [ ] ship\n\n> [!NOTE]\n> keep markdown\n\n<details>\n<summary>More</summary>\n\nhidden\n</details>';
+    const page = await create('/api/documents', { title: 'Markdown page', body });
+    expect((await (await app.request(`/api/documents/${page.id}`, { headers })).json()).body).toBe(body);
+  });
+});
