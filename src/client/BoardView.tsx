@@ -4,7 +4,7 @@ import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, v
 import { CSS } from '@dnd-kit/utilities';
 import { Ellipsis, X } from 'lucide-react';
 import type { Epic, Goal, Hold, Issue, IssueStatus, Priority } from '../contracts/items.js';
-import { DueBadge, HoldBadge, PriorityBadge, statusLabels } from './format.js';
+import { DueBadge, HoldBadge, PriorityBadge, RecurrenceBadge, statusLabels } from './format.js';
 import { GitHubChips } from './GitHubChips.js';
 import { TodoDetail } from './TodoDetail.js';
 
@@ -83,11 +83,18 @@ export function BoardView({ token, onActivity }: { token: string; onActivity?: (
     try {
       const response = await fetch(`/api/issues/${id}/move`, { method: 'PATCH', headers: { ...headers, 'content-type': 'application/json' }, body: JSON.stringify({ status, position }) });
       if (!response.ok) throw new Error();
+      if (status === 'done' && find(id)?.recurrence) void refresh();
       onActivity?.();
     } catch {
       setBoard(previous);
       setActionError('카드를 옮기지 못해 원래 자리로 되돌렸습니다. 다시 시도하세요.');
     }
+  }
+
+  // Completing a recurring todo creates its next occurrence server-side (YG-28); reload to show it.
+  async function refresh() {
+    const response = await fetch('/api/issues', { headers });
+    if (response.ok) setBoard(toBoard(await response.json()));
   }
 
   function moveTo(issue: Issue, status: IssueStatus) {
@@ -133,6 +140,7 @@ export function BoardView({ token, onActivity }: { token: string; onActivity?: (
       if (from === todo.status) return { ...prev, [from]: prev[from].map((issue) => issue.id === todo.id ? todo : issue) };
       return { ...prev, [from]: prev[from].filter((issue) => issue.id !== todo.id), [todo.status]: [todo, ...prev[todo.status]] };
     });
+    if (todo.recurrence) void refresh();
     onActivity?.();
   }
 
@@ -214,6 +222,7 @@ function CardBody({ issue }: { issue: Issue }) {
       <PriorityBadge priority={issue.priority} />
       {issue.hold && <HoldBadge hold={issue.hold} reason={issue.holdReason} />}
       <DueBadge issue={issue} />
+      {issue.recurrence && <RecurrenceBadge recurrence={issue.recurrence} />}
     </span>
   </>;
 }

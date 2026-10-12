@@ -1,4 +1,4 @@
-import { foreignKey, integer, jsonb, pgTable, primaryKey, text, timestamp, unique, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import { boolean, foreignKey, integer, smallint, jsonb, pgTable, primaryKey, text, timestamp, unique, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 
 export const appOwners = pgTable('app_owners', {
   ownerId: uuid('owner_id').primaryKey(),
@@ -80,6 +80,7 @@ export const issues = pgTable('issues', {
   estimateMinutes: integer('estimate_minutes'),
   source: text('source'),
   key: text('key'),
+  recurrenceId: uuid('recurrence_id').references(() => recurrences.id, { onDelete: 'set null' }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull()
 }, (table) => [unique('issues_id_owner_key').on(table.id, table.ownerId), uniqueIndex('issues_owner_key_idx').on(table.ownerId, table.key)]);
@@ -158,4 +159,16 @@ export const githubDeliveries = pgTable('github_deliveries', {
   deliveryId: text('delivery_id').primaryKey(),
   event: text('event').notNull(),
   receivedAt: timestamp('received_at', { withTimezone: true }).defaultNow().notNull()
+});
+
+export const recurrences = pgTable('recurrences', {
+  id: uuid('id').primaryKey(),
+  ownerId: uuid('owner_id').notNull(),
+  freq: text('freq').$type<import('../contracts/items.js').Recurrence['freq']>().notNull(),
+  weekdays: text('weekdays').array().$type<import('../contracts/items.js').Weekday[]>(),
+  monthDay: smallint('month_day'),
+  time: text('time'),
+  paused: boolean('paused').notNull().default(false),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull()
 });

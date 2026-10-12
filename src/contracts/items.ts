@@ -11,8 +11,11 @@ type WorkRecord = { id: string; title: string; createdAt: string; updatedAt: str
 export type Goal = WorkRecord;
 export type Epic = WorkRecord & { goalId: string };
 export type Issue = WorkRecord & { epicId: string; status: IssueStatus; position: number; priority: Priority; dueAt: string | null;
-  hold: Hold | null; holdReason: string | null; scheduledAt: string | null; notes: string; estimateMinutes: number | null; source: string | null; key: string | null; github?: GitHubSummary | null };
+  hold: Hold | null; holdReason: string | null; scheduledAt: string | null; notes: string; estimateMinutes: number | null; source: string | null; key: string | null; github?: GitHubSummary | null; recurrence?: Recurrence | null };
 export type Todo = Issue & { area: string; epic: string };
+export type Weekday = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun';
+/** YG-28 series rule. Times are Asia/Seoul 'HH:mm'; monthDay past the month's end means its last day. */
+export type Recurrence = { id: string; freq: 'daily' | 'weekly' | 'monthly'; weekdays: Weekday[] | null; monthDay: number | null; time: string | null; paused: boolean };
 export type TodoVia = 'ui' | 'mcp' | 'import';
 export type TodayView = { date: string; today: Todo[]; overdue: Todo[]; waiting: Todo[] };
 export type DeliveryPlanStatus = 'pending' | 'accepted' | 'dismissed';

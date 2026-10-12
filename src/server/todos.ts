@@ -3,7 +3,8 @@ import { z } from 'zod';
 import type { Hold, IssueStatus, Priority, TodayView, Todo, TodoVia } from '../contracts/items.js';
 import { appendActivity, type Transaction } from './activity.js';
 import { getDb } from './db.js';
-import { epics, goals, issues } from './schema.js';
+import { epics, goals, issues, recurrences } from './schema.js';
+import { recurrenceInput, setRecurrence, spawnNext, toRecurrence, type RecurrenceInput } from './recurrences.js';
 import { NotFoundError, issue } from './work.js';
 import { allocateKey } from './ticket-keys.js';
 
@@ -23,7 +24,8 @@ export const todoFields = {
   holdReason: z.string().trim().max(500).nullable(),
   scheduledAt: day.nullable(),
   notes: z.string().max(20_000),
-  estimateMinutes: z.number().int().positive().max(100_000).nullable()
+  estimateMinutes: z.number().int().positive().max(100_000).nullable(),
+  recurrence: recurrenceInput.nullable()
 };
 export const todoChanges = z.object({ area: todoName, ...todoFields }).partial().strict().refine((input) => Object.keys(input).length > 0, 'No changes');
 
@@ -34,6 +36,8 @@ export type TodoInput = {
   hold?: Hold | null; holdReason?: string | null; scheduledAt?: DateInput; notes?: string; estimateMinutes?: number | null; source?: string | null;
   /** Ticket key prefix (e.g. 'YG'): assigns the next key on create, or on update when the todo has none. */
   prefix?: string;
+  /** YG-28 repeat rule; null ends the series. */
+  recurrence?: RecurrenceInput | null;
 };
 /** `area` alone moves the todo to that area's default Epic; `epic` alone moves it within its current area. */
 export type TodoChanges = Partial<TodoInput>;
@@ -55,9 +59,11 @@ export async function createTodo(ownerId: string, input: TodoInput, via: TodoVia
   return db.transaction(async (tx) => {
     const place = await resolveEpic(tx, ownerId, input.area, input.epic ?? DEFAULT_EPIC);
     const status = input.status ?? 'todo';
-    const [row] = await tx.insert(issues).values({ ...columns(input), id: crypto.randomUUID(), ownerId, epicId: place.epicId, title: input.title.trim(), status, position: await nextPosition(tx, ownerId, status), key: input.prefix ? await allocateKey(tx, ownerId, input.prefix) : null }).returning();
+    const values = columns(input);
+    if (input.recurrence) Object.assign(values, await setRecurrence(tx, ownerId, { dueAt: values.dueAt }, input.recurrence));
+    const [row] = await tx.insert(issues).values({ ...values, id: crypto.randomUUID(), ownerId, epicId: place.epicId, title: input.title.trim(), status, position: await nextPosition(tx, ownerId, status), key: input.prefix ? await allocateKey(tx, ownerId, input.prefix) : null }).returning();
     await appendActivity(tx, ownerId, { kind: 'issue.created', subjectType: 'issue', subjectId: row!.id, payload: { via, area: place.area, epic: place.epic } });
-    return { ...issue(row!), area: place.area, epic: place.epic };
+    return { ...issue(row!), area: place.area, epic: place.epic, recurrence: (await todoRows(eq(issues.id, row!.id), tx))[0]!.recurrence };
   });
 }
 
@@ -70,13 +76,16 @@ export async function updateTodo(ownerId: string, id: string, changes: TodoChang
     const place = changes.area === undefined && changes.epic === undefined
       ? { epicId: current.epicId, area: current.area, epic: current.epic }
       : await resolveEpic(tx, ownerId, changes.area ?? current.area, changes.epic ?? (changes.area === undefined ? current.epic : DEFAULT_EPIC));
-    const set = columns(changes);
+    let set = columns(changes);
+    if (changes.recurrence !== undefined) set = { ...await setRecurrence(tx, ownerId, current, changes.recurrence), ...set };
     if (changes.prefix && !current.key) set.key = await allocateKey(tx, ownerId, changes.prefix);
     if (set.status && set.status !== current.status) set.position = await nextPosition(tx, ownerId, set.status, set.status === 'done');
     const [row] = await tx.update(issues).set({ ...set, epicId: place.epicId, updatedAt: new Date() }).where(and(eq(issues.id, id), eq(issues.ownerId, ownerId))).returning();
     const kind = set.status === 'done' && current.status !== 'done' ? 'issue.completed' : 'issue.updated';
     await appendActivity(tx, ownerId, { kind, subjectType: 'issue', subjectId: id, payload: { via, changes: changed } });
-    return { ...issue(row!), area: place.area, epic: place.epic };
+    // Completing rolls the series; an active rule set on a done occurrence (resume / late attach) rolls it once too.
+    if (kind === 'issue.completed' || (changes.recurrence && !changes.recurrence.paused && row!.status === 'done')) await spawnNext(tx, row!, { via });
+    return { ...issue(row!), area: place.area, epic: place.epic, recurrence: (await todoRows(eq(issues.id, id), tx))[0]!.recurrence };
   });
 }
 
@@ -115,10 +124,10 @@ export async function todayView(ownerId: string, now = new Date()): Promise<Toda
 }
 
 async function todoRows(where: SQL, executor: Transaction | typeof db = db, lock = false): Promise<Todo[]> {
-  const query = executor.select({ issue: issues, area: goals.title, epic: epics.title }).from(issues)
-    .innerJoin(epics, eq(issues.epicId, epics.id)).innerJoin(goals, eq(epics.goalId, goals.id)).where(where)
+  const query = executor.select({ issue: issues, area: goals.title, epic: epics.title, recurrence: recurrences }).from(issues)
+    .innerJoin(epics, eq(issues.epicId, epics.id)).innerJoin(goals, eq(epics.goalId, goals.id)).leftJoin(recurrences, eq(issues.recurrenceId, recurrences.id)).where(where)
     .orderBy(asc(issues.priority), sql`${issues.dueAt} ASC NULLS LAST`, asc(issues.position), asc(issues.id));
-  return (await (lock ? query.for('update', { of: issues }) : query)).map((row) => ({ ...issue(row.issue), area: row.area, epic: row.epic }));
+  return (await (lock ? query.for('update', { of: issues }) : query)).map((row) => ({ ...issue(row.issue), area: row.area, epic: row.epic, recurrence: toRecurrence(row.recurrence) }));
 }
 
 // Finds or creates the area Goal and its Epic by name; the per-owner lock keeps concurrent creates from duplicating them.
