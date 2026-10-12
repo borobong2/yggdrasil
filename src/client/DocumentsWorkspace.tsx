@@ -1,92 +1,258 @@
-import { FormEvent, useEffect, useState } from 'react';
-import { FileText, Link2, Plus } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import type { DragEvent } from 'react';
+import { ArrowLeft, ChevronRight, Clock, FileText, Plus, RotateCcw, SmilePlus, Trash2 } from 'lucide-react';
 import type { Document, Issue } from '../contracts/items.js';
+import { BlockEditor } from './BlockEditor.js';
+import { statusLabels } from './format.js';
 
 type Props = { token: string };
+type Status = 'idle' | 'dirty' | 'saving' | 'saved' | 'error';
+type Zone = 'before' | 'after' | 'inside';
 const json = { 'content-type': 'application/json' };
-
-function Tree({ documents, parentId, select, selectedId }: { documents: Document[]; parentId: string | null; select: (document: Document) => void; selectedId?: string }) {
-  const children = documents.filter((document) => document.parentId === parentId);
-  return !children.length ? null : <ul className={parentId ? 'ml-3 border-l border-line pl-2' : ''}>{children.map((document) => <li key={document.id} id={`document-${document.id}`}>
-    <button type="button" aria-current={document.id === selectedId || undefined} onClick={() => select(document)}
-      className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-muted hover:bg-sunken hover:text-ink aria-[current=true]:bg-accent-soft aria-[current=true]:font-medium aria-[current=true]:text-accent-ink">
-      <FileText className="size-3.5 shrink-0" /><span className="truncate">{document.title}</span>
-    </button>
-    <Tree documents={documents} parentId={document.id} select={select} selectedId={selectedId} />
-  </li>)}</ul>;
-}
+const untitled = '제목 없음';
+const emojis = ['📄', '📝', '📌', '💡', '🎯', '🚀', '🧭', '🗂️', '📚', '🧪', '🛠️', '🐛', '✅', '📅', '📈', '💬', '🔒', '🌱', '🌳', '⭐', '🔥', '🧩', '🎨', '⚙️', '📦', '🧠', '🗺️', '🔍', '❤️', '🏁'];
+const statusText: Record<Status, string> = { idle: '', dirty: '저장 대기…', saving: '저장 중…', saved: '저장됨', error: '저장 실패 · 다시 시도' };
+const expandedKey = 'yggdrasil-docs-expanded';
+const hashId = () => location.hash.match(/^#document-([0-9a-f-]{36})$/)?.[1] ?? null;
 
 export function DocumentsWorkspace({ token }: Props) {
   const [documents, setDocuments] = useState<Document[]>([]);
+  const [trash, setTrash] = useState<Document[] | null>(null);
   const [issues, setIssues] = useState<Issue[]>([]);
-  const [selected, setSelected] = useState<Document | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(hashId);
   const [links, setLinks] = useState<string[]>([]);
+  const [expanded, setExpanded] = useState<Set<string>>(() => { try { return new Set(JSON.parse(localStorage.getItem(expandedKey) ?? '[]')); } catch { return new Set(); } });
+  const [status, setStatus] = useState<Status>('idle');
   const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [drag, setDrag] = useState<{ id: string; over?: string | null; zone?: Zone } | null>(null);
+  const pending = useRef<{ id: string; changes: Record<string, unknown> } | null>(null);
+  const timer = useRef<number | undefined>(undefined);
+  const titleInput = useRef<HTMLInputElement>(null);
+  const iconPicker = useRef<HTMLDivElement>(null);
   const headers: Record<string, string> = token ? { authorization: `Bearer ${token}` } : {};
 
-  async function load() {
-    setLoading(true);
-    const [docs, work] = await Promise.all([fetch('/api/documents', { headers }), fetch('/api/issues', { headers })]);
-    if (!docs.ok || !work.ok) { setLoading(false); return setError('문서를 불러오지 못했습니다.'); }
-    setDocuments(await docs.json()); setIssues(await work.json()); setError(''); setLoading(false);
-  }
+  const selected = documents.find((d) => d.id === selectedId) ?? null;
+  const children = (parentId: string | null) => documents.filter((d) => d.parentId === parentId);
+  const ancestors = (doc: Document | null): Document[] => { const chain: Document[] = []; for (let d = doc; d?.parentId;) { d = documents.find((x) => x.id === d!.parentId) ?? null; if (d) chain.unshift(d); } return chain; };
+  const isInside = (id: string, ancestorId: string) => ancestors(documents.find((d) => d.id === id) ?? null).some((d) => d.id === ancestorId);
 
-  async function select(document: Document) {
-    setSelected(document);
-    const response = await fetch(`/api/documents/${document.id}/issue-links`, { headers });
-    setLinks(response.ok ? (await response.json()).map((link: { issueId: string }) => link.issueId) : []);
+  async function load() {
+    const [docs, work] = await Promise.all([fetch('/api/documents', { headers }), fetch('/api/issues', { headers })]);
+    setLoading(false);
+    if (!docs.ok || !work.ok) return setError('문서를 불러오지 못했습니다.');
+    setDocuments(await docs.json()); setIssues(await work.json()); setError('');
   }
+  async function loadTrash() { const response = await fetch('/api/documents?archived=true', { headers }); if (response.ok) setTrash(await response.json()); }
 
   useEffect(() => { void load(); }, [token]);
+  useEffect(() => { try { localStorage.setItem(expandedKey, JSON.stringify([...expanded])); } catch { /* per-viewer convenience only */ } }, [expanded]);
+  useEffect(() => {
+    const onHash = () => { const id = hashId(); if (id || location.hash === '#/documents') void open(id); };
+    const onLeave = () => { const job = pending.current; if (job) void fetch(`/api/documents/${job.id}`, { method: 'PATCH', headers: { ...headers, ...json }, body: JSON.stringify(job.changes), keepalive: true }); };
+    window.addEventListener('hashchange', onHash); window.addEventListener('pagehide', onLeave);
+    return () => { window.removeEventListener('hashchange', onHash); window.removeEventListener('pagehide', onLeave); onLeave(); };
+  }, [token]);
+  useEffect(() => {
+    if (!selectedId) return setLinks([]);
+    let current = true;
+    void fetch(`/api/documents/${selectedId}/issue-links`, { headers }).then(async (response) => { if (current) setLinks(response.ok ? (await response.json()).map((link: { issueId: string }) => link.issueId) : []); });
+    return () => { current = false; };
+  }, [selectedId, token]);
 
-  async function create() {
-    const response = await fetch('/api/documents', { method: 'POST', headers: { ...headers, ...json }, body: JSON.stringify({ title: '제목 없는 문서' }) });
-    if (!response.ok) return setError('문서를 만들지 못했습니다.');
-    await load(); await select(await response.json());
+  async function flush() {
+    window.clearTimeout(timer.current);
+    const job = pending.current;
+    if (!job) return;
+    pending.current = null; setStatus('saving');
+    const response = await fetch(`/api/documents/${job.id}`, { method: 'PATCH', headers: { ...headers, ...json }, body: JSON.stringify(job.changes) }).catch(() => null);
+    if (!response?.ok) { pending.current ??= job; return setStatus('error'); }
+    const saved: Document = await response.json();
+    setDocuments((all) => all.map((d) => d.id === saved.id ? { ...d, updatedAt: saved.updatedAt } : d));
+    if (!pending.current) setStatus('saved');
+  }
+  function edit(id: string, changes: Partial<Pick<Document, 'title' | 'body' | 'icon'>>) {
+    setDocuments((all) => all.map((d) => d.id === id ? { ...d, ...changes } : d));
+    const saveable = changes.title !== undefined && !changes.title.trim() ? { ...changes, title: undefined } : changes; // a blank title stays local until typed
+    if (Object.values(saveable).every((value) => value === undefined)) return;
+    if (pending.current && pending.current.id !== id) void flush();
+    pending.current = { id, changes: { ...(pending.current?.id === id ? pending.current.changes : {}), ...saveable } };
+    setStatus('dirty');
+    window.clearTimeout(timer.current);
+    timer.current = window.setTimeout(() => void flush(), 700);
   }
 
-  async function save(event: FormEvent) {
+  async function open(id: string | null) {
+    await flush();
+    setSelectedId(id); setStatus('idle');
+    history.replaceState(null, '', id ? `#document-${id}` : '#/documents');
+    if (id) setExpanded((current) => new Set([...current, ...ancestors(documents.find((d) => d.id === id) ?? null).map((d) => d.id)]));
+  }
+
+  async function create(parentId: string | null) {
+    const response = await fetch('/api/documents', { method: 'POST', headers: { ...headers, ...json }, body: JSON.stringify({ title: untitled, parentId }) });
+    if (!response.ok) return setError('페이지를 만들지 못했습니다.');
+    const doc: Document = await response.json();
+    setDocuments((all) => [...all, doc]);
+    if (parentId) setExpanded((current) => new Set([...current, parentId]));
+    await open(doc.id);
+    requestAnimationFrame(() => titleInput.current?.select());
+  }
+
+  async function archive(doc: Document) {
+    await flush();
+    const response = await fetch(`/api/documents/${doc.id}/archive`, { method: 'POST', headers });
+    if (!response.ok) return setError('휴지통으로 옮기지 못했습니다.');
+    if (selectedId && (selectedId === doc.id || isInside(selectedId, doc.id))) await open(doc.parentId);
+    await load(); if (trash) await loadTrash();
+  }
+  async function restore(doc: Document) {
+    const response = await fetch(`/api/documents/${doc.id}/restore`, { method: 'POST', headers });
+    if (!response.ok) return setError('복원하지 못했습니다.');
+    await Promise.all([load(), loadTrash()]);
+  }
+
+  async function drop(targetId: string | null, zone: Zone) {
+    const dragId = drag?.id; setDrag(null);
+    if (!dragId || dragId === targetId || targetId && isInside(targetId, dragId)) return; // never into its own subtree
+    const target = documents.find((d) => d.id === targetId);
+    const parentId = !target ? null : zone === 'inside' ? target.id : target.parentId;
+    const siblings = children(parentId).filter((d) => d.id !== dragId);
+    const index = !target || zone === 'inside' ? siblings.length : siblings.findIndex((d) => d.id === target.id) + (zone === 'after' ? 1 : 0);
+    await flush();
+    const response = await fetch(`/api/documents/${dragId}/move`, { method: 'POST', headers: { ...headers, ...json }, body: JSON.stringify({ parentId, index }) });
+    if (!response.ok) setError('페이지를 옮기지 못했습니다.');
+    if (parentId) setExpanded((current) => new Set([...current, parentId]));
+    await load();
+  }
+  function dragOver(id: string, event: DragEvent<HTMLElement>) {
+    if (!drag) return;
     event.preventDefault();
-    if (!selected) return;
-    const response = await fetch(`/api/documents/${selected.id}`, { method: 'PATCH', headers: { ...headers, ...json }, body: JSON.stringify({ title: selected.title, body: selected.body, parentId: selected.parentId }) });
-    if (!response.ok) return setError('문서를 저장하지 못했습니다.');
-    const next = await response.json(); setSelected(next); setDocuments((current) => current.map((document) => document.id === next.id ? next : document)); setError('');
+    const rect = event.currentTarget.getBoundingClientRect();
+    const y = (event.clientY - rect.top) / rect.height;
+    const zone: Zone = y < 0.25 ? 'before' : y > 0.75 ? 'after' : 'inside';
+    if (drag.over !== id || drag.zone !== zone) setDrag({ ...drag, over: id, zone });
   }
 
-  async function toggleIssue(issueId: string) {
+  async function mention(issueId: string) {
     if (!selected || links.includes(issueId)) return;
     const response = await fetch(`/api/documents/${selected.id}/issue-links`, { method: 'POST', headers: { ...headers, ...json }, body: JSON.stringify({ issueId }) });
-    if (!response.ok) return setError('이슈를 연결하지 못했습니다.');
-    setLinks((current) => [...current, issueId]);
+    if (response.ok || response.status === 400) setLinks((current) => current.includes(issueId) ? current : [...current, issueId]); // 400 = already linked
+    else setError('할 일을 연결하지 못했습니다.');
   }
 
-  const linked = issues.filter((issue) => links.includes(issue.id));
-  return <section aria-label="문서" className="grid gap-4 md:grid-cols-[240px_minmax(0,1fr)]">
-    <aside className="card h-fit p-2">
-      <div className="flex items-center justify-between px-2 py-1">
-        <h2 className="eyebrow">문서 {documents.length}</h2>
-        <button type="button" className="btn btn-ghost h-7 px-2" onClick={() => void create()}><Plus />새 문서</button>
+  // A render function, not a component: a nested component type would remount rows mid-drag.
+  function row(doc: Document, depth: number) {
+    const kids = children(doc.id);
+    const isOpen = expanded.has(doc.id);
+    const target = drag?.over === doc.id && drag.id !== doc.id ? drag.zone : undefined;
+    return <li key={doc.id}>
+      <div draggable data-doc={doc.id} aria-current={doc.id === selectedId || undefined}
+        onDragStart={(event) => { event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('application/x-yggdrasil-page', doc.id); setDrag({ id: doc.id }); }}
+        onDragEnd={() => setDrag(null)} onDragOver={(event) => dragOver(doc.id, event)} onDrop={(event) => { event.preventDefault(); void drop(doc.id, drag?.zone ?? 'inside'); }}
+        className={`group flex h-8 max-md:h-10 items-center gap-0.5 rounded-md pr-1 text-sm text-muted hover:bg-line/50 hover:text-ink aria-[current=true]:bg-accent-soft aria-[current=true]:font-medium aria-[current=true]:text-accent-ink
+          ${target === 'inside' ? 'bg-accent-soft ring-1 ring-accent' : ''} ${target === 'before' ? 'shadow-[0_-2px_0_var(--color-accent)]' : ''} ${target === 'after' ? 'shadow-[0_2px_0_var(--color-accent)]' : ''} ${drag?.id === doc.id ? 'opacity-40' : ''}`}
+        style={{ paddingLeft: 4 + depth * 14 }}>
+        <button type="button" aria-label={isOpen ? '하위 페이지 접기' : '하위 페이지 펼치기'} aria-expanded={kids.length ? isOpen : undefined}
+          className={`grid size-5 shrink-0 place-items-center rounded text-faint hover:bg-line hover:text-ink ${kids.length ? '' : 'invisible'}`}
+          onClick={() => setExpanded((current) => { const next = new Set(current); if (!next.delete(doc.id)) next.add(doc.id); return next; })}>
+          <ChevronRight className={`size-3.5 transition-transform ${isOpen ? 'rotate-90' : ''}`} />
+        </button>
+        <button type="button" className="flex h-full min-w-0 flex-1 items-center gap-1.5 text-left" onClick={() => void open(doc.id)}>
+          <span className="grid w-4 shrink-0 place-items-center text-[13px]">{doc.icon ?? <FileText className="size-3.5" />}</span>
+          <span className="truncate">{doc.title || untitled}</span>
+        </button>
+        <span className="flex shrink-0 opacity-0 group-hover:opacity-100 focus-within:opacity-100 max-md:opacity-100">
+          <button type="button" aria-label={`${doc.title} 하위 페이지 추가`} className="grid size-6 max-md:size-9 place-items-center rounded text-faint hover:bg-line hover:text-ink" onClick={() => void create(doc.id)}><Plus className="size-3.5" /></button>
+          <button type="button" aria-label={`${doc.title} 휴지통으로 이동`} className="grid size-6 max-md:size-9 place-items-center rounded text-faint hover:bg-line hover:text-danger" onClick={() => void archive(doc)}><Trash2 className="size-3.5" /></button>
+        </span>
       </div>
-      {loading && <p role="status" className="px-2 py-1 text-xs text-faint">문서를 불러오는 중…</p>}
-      {!documents.length ? <p className="empty">아직 문서가 없습니다.</p> : <Tree documents={documents} parentId={null} select={(document) => void select(document)} selectedId={selected?.id} />}
+      {isOpen && kids.length > 0 && <ul>{kids.map((kid) => row(kid, depth + 1))}</ul>}
+    </li>;
+  }
+
+  const recent = [...documents].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 4);
+  const linked = issues.filter((issue) => links.includes(issue.id));
+  return <section aria-label="문서" className="grid gap-4 md:grid-cols-[248px_minmax(0,1fr)] md:gap-6">
+    <aside aria-label="페이지 목록" className={`h-fit space-y-4 md:sticky md:top-16 ${selected ? 'max-md:hidden' : ''}`}>
+      {documents.length > 3 && <div>
+        <h2 className="eyebrow flex items-center gap-1 px-2 pb-1"><Clock className="size-3" />최근</h2>
+        <ul>{recent.map((doc) => <li key={doc.id}><button type="button" onClick={() => void open(doc.id)} className="flex h-7 w-full items-center gap-1.5 rounded-md px-2 text-left text-sm text-muted hover:bg-line/50 hover:text-ink">
+          <span className="w-4 shrink-0 text-center text-[13px]">{doc.icon ?? '·'}</span><span className="truncate">{doc.title}</span></button></li>)}</ul>
+      </div>}
+      <div>
+        <div className="flex items-center justify-between px-2 pb-1" onDragOver={(event) => { if (drag) { event.preventDefault(); if (drag.over !== null) setDrag({ ...drag, over: null }); } }} onDrop={(event) => { event.preventDefault(); void drop(null, 'after'); }}>
+          <h2 className="eyebrow">페이지 {documents.length}</h2>
+          <button type="button" className="btn btn-ghost h-7 px-2" onClick={() => void create(null)}><Plus />새 페이지</button>
+        </div>
+        {loading && <p role="status" className="px-2 py-1 text-xs text-faint">불러오는 중…</p>}
+        {!loading && !documents.length ? <p className="empty">아직 페이지가 없습니다.<br />‘새 페이지’로 생각을 적어 보세요.</p>
+          : <ul aria-label="페이지 트리">{children(null).map((doc) => row(doc, 0))}</ul>}
+      </div>
+      <div>
+        <button type="button" aria-expanded={!!trash} className="flex h-7 w-full items-center gap-1.5 rounded-md px-2 text-sm text-muted hover:bg-line/50 hover:text-ink" onClick={() => trash ? setTrash(null) : void loadTrash()}>
+          <Trash2 className="size-3.5" />휴지통<ChevronRight className={`ml-auto size-3.5 transition-transform ${trash ? 'rotate-90' : ''}`} />
+        </button>
+        {trash && (!trash.length ? <p className="px-2 py-2 text-xs text-faint">휴지통이 비어 있습니다.</p> : <ul aria-label="휴지통">{trash.map((doc) => <li key={doc.id} className="flex h-7 items-center gap-1.5 pl-7 pr-1 text-sm text-faint">
+          <span className="min-w-0 flex-1 truncate">{doc.icon} {doc.title}</span>
+          <button type="button" aria-label={`${doc.title} 복원`} className="grid size-6 place-items-center rounded hover:bg-line hover:text-ink" onClick={() => void restore(doc)}><RotateCcw className="size-3.5" /></button>
+        </li>)}</ul>)}
+      </div>
     </aside>
-    <div className="min-w-0 space-y-3">
+
+    <div className={`min-w-0 space-y-3 ${selected ? '' : 'max-md:hidden'}`}>
       {error && <p role="alert" className="alert">{error}</p>}
-      {!selected ? <div className="card empty py-16">왼쪽에서 문서를 고르거나 새 문서를 만드세요.</div> : <form onSubmit={save} className="card flex flex-col">
-        <label className="sr-only" htmlFor="document-title">제목</label>
-        <input id="document-title" className="w-full rounded-t-lg border-b border-line bg-transparent px-5 pb-3 pt-5 text-xl font-semibold tracking-tight outline-none focus:bg-sunken/40" value={selected.title} onChange={(event) => setSelected({ ...selected, title: event.target.value })} required />
-        <label className="sr-only" htmlFor="document-body">본문</label>
-        <textarea id="document-body" className="min-h-80 w-full resize-y bg-transparent px-5 py-4 text-base leading-7 outline-none focus:bg-sunken/40" placeholder="내용을 입력하세요" value={selected.body} onChange={(event) => setSelected({ ...selected, body: event.target.value })} />
-        <div className="grid gap-3 border-t border-line p-4 sm:grid-cols-2">
-          <label><span className="label">상위 문서</span><select className="field" value={selected.parentId ?? ''} onChange={(event) => setSelected({ ...selected, parentId: event.target.value || null })}><option value="">최상위</option>{documents.filter((document) => document.id !== selected.id).map((document) => <option key={document.id} value={document.id}>{document.title}</option>)}</select></label>
-          <label><span className="label">이슈 연결</span><select className="field" value="" onChange={(event) => { if (event.target.value) void toggleIssue(event.target.value); }}><option value="">이슈 선택</option>{issues.filter((issue) => !links.includes(issue.id)).map((issue) => <option key={issue.id} value={issue.id}>{issue.title}</option>)}</select></label>
-        </div>
-        <div className="flex flex-wrap items-center gap-2 border-t border-line px-4 py-3">
-          <div className="mr-auto flex min-w-0 flex-wrap gap-1.5">{linked.length ? linked.map((issue) => <span key={issue.id} className="badge"><Link2 />{issue.title}</span>) : <span className="text-xs text-faint">연결된 이슈 없음</span>}</div>
-          <button className="btn btn-primary">저장</button>
-        </div>
-      </form>}
+      {!selected ? <div className="card empty py-20">{selectedId && !loading ? '페이지를 찾을 수 없습니다. 휴지통에 있는지 확인하세요.' : '왼쪽에서 페이지를 고르거나 새 페이지를 만드세요.'}</div>
+        : <article className="card min-h-[70dvh]" aria-label={selected.title}>
+          <div className="flex h-11 items-center gap-1 border-b border-line px-2 text-sm text-faint md:px-4">
+            <button type="button" className="btn btn-ghost h-8 px-2 md:hidden" onClick={() => void open(null)}><ArrowLeft />페이지</button>
+            <nav aria-label="경로" className="flex min-w-0 flex-1 items-center gap-1 max-md:hidden">
+              {ancestors(selected).map((doc) => <span key={doc.id} className="flex min-w-0 items-center gap-1"><button type="button" className="truncate hover:text-ink" onClick={() => void open(doc.id)}>{doc.icon} {doc.title}</button><span>/</span></span>)}
+              <span className="truncate text-muted">{selected.title || untitled}</span>
+            </nav>
+            <span role="status" aria-live="polite" data-save-status className={`ml-auto shrink-0 text-xs ${status === 'error' ? 'text-danger' : ''}`}>
+              {status === 'error' ? <button type="button" className="underline" onClick={() => void flush()}>{statusText.error}</button> : statusText[status]}
+            </span>
+          </div>
+          <div className="mx-auto max-w-[720px] px-5 pb-10 pt-8 md:px-14 md:pt-14">
+            <div className="group/head">
+              <button type="button" popoverTarget="icon-picker" aria-label="페이지 아이콘 선택"
+                className={selected.icon ? 'mb-2 rounded-md p-1 text-[44px] leading-none hover:bg-sunken' : 'btn btn-ghost mb-1 h-7 px-1.5 text-xs opacity-100 md:opacity-0 md:group-hover/head:opacity-100 md:focus-visible:opacity-100'}>
+                {selected.icon ?? <><SmilePlus />아이콘 추가</>}
+              </button>
+              <div ref={iconPicker} id="icon-picker" popover="auto" aria-label="아이콘" className="m-auto w-72 rounded-lg border border-line bg-surface p-2 shadow-pop">
+                <div className="grid grid-cols-6 gap-1">{emojis.map((emoji) => <button key={emoji} type="button" aria-label={`아이콘 ${emoji}`} className="grid size-10 place-items-center rounded-md text-xl hover:bg-sunken"
+                  onClick={() => { edit(selected.id, { icon: emoji }); iconPicker.current?.hidePopover(); }}>{emoji}</button>)}</div>
+                {selected.icon && <button type="button" className="btn btn-ghost mt-1 w-full" onClick={() => { edit(selected.id, { icon: null }); iconPicker.current?.hidePopover(); }}>아이콘 제거</button>}
+              </div>
+              <label className="sr-only" htmlFor="document-title">제목</label>
+              <input id="document-title" ref={titleInput} value={selected.title} placeholder={untitled} maxLength={200} autoComplete="off"
+                className="w-full bg-transparent text-[30px] font-bold leading-10 tracking-tight outline-none placeholder:text-line-strong md:text-[36px] md:leading-[44px]"
+                onChange={(event) => edit(selected.id, { title: event.target.value })}
+                onKeyDown={(event) => {
+                  if (event.key !== 'Enter' || event.nativeEvent.isComposing) return;
+                  event.preventDefault();
+                  const first = document.querySelector<HTMLElement>('[data-row] textarea, [data-row] .cursor-text');
+                  if (first instanceof HTMLTextAreaElement) first.focus(); else first?.click();
+                }} />
+            </div>
+            <div className="mt-4 md:ml-0">
+              <BlockEditor key={selected.id} initial={selected.body} issues={issues} onChange={(body) => edit(selected.id, { body })} onMention={(issueId) => void mention(issueId)} />
+            </div>
+            {children(selected.id).length > 0 && <ul aria-label="하위 페이지" className="mb-6 space-y-0.5">{children(selected.id).map((doc) => <li key={doc.id}>
+              <button type="button" className="flex items-center gap-2 rounded-md px-1 py-1 text-[15px] underline decoration-line-strong underline-offset-4 hover:bg-sunken" onClick={() => void open(doc.id)}>
+                <span>{doc.icon ?? <FileText className="size-4 text-faint" />}</span>{doc.title}</button></li>)}</ul>}
+            <section aria-label="연결된 할 일" className="border-t border-line pt-4">
+              <h2 className="eyebrow mb-2">연결된 할 일 {linked.length}</h2>
+              {linked.length ? <ul className="space-y-1">{linked.map((issue) => <li key={issue.id}>
+                <a href={`#issue-${issue.id}`} className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-sunken">
+                  <span className={`badge ${issue.status === 'done' ? 'bg-accent-soft text-accent-ink' : ''}`}>{statusLabels[issue.status]}</span>
+                  <span className={`min-w-0 truncate ${issue.status === 'done' ? 'text-faint line-through' : ''}`}>{issue.title}</span>
+                </a></li>)}</ul>
+                : <p className="text-xs text-faint">본문에서 ‘@’를 입력하거나 ‘/할 일 언급’으로 할 일을 연결하세요.</p>}
+            </section>
+          </div>
+        </article>}
     </div>
   </section>;
 }

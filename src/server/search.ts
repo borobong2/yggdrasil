@@ -13,7 +13,7 @@ export async function searchWorkspace(ownerId: string, query: string): Promise<S
   const result = await getDb().execute(sql`
     SELECT kind, id, left(title, 200) AS title, left(preview, 200) AS preview FROM (
       SELECT 'document' AS kind, id, title, body AS preview FROM documents
-        WHERE owner_id = ${ownerId} AND (title ILIKE ${pattern} OR body ILIKE ${pattern})
+        WHERE owner_id = ${ownerId} AND archived_at IS NULL AND (title ILIKE ${pattern} OR body ILIKE ${pattern})
       UNION ALL SELECT 'goal', id, title, title FROM goals WHERE owner_id = ${ownerId} AND title ILIKE ${pattern}
       UNION ALL SELECT 'epic', id, title, title FROM epics WHERE owner_id = ${ownerId} AND title ILIKE ${pattern}
       UNION ALL SELECT 'issue', id, title, title FROM issues WHERE owner_id = ${ownerId} AND title ILIKE ${pattern}

@@ -21,7 +21,7 @@ export type DeliveryPlanActivityPayload = { proposalId: string; captureId: strin
 export type Activity = { id: string; ownerId: string; actorId: string; kind: 'issue.created' | 'issue.updated' | 'issue.completed' | 'issue.moved' | 'delivery-plan.created' | 'delivery-plan.accepted' | 'delivery-plan.dismissed' | 'evidence.added'; subjectType: 'issue' | 'delivery-plan-proposal'; subjectId: string; payload: Record<string, unknown>; createdAt: string };
 export type IssueEvidence = { id: string; issueId: string; url: string; kind: EvidenceKind; status: EvidenceStatus; createdAt: string };
 
-export type Document = WorkRecord & { body: string; parentId: string | null };
+export type Document = WorkRecord & { body: string; parentId: string | null; position: number; archivedAt: string | null; icon: string | null };
 export type DocumentIssueLink = { documentId: string; issueId: string; createdAt: string };
 
 export type Progress = { done: number; total: number; ratio: number };
