@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { Activity, CalendarCheck, FileText, Inbox, ListTree, Settings, SquareKanban } from 'lucide-react';
+import { Activity, CalendarCheck, CalendarDays, FileText, Inbox, ListTree, Settings, SquareKanban } from 'lucide-react';
 import './styles.css';
 import { LoginScreen, SessionPanel, TreeMark, useAuth } from './LoginView.js';
 import { PatSettings } from './PatSettings.js';
@@ -13,9 +13,11 @@ import { BoardView } from './BoardView.js';
 import { ActivityTimeline } from './ActivityTimeline.js';
 import { InboxView } from './InboxView.js';
 import { TodayView } from './TodayView.js';
+import { CalendarView } from './CalendarView.js';
 
 const tabs = [
   { id: 'today', label: '오늘', icon: CalendarCheck },
+  { id: 'calendar', label: '캘린더', icon: CalendarDays },
   { id: 'inbox', label: '인박스', icon: Inbox },
   { id: 'documents', label: '문서', icon: FileText },
   { id: 'planning', label: '기획', icon: ListTree },
@@ -28,7 +30,7 @@ type Tab = typeof tabs[number]['id'];
 // Hash routing: `#/board` selects a tab; record anchors (`#document-…`, `#issue-…`) jump to the owning tab.
 function tabFromHash(current: Tab): Tab {
   const hash = location.hash.slice(1);
-  const direct = tabs.find((tab) => hash === `/${tab.id}`);
+  const direct = tabs.find((tab) => hash === `/${tab.id}` || hash.startsWith(`/${tab.id}/`)); // #/calendar/week/2026-10-13
   if (direct) return direct.id;
   if (hash.startsWith('document-')) return 'documents';
   if (/^(goal|epic|issue)-/.test(hash)) return 'planning';
@@ -71,6 +73,7 @@ function App() {
       </header>
       <main className="mx-auto w-full max-w-[1200px] px-4 py-5 md:px-6 md:py-6">
         {tab === 'today' && <TodayView token={token} onActivity={refreshActivity} />}
+        {tab === 'calendar' && <CalendarView token={token} onActivity={refreshActivity} />}
         {tab === 'inbox' && <InboxView token={token} onActivity={refreshActivity} />}
         {tab === 'documents' && <DocumentsWorkspace token={token} />}
         {tab === 'planning' && <PlanningView token={token} />}
@@ -79,7 +82,7 @@ function App() {
         {tab === 'settings' && <div className="max-w-2xl space-y-4"><SessionPanel auth={auth} /><PatSettings token={token} /><GitHubSettings token={token} /></div>}
       </main>
     </div>
-    <nav aria-label="주 메뉴 (모바일)" className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-7 border-t border-line bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">
+    <nav aria-label="주 메뉴 (모바일)" className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-8 border-t border-line bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">
       {tabs.map((item) => <a key={item.id} href={`#/${item.id}`} aria-current={item.id === tab ? 'page' : undefined}
         className="flex h-14 flex-col items-center justify-center gap-0.5 text-2xs font-medium text-faint aria-[current=page]:text-accent-ink">
         <item.icon className="size-5" strokeWidth={1.75} />{item.label}

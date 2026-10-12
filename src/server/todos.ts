@@ -1,10 +1,10 @@
 import { and, asc, eq, inArray, isNull, ne, or, sql, type SQL } from 'drizzle-orm';
 import { z } from 'zod';
-import type { Hold, IssueStatus, Priority, TodayView, Todo, TodoVia } from '../contracts/items.js';
+import type { CalendarGhost, CalendarView, Hold, IssueStatus, Priority, TodayView, Todo, TodoVia } from '../contracts/items.js';
 import { appendActivity, type Transaction } from './activity.js';
 import { getDb } from './db.js';
 import { epics, goals, issues, recurrences } from './schema.js';
-import { recurrenceInput, setRecurrence, spawnNext, toRecurrence, type RecurrenceInput } from './recurrences.js';
+import { nextSlot, recurrenceInput, setRecurrence, spawnNext, toRecurrence, type RecurrenceInput } from './recurrences.js';
 import { NotFoundError, issue } from './work.js';
 import { allocateKey } from './ticket-keys.js';
 
@@ -160,4 +160,32 @@ export function columns(input: TodoChanges): Partial<typeof issues.$inferInsert>
     if (value !== undefined) out[key] = key === 'dueAt' || key === 'scheduledAt' ? parseTodoDate(value as DateInput) : key === 'title' ? (value as string).trim() : value;
   }
   return out;
+}
+
+/**
+ * YG-30 calendar range [from, to] (Asia/Seoul days, inclusive). A todo's calendar date is dueAt, else scheduledAt.
+ * `undated` = open todos with neither date. `ghosts` = upcoming occurrences of active series, computed with nextSlot
+ * from the same anchor spawnNext would use (max(now, open occurrence's date)) — preview only, never stored.
+ */
+export async function calendarView(ownerId: string, from: string, to: string, withDone = false, now = new Date()): Promise<CalendarView> {
+  const date = sql`(coalesce(${issues.dueAt}, ${issues.scheduledAt}) AT TIME ZONE 'Asia/Seoul')::date`;
+  const mine = eq(issues.ownerId, ownerId);
+  const notDone = ne(issues.status, 'done');
+  const [todos, undated, open] = await Promise.all([
+    todoRows(and(mine, sql`${date} BETWEEN ${from}::date AND ${to}::date`, withDone ? undefined : notDone)!),
+    todoRows(and(mine, notDone, isNull(issues.dueAt), isNull(issues.scheduledAt))!),
+    // One open occurrence per active series (spawnNext keeps it that way).
+    todoRows(and(mine, notDone, eq(recurrences.paused, false))!)
+  ]);
+  const end = parseTodoDate(to)!.getTime() + 86_400_000;
+  const start = parseTodoDate(from)!.getTime();
+  const ghosts: CalendarGhost[] = [];
+  for (const todo of open) {
+    const rule = todo.recurrence!;
+    const anchor = new Date(todo.dueAt ?? todo.scheduledAt ?? now);
+    // ponytail: 400 slots per series covers a daily rule over the 62-day range cap.
+    for (let slot = nextSlot(rule, anchor > now ? anchor : now), i = 0; slot.getTime() < end && i < 400; slot = nextSlot(rule, slot), i++)
+      if (slot.getTime() >= start) ghosts.push({ recurrenceId: rule.id, todoId: todo.id, title: todo.title, priority: todo.priority, at: slot.toISOString(), allDay: !rule.time });
+  }
+  return { from, to, todos, undated, ghosts: ghosts.sort((a, b) => a.at.localeCompare(b.at)) };
 }
