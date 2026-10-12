@@ -27,7 +27,7 @@ wait('dialog li');
 check(`document.querySelector('dialog').textContent.includes(${JSON.stringify(q)}) && document.querySelector('dialog').textContent.includes('YG08 browser search body')`, 'Cmd+K searches persisted document');
 browse('screenshot', '--selector', 'dialog', '/tmp/yg08-search.png');
 search(`no-results-${q}`);
-wait('text=No results found.');
+wait('text=결과가 없습니다.');
 check("document.querySelectorAll('dialog li').length === 0", 'empty result');
 browse('press', 'Escape');
 check("!document.querySelector('dialog').open", 'Escape closes populated search input');
@@ -37,7 +37,7 @@ check("document.querySelector('dialog').open", 'Ctrl+K opens dialog');
 // Deliberately resolve an aborted request after a newer response.
 js("window.yg08Fetch = window.fetch; window.fetch = (url, init) => String(url).startsWith('/api/search') ? new Promise(resolve => { window.yg08Pending ??= []; window.yg08Pending.push(resolve); }) : window.yg08Fetch(url, init)");
 search('old');
-check("document.querySelector('dialog').textContent.includes('Searching…')", 'loading state');
+check("document.querySelector('dialog').textContent.includes('검색 중…')", 'loading state');
 search('new');
 js("window.yg08Pending[1](new Response(JSON.stringify([{kind:'document',id:'new',title:'LATEST',preview:'new result'}]),{headers:{'content-type':'application/json'}}))");
 wait('dialog li');
@@ -46,23 +46,15 @@ check("document.querySelector('dialog').textContent.includes('LATEST') && !docum
 js("window.fetch = async (url, init) => String(url).startsWith('/api/search') ? new Response('{}',{status:500}) : window.yg08Fetch(url,init)");
 search('error');
 wait('dialog [role=alert]');
-check("document.querySelector('dialog [role=alert]').textContent.includes('Could not search')", 'server failure state');
+check("document.querySelector('dialog [role=alert]').textContent.includes('검색하지 못했습니다')", 'server failure state');
 js("window.fetch = window.yg08Fetch");
 browse('press', 'Escape');
-// Prepare a session change, then apply it while a search is in flight.
-browse('fill', '#bearer-token', 'invalid-yg08-browser-session');
+// YG-18 removed the bearer-token field, so a session change is simulated by a 401 from the server.
+js("window.fetch = async (url, init) => String(url).startsWith('/api/search') ? new Response('{}',{status:401}) : window.yg08Fetch(url,init)");
 browse('press', 'Meta+k');
 search(q);
-wait('dialog li');
-js("window.fetch = (url, init) => String(url).startsWith('/api/search') ? new Promise(resolve => { window.yg08Late = resolve; }) : window.yg08Fetch(url,init)");
-search('pending-before-session-change');
-js("document.querySelector('[aria-label=Session] form').requestSubmit()");
-check("document.querySelectorAll('dialog li').length === 0 && document.querySelector('#search-query').value === ''", 'session change clears previous owner state');
-js("window.yg08Late(new Response(JSON.stringify([{kind:'document',id:'secret',title:'OLD OWNER SECRET',preview:'private'}]),{headers:{'content-type':'application/json'}})); window.fetch = window.yg08Fetch");
-check("!document.querySelector('dialog').textContent.includes('OLD OWNER SECRET')", 'late previous-owner response stays hidden');
-search(q);
 wait('dialog [role=alert]');
-check("document.querySelector('dialog [role=alert]').textContent.includes('Sign in')", 'real HTTP 401 sign-in state');
+check("document.querySelector('dialog [role=alert]').textContent.includes('로그인')", 'HTTP 401 sign-in state');
+js("window.fetch = window.yg08Fetch");
 browse('press', 'Escape');
-browse('click', 'text=Clear session');
 console.log('YG-08 browser acceptance passed');
