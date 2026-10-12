@@ -1,16 +1,28 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Check, X } from 'lucide-react';
-import type { Hold, Issue, Priority } from '../contracts/items.js';
+import type { Hold, Issue, Priority, Recurrence, Weekday } from '../contracts/items.js';
+import { recurrenceLabel, weekdayLabels, weekdays } from '../contracts/recurrence.js';
 import { statusLabels } from './format.js';
 
 // Date inputs speak Asia/Seoul calendar days, matching how the server parses 'YYYY-MM-DD'.
 const seoulDay = (iso: string | null) => iso ? new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul' }).format(new Date(iso)) : '';
+const seoulTime = (iso: string | null) => { const time = iso ? new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(iso)) : ''; return time === '00:00' ? '' : time; };
+const seoulWeekday = (iso: string | null) => weekdays[(new Date(`${seoulDay(iso) || seoulDay(new Date().toISOString())}T00:00:00Z`).getUTCDay() + 6) % 7]!;
 
-type Draft = { title: string; priority: Priority; hold: '' | Hold; holdReason: string; dueAt: string; scheduledAt: string; estimateMinutes: string; notes: string };
-const draftOf = (issue: Issue): Draft => ({ title: issue.title, priority: issue.priority, hold: issue.hold ?? '', holdReason: issue.holdReason ?? '', dueAt: seoulDay(issue.dueAt),
-  scheduledAt: seoulDay(issue.scheduledAt), estimateMinutes: issue.estimateMinutes?.toString() ?? '', notes: issue.notes });
+// YG-28 repeat rule draft. '' = no rule (choosing it on a series ends the series).
+type Repeat = { freq: '' | Recurrence['freq']; weekdays: Weekday[]; monthDay: string; time: string; paused: boolean };
+const repeatOf = (issue: Issue): Repeat => {
+  const rule = issue.recurrence;
+  return { freq: rule?.freq ?? '', weekdays: rule?.weekdays ?? [seoulWeekday(issue.dueAt)], monthDay: String(rule?.monthDay ?? Number(seoulDay(issue.dueAt || new Date().toISOString()).slice(8))), time: rule?.time ?? '', paused: rule?.paused ?? false };
+};
+const recurrenceOf = (repeat: Repeat) => repeat.freq ? { freq: repeat.freq, ...(repeat.freq === 'weekly' ? { weekdays: weekdays.filter((day) => repeat.weekdays.includes(day)) } : {}),
+  ...(repeat.freq === 'monthly' ? { monthDay: Number(repeat.monthDay) } : {}), time: repeat.time || null, paused: repeat.paused } : null;
+
+type Draft = { title: string; priority: Priority; hold: '' | Hold; holdReason: string; dueAt: string; dueTime: string; scheduledAt: string; estimateMinutes: string; notes: string; repeat: Repeat };
+const draftOf = (issue: Issue): Draft => ({ title: issue.title, priority: issue.priority, hold: issue.hold ?? '', holdReason: issue.holdReason ?? '', dueAt: seoulDay(issue.dueAt), dueTime: seoulTime(issue.dueAt),
+  scheduledAt: seoulDay(issue.scheduledAt), estimateMinutes: issue.estimateMinutes?.toString() ?? '', notes: issue.notes, repeat: repeatOf(issue) });
 const payloadOf = (draft: Draft) => ({ title: draft.title, priority: draft.priority, hold: draft.hold || null, holdReason: draft.hold && draft.holdReason.trim() ? draft.holdReason : null,
-  dueAt: draft.dueAt || null, scheduledAt: draft.scheduledAt || null, estimateMinutes: draft.estimateMinutes ? Number(draft.estimateMinutes) : null, notes: draft.notes });
+  dueAt: draft.dueAt ? (draft.dueTime ? `${draft.dueAt}T${draft.dueTime}:00+09:00` : draft.dueAt) : null, scheduledAt: draft.scheduledAt || null, estimateMinutes: draft.estimateMinutes ? Number(draft.estimateMinutes) : null, notes: draft.notes, recurrence: recurrenceOf(draft.repeat) });
 
 export function TodoDetail({ issue, area, headers, onClose, onSaved }: { issue: Issue; area: string; headers: Record<string, string>; onClose: () => void; onSaved: (todo: Issue) => void }) {
   const dialog = useRef<HTMLDialogElement>(null);
@@ -18,6 +30,7 @@ export function TodoDetail({ issue, area, headers, onClose, onSaved }: { issue: 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const set = (changes: Partial<Draft>) => setDraft({ ...draft, ...changes });
+  const setRepeat = (changes: Partial<Repeat>) => set({ repeat: { ...draft.repeat, ...changes } });
 
   useEffect(() => { dialog.current?.showModal(); }, []);
 
@@ -25,7 +38,7 @@ export function TodoDetail({ issue, area, headers, onClose, onSaved }: { issue: 
     setBusy(true); setError('');
     try {
       const response = await fetch(url, { ...init, headers: { ...headers, 'content-type': 'application/json' } });
-      if (response.status === 400) throw new Error('입력값을 확인하세요. 제목은 1~200자, 예상 시간은 양의 정수(분)입니다.');
+      if (response.status === 400) throw new Error('입력값을 확인하세요. 제목은 1~200자, 예상 시간은 양의 정수(분), 매주 반복은 요일 1개 이상, 매월은 1~31일입니다.');
       if (!response.ok) throw new Error('저장하지 못했습니다. 다시 시도하세요.');
       onSaved(await response.json());
       onClose();
@@ -36,7 +49,7 @@ export function TodoDetail({ issue, area, headers, onClose, onSaved }: { issue: 
   function save(event: FormEvent) {
     event.preventDefault();
     const [before, after] = [payloadOf(draftOf(issue)), payloadOf(draft)];
-    const changes = Object.fromEntries(Object.entries(after).filter(([key, value]) => before[key as keyof typeof before] !== value));
+    const changes = Object.fromEntries(Object.entries(after).filter(([key, value]) => JSON.stringify(before[key as keyof typeof before]) !== JSON.stringify(value)));
     if (!Object.keys(changes).length) return onClose();
     void send(`/api/todos/${issue.id}`, { method: 'PATCH', body: JSON.stringify(changes) });
   }
@@ -70,7 +83,30 @@ export function TodoDetail({ issue, area, headers, onClose, onSaved }: { issue: 
         <div className="grid grid-cols-2 gap-3">
           <label className="block"><span className="label">마감일</span><input type="date" className="field" value={draft.dueAt} onChange={(event) => set({ dueAt: event.target.value })} /></label>
           <label className="block"><span className="label">예정일</span><input type="date" className="field" value={draft.scheduledAt} onChange={(event) => set({ scheduledAt: event.target.value })} /></label>
+          {(draft.repeat.freq || draft.dueTime) && <label className="block"><span className="label">마감 시각</span>
+            <input type="time" className="field" value={draft.dueTime} disabled={!draft.dueAt} onChange={(event) => set({ dueTime: event.target.value })} /></label>}
         </div>
+        <fieldset className="space-y-2 rounded-lg border border-line p-3">
+          <legend className="label px-1">반복</legend>
+          <div className="grid grid-cols-2 gap-3">
+            <select className="field" aria-label="반복 주기" value={draft.repeat.freq} onChange={(event) => setRepeat({ freq: event.target.value as Repeat['freq'] })}>
+              <option value="">반복 안 함</option><option value="daily">매일</option><option value="weekly">매주</option><option value="monthly">매월</option>
+            </select>
+            {draft.repeat.freq && <input type="time" className="field" aria-label="반복 시각" value={draft.repeat.time} onChange={(event) => setRepeat({ time: event.target.value })} />}
+          </div>
+          {draft.repeat.freq === 'weekly' && <div role="group" aria-label="반복 요일" className="flex gap-1">
+            {weekdays.map((day) => { const on = draft.repeat.weekdays.includes(day); return <button key={day} type="button" aria-pressed={on}
+              className={`btn h-8 flex-1 p-0 ${on ? 'btn-primary' : 'btn-ghost border border-line'}`}
+              onClick={() => setRepeat({ weekdays: on ? draft.repeat.weekdays.filter((item) => item !== day) : [...draft.repeat.weekdays, day] })}>{weekdayLabels[day]}</button>; })}
+          </div>}
+          {draft.repeat.freq === 'monthly' && <label className="flex items-center gap-2 text-sm">매월
+            <input type="number" inputMode="numeric" min={1} max={31} className="field w-20" aria-label="반복 날짜" value={draft.repeat.monthDay} onChange={(event) => setRepeat({ monthDay: event.target.value })} />일
+            <span className="text-xs text-faint">(없는 날은 말일)</span></label>}
+          {draft.repeat.freq && <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={draft.repeat.paused} onChange={(event) => setRepeat({ paused: event.target.checked })} />일시정지</label>}
+          <p className="text-xs text-muted">{draft.repeat.freq
+            ? `${recurrenceLabel({ ...recurrenceOf(draft.repeat)!, weekdays: draft.repeat.weekdays, monthDay: Number(draft.repeat.monthDay) })} · 완료하면 다음 회차가 생깁니다. 마감일만 바꾸면 이번 회차만 옮겨집니다.`
+            : issue.recurrence ? '저장하면 반복이 끝납니다. 이 할 일은 남습니다.' : '매일·매주·매월 반복할 수 있습니다.'}</p>
+        </fieldset>
         <label className="block"><span className="label">예상 시간 (분)</span>
           <input type="number" inputMode="numeric" min={1} max={100000} step={1} className="field" value={draft.estimateMinutes} onChange={(event) => set({ estimateMinutes: event.target.value })} /></label>
         <label className="block"><span className="label">메모</span>
