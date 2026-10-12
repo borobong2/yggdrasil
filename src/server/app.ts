@@ -13,6 +13,7 @@ import { registerDocumentRoutes } from './routes/documents.js';
 import { registerEvidenceRoutes } from './routes/evidence.js';
 import { registerPlanningRoutes } from './routes/planning.js';
 import { registerBoardRoutes } from './routes/board.js';
+import { registerTodoRoutes } from './routes/todos.js';
 import { registerDeliveryPlanRoutes } from './routes/delivery-plans.js';
 import { registerPlanAcceptanceRoutes } from './routes/plan-acceptance.js';
 
@@ -31,6 +32,7 @@ export function createApp(provider?: SuggestionProvider, deliveryPlanProvider?: 
   registerDocumentRoutes(app);
   registerPlanningRoutes(app);
   registerBoardRoutes(app);
+  registerTodoRoutes(app);
   registerActivityRoutes(app);
   return app;
 }

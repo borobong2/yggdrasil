@@ -8,22 +8,7 @@ import { findDeliveryPlanCapture, generateDeliveryPlan } from './delivery-plans.
 import { AIConfigurationRequired, generateOpenAIDeliveryPlan, type DeliveryPlanProvider } from './openai.js';
 import { NotFoundError } from './work.js';
 import type { Todo } from '../contracts/items.js';
-import { completeTodo, createTodo, getTodo, listAreas, listAreaTodos, seoulDate, todayView, updateTodo } from './todos.js';
-
-const name = z.string().trim().min(1).max(200);
-const day = z.union([z.iso.date(), z.iso.datetime({ offset: true })]).describe("'YYYY-MM-DD' (Asia/Seoul) or ISO timestamp");
-const todoFields = {
-  epic: name.describe("Group inside the area; defaults to '일반'"),
-  title: name,
-  status: z.enum(['backlog', 'todo', 'doing', 'done']),
-  priority: z.enum(['p1', 'p2', 'p3', 'p4']),
-  dueAt: day.nullable(),
-  hold: z.enum(['waiting', 'blocked', 'scheduled']).nullable(),
-  holdReason: z.string().trim().max(500).nullable(),
-  scheduledAt: day.nullable(),
-  notes: z.string().max(20_000),
-  estimateMinutes: z.number().int().positive().max(100_000).nullable()
-};
+import { completeTodo, createTodo, getTodo, listAreas, listAreaTodos, seoulDate, todayView, todoFields, todoName as name, updateTodo } from './todos.js';
 
 export function createMcpServer(ownerId: string, provider: DeliveryPlanProvider = generateOpenAIDeliveryPlan) {
   const server = new McpServer({ name: 'yggdrasil', version: '0.1.0' });
