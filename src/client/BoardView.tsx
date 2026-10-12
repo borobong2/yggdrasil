@@ -2,11 +2,12 @@ import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { DndContext, DragOverlay, KeyboardSensor, MouseSensor, TouchSensor, closestCorners, useDroppable, useSensor, useSensors, type Announcements, type DragEndEvent, type DragOverEvent, type UniqueIdentifier } from '@dnd-kit/core';
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Ellipsis, X } from 'lucide-react';
+import { Ellipsis, ListChecks, X } from 'lucide-react';
 import type { Epic, Goal, Hold, Issue, IssueStatus, Priority } from '../contracts/items.js';
 import { DueBadge, HoldBadge, PriorityBadge, RecurrenceBadge, statusLabels } from './format.js';
 import { GitHubChips } from './GitHubChips.js';
 import { TodoDetail } from './TodoDetail.js';
+import { BulkActions, SelectBox, useSelection, type Selection } from './BulkActions.js';
 
 // Backlog sits last so the first column on a phone is the work that matters now.
 const statuses: IssueStatus[] = ['todo', 'doing', 'done', 'backlog'];
@@ -32,6 +33,7 @@ export function BoardView({ token, onActivity }: { token: string; onActivity?: (
   const [activeId, setActiveId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const snapshot = useRef<Board | null>(null);
+  const selection = useSelection();
   const headers: Record<string, string> = token ? { authorization: `Bearer ${token}` } : {};
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
@@ -137,14 +139,16 @@ export function BoardView({ token, onActivity }: { token: string; onActivity?: (
     setBoard((prev) => {
       if (!prev) return prev;
       const from = columnOf(todo.id, prev)!;
-      if (from === todo.status) return { ...prev, [from]: prev[from].map((issue) => issue.id === todo.id ? todo : issue) };
-      return { ...prev, [from]: prev[from].filter((issue) => issue.id !== todo.id), [todo.status]: [todo, ...prev[todo.status]] };
+      const merged = { ...prev[from].find((issue) => issue.id === todo.id), ...todo };
+      if (from === todo.status) return { ...prev, [from]: prev[from].map((issue) => issue.id === todo.id ? merged : issue) };
+      return { ...prev, [from]: prev[from].filter((issue) => issue.id !== todo.id), [todo.status]: [merged, ...prev[todo.status]] };
     });
     if (todo.recurrence) void refresh();
     onActivity?.();
   }
 
   const active = activeId ? find(activeId) : undefined;
+  const order = statuses.flatMap((status) => filtered[status].map((issue) => issue.id));
   const selected = selectedId ? find(selectedId) : undefined;
   const areaNames = [...new Set(areas.values())].filter(Boolean).sort((a, b) => a.localeCompare(b, 'ko'));
 
@@ -160,6 +164,7 @@ export function BoardView({ token, onActivity }: { token: string; onActivity?: (
         <option value="">보류 전체</option><option value="none">보류 없음</option><option value="waiting">대기</option><option value="blocked">막힘</option><option value="scheduled">예정</option>
       </select>
       {filtering && <button type="button" className="btn btn-ghost h-8" onClick={() => setFilters(noFilters)}><X />필터 해제</button>}
+      <button type="button" className="btn btn-ghost ml-auto h-8" aria-pressed={selection.mode} onClick={() => selection.mode ? selection.clear() : selection.setMode(true)}><ListChecks />{selection.mode ? '선택 끝내기' : '선택'}</button>
     </div>
     {actionError && <p role="alert" className="alert flex items-center gap-2"><span className="flex-1">{actionError}</span>
       <button type="button" className="btn btn-ghost size-6 p-0 text-danger" aria-label="오류 닫기" onClick={() => setActionError('')}><X /></button></p>}
@@ -174,18 +179,20 @@ export function BoardView({ token, onActivity }: { token: string; onActivity?: (
             const list = filtered[status];
             const limited = status === 'done' && !allDone && list.length > DONE_LIMIT;
             const shown = limited ? list.filter((issue, index) => index < DONE_LIMIT || issue.id === activeId) : list;
-            return <BoardColumn key={status} status={status} issues={shown} count={list.length} total={board[status].length} onOpen={setSelectedId} onMove={moveTo}
+            return <BoardColumn key={status} status={status} issues={shown} count={list.length} total={board[status].length} onOpen={setSelectedId} onMove={moveTo} selection={selection} order={order}
               footer={status === 'done' && list.length > DONE_LIMIT ? <button type="button" className="btn btn-ghost mt-1 h-7 w-full text-xs" aria-expanded={allDone} onClick={() => setAllDone(!allDone)}>
                 {allDone ? '최근 것만 보기' : `더보기 (${list.length - DONE_LIMIT}개)`}</button> : null} />;
           })}
         </div>
         <DragOverlay dropAnimation={null}>{active ? <div className="card cursor-grabbing p-3 shadow-pop"><CardBody issue={active} /></div> : null}</DragOverlay>
       </DndContext>}
+    <BulkActions selection={selection} headers={headers} onApplied={(todos) => todos.forEach(updated)} />
     {selected && <TodoDetail key={selected.id} issue={selected} area={areas.get(selected.epicId) ?? ''} headers={headers} onClose={() => setSelectedId(null)} onSaved={updated} />}
   </section>;
 }
 
-function BoardColumn({ status, issues, count, total, onOpen, onMove, footer }: { status: IssueStatus; issues: Issue[]; count: number; total: number; onOpen: (id: string) => void; onMove: (issue: Issue, status: IssueStatus) => void; footer: React.ReactNode }) {
+type SelectProps = { selection: Selection; order: string[] };
+function BoardColumn({ status, issues, count, total, onOpen, onMove, footer, selection, order }: { status: IssueStatus; issues: Issue[]; count: number; total: number; onOpen: (id: string) => void; onMove: (issue: Issue, status: IssueStatus) => void; footer: React.ReactNode } & SelectProps) {
   const { setNodeRef, isOver } = useDroppable({ id: status });
   const title = statusLabels[status];
   return <section aria-label={title} ref={setNodeRef} data-status={status}
@@ -194,7 +201,7 @@ function BoardColumn({ status, issues, count, total, onOpen, onMove, footer }: {
       <span className="font-normal tabular-nums text-faint">{count === total ? total : `${count}/${total}`}</span></h3>
     <SortableContext id={status} items={issues.map((issue) => issue.id)} strategy={verticalListSortingStrategy}>
       <ul className="min-h-16 space-y-2">
-        {issues.map((issue) => <SortableCard key={issue.id} issue={issue} onOpen={onOpen} onMove={onMove} />)}
+        {issues.map((issue) => <SortableCard key={issue.id} issue={issue} onOpen={onOpen} onMove={onMove} selection={selection} order={order} />)}
         {issues.length === 0 && <li className="rounded-md border border-dashed border-line-strong py-6 text-center text-xs text-faint">{total ? '조건에 맞는 이슈 없음' : '여기로 끌어 놓기'}</li>}
       </ul>
     </SortableContext>
@@ -202,15 +209,17 @@ function BoardColumn({ status, issues, count, total, onOpen, onMove, footer }: {
   </section>;
 }
 
-function SortableCard({ issue, onOpen, onMove }: { issue: Issue; onOpen: (id: string) => void; onMove: (issue: Issue, status: IssueStatus) => void }) {
+function SortableCard({ issue, onOpen, onMove, selection, order }: { issue: Issue; onOpen: (id: string) => void; onMove: (issue: Issue, status: IssueStatus) => void } & SelectProps) {
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id: issue.id });
   const style: CSSProperties = { transform: CSS.Translate.toString(transform), transition };
-  return <li ref={setNodeRef} style={style} data-issue-id={issue.id} className={`card group relative select-none [-webkit-touch-callout:none] ${isDragging ? 'opacity-40 ring-2 ring-accent' : 'hover:border-line-strong'}`}>
-    <button type="button" ref={setActivatorNodeRef} {...attributes} {...listeners} aria-roledescription="이동 가능한 카드" onClick={() => onOpen(issue.id)}
-      className="block w-full cursor-grab touch-manipulation rounded-[inherit] p-3 pr-9 text-left active:cursor-grabbing">
+  const checked = selection.selected.has(issue.id);
+  return <li ref={setNodeRef} style={style} data-issue-id={issue.id} className={`card group relative select-none [-webkit-touch-callout:none] ${isDragging ? 'opacity-40 ring-2 ring-accent' : checked ? 'border-accent bg-accent-soft' : 'hover:border-line-strong'}`}>
+    <SelectBox label={issue.title} checked={checked} onToggle={(range) => selection.toggle(issue.id, range, order)} className={`absolute left-3 top-[15px] z-[1] ${selection.mode ? '' : 'hidden md:block'}`} />
+    <button type="button" ref={setActivatorNodeRef} {...attributes} {...listeners} aria-roledescription="이동 가능한 카드" onClick={(event) => selection.mode ? selection.toggle(issue.id, event.shiftKey, order) : onOpen(issue.id)}
+      className={`block w-full cursor-grab touch-manipulation rounded-[inherit] p-3 pr-9 text-left active:cursor-grabbing ${selection.mode ? 'pl-9' : 'md:pl-9'}`}>
       <CardBody issue={issue} />
     </button>
-    {(issue.key || issue.github?.pr || issue.github?.deploy) && <div className="-mt-1.5 flex flex-wrap gap-1 px-3 pb-3"><GitHubChips issue={issue} /></div>}
+    {(issue.key || issue.github?.pr || issue.github?.deploy) && <div className={`-mt-1.5 flex flex-wrap gap-1 px-3 pb-3 ${selection.mode ? 'pl-9' : 'md:pl-9'}`}><GitHubChips issue={issue} /></div>}
     <CardMenu issue={issue} onMove={onMove} />
   </li>;
 }

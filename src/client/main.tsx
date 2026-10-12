@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { Activity, FileText, Inbox, ListTree, Settings, SquareKanban } from 'lucide-react';
+import { Activity, CalendarCheck, FileText, Inbox, ListTree, Settings, SquareKanban } from 'lucide-react';
 import './styles.css';
 import { LoginScreen, SessionPanel, TreeMark, useAuth } from './LoginView.js';
 import { PatSettings } from './PatSettings.js';
@@ -12,8 +12,10 @@ import { SearchCommand } from './SearchCommand.js';
 import { BoardView } from './BoardView.js';
 import { ActivityTimeline } from './ActivityTimeline.js';
 import { InboxView } from './InboxView.js';
+import { TodayView } from './TodayView.js';
 
 const tabs = [
+  { id: 'today', label: '오늘', icon: CalendarCheck },
   { id: 'inbox', label: '인박스', icon: Inbox },
   { id: 'documents', label: '문서', icon: FileText },
   { id: 'planning', label: '기획', icon: ListTree },
@@ -37,7 +39,7 @@ function tabFromHash(current: Tab): Tab {
 function App() {
   const auth = useAuth();
   const { token } = auth;
-  const [tab, setTab] = useState<Tab>(() => tabFromHash('inbox'));
+  const [tab, setTab] = useState<Tab>(() => tabFromHash('today'));
   const [activityRevision, setActivityRevision] = useState(0);
   const refreshActivity = () => setActivityRevision((revision) => revision + 1);
 
@@ -68,6 +70,7 @@ function App() {
         <SearchCommand token={token} />
       </header>
       <main className="mx-auto w-full max-w-[1200px] px-4 py-5 md:px-6 md:py-6">
+        {tab === 'today' && <TodayView token={token} onActivity={refreshActivity} />}
         {tab === 'inbox' && <InboxView token={token} onActivity={refreshActivity} />}
         {tab === 'documents' && <DocumentsWorkspace token={token} />}
         {tab === 'planning' && <PlanningView token={token} />}
@@ -76,7 +79,7 @@ function App() {
         {tab === 'settings' && <div className="max-w-2xl space-y-4"><SessionPanel auth={auth} /><PatSettings token={token} /><GitHubSettings token={token} /></div>}
       </main>
     </div>
-    <nav aria-label="주 메뉴 (모바일)" className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-6 border-t border-line bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">
+    <nav aria-label="주 메뉴 (모바일)" className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-7 border-t border-line bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">
       {tabs.map((item) => <a key={item.id} href={`#/${item.id}`} aria-current={item.id === tab ? 'page' : undefined}
         className="flex h-14 flex-col items-center justify-center gap-0.5 text-2xs font-medium text-faint aria-[current=page]:text-accent-ink">
         <item.icon className="size-5" strokeWidth={1.75} />{item.label}

@@ -110,20 +110,25 @@ export async function listAreas(ownerId: string): Promise<string[]> {
   return (await db.selectDistinct({ title: goals.title }).from(goals).where(eq(goals.ownerId, ownerId)).orderBy(asc(goals.title))).map((row) => row.title);
 }
 
-/** today = open, not waiting/blocked (scheduled only once its day arrives), and due ≤ today, p1, or scheduled ≤ today — all in Asia/Seoul. */
+/** today = open, not waiting/blocked (scheduled only once its day arrives), and due ≤ today, p1, or scheduled ≤ today — all in Asia/Seoul. Shared by MCP todo://today and GET /api/todos/today. */
 export async function todayView(ownerId: string, now = new Date()): Promise<TodayView> {
   const date = seoulDate(now);
   const day = (column: typeof issues.dueAt | typeof issues.scheduledAt, op: '<' | '<=') => sql`(${column} AT TIME ZONE 'Asia/Seoul')::date ${sql.raw(op)} ${date}::date`;
   const open = and(eq(issues.ownerId, ownerId), ne(issues.status, 'done'))!;
-  const [today, overdue, waiting] = await Promise.all([
+  const weekEnd = seoulDate(new Date(now.getTime() + 7 * 86_400_000));
+  const upcoming = (column: typeof issues.dueAt | typeof issues.scheduledAt) => sql`(${column} AT TIME ZONE 'Asia/Seoul')::date BETWEEN (${date}::date + 1) AND ${weekEnd}::date`;
+  const [today, overdue, waiting, later] = await Promise.all([
     todoRows(and(open, or(isNull(issues.hold), and(eq(issues.hold, 'scheduled'), day(issues.scheduledAt, '<='))), or(day(issues.dueAt, '<='), eq(issues.priority, 'p1'), day(issues.scheduledAt, '<=')))!),
     todoRows(and(open, day(issues.dueAt, '<'))!),
-    todoRows(and(open, inArray(issues.hold, ['waiting', 'blocked']))!)
+    todoRows(and(open, inArray(issues.hold, ['waiting', 'blocked']))!),
+    // 이번 주 예정 (YG-25): due or scheduled in the next 7 days, not waiting/blocked, not already in today.
+    todoRows(and(open, or(isNull(issues.hold), eq(issues.hold, 'scheduled')), or(upcoming(issues.dueAt), upcoming(issues.scheduledAt)))!)
   ]);
-  return { date, today, overdue, waiting };
+  const inToday = new Set(today.map((todo) => todo.id));
+  return { date, today, overdue, waiting, week: later.filter((todo) => !inToday.has(todo.id)) };
 }
 
-async function todoRows(where: SQL, executor: Transaction | typeof db = db, lock = false): Promise<Todo[]> {
+export async function todoRows(where: SQL, executor: Transaction | typeof db = db, lock = false): Promise<Todo[]> {
   const query = executor.select({ issue: issues, area: goals.title, epic: epics.title, recurrence: recurrences }).from(issues)
     .innerJoin(epics, eq(issues.epicId, epics.id)).innerJoin(goals, eq(epics.goalId, goals.id)).leftJoin(recurrences, eq(issues.recurrenceId, recurrences.id)).where(where)
     .orderBy(asc(issues.priority), sql`${issues.dueAt} ASC NULLS LAST`, asc(issues.position), asc(issues.id));
@@ -142,13 +147,13 @@ async function resolveEpic(tx: Transaction, ownerId: string, area: string, epic:
 }
 
 // `top` places the todo above the column (just-completed todos lead the 완료 column); positions may go negative until the next board move renumbers them.
-async function nextPosition(tx: Transaction, ownerId: string, status: IssueStatus, top = false): Promise<number> {
+export async function nextPosition(tx: Transaction, ownerId: string, status: IssueStatus, top = false): Promise<number> {
   const next = top ? sql<number>`coalesce(min(${issues.position}), 1)::int - 1` : sql<number>`coalesce(max(${issues.position}), -1)::int + 1`;
   const [row] = await tx.select({ next }).from(issues).where(and(eq(issues.ownerId, ownerId), eq(issues.status, status)));
   return row!.next;
 }
 
-function columns(input: TodoChanges): Partial<typeof issues.$inferInsert> {
+export function columns(input: TodoChanges): Partial<typeof issues.$inferInsert> {
   const out: Record<string, unknown> = {};
   for (const key of fields) {
     const value = input[key];
