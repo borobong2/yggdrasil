@@ -120,6 +120,9 @@ export const documents = pgTable('documents', {
   parentId: uuid('parent_id').references((): any => documents.id),
   title: text('title').notNull(),
   body: text('body').notNull().default(''),
+  position: integer('position').notNull().default(0),
+  archivedAt: timestamp('archived_at', { withTimezone: true }),
+  icon: text('icon'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull()
 });
