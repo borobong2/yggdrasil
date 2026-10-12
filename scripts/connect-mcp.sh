@@ -38,9 +38,17 @@ fi
 if command -v codex >/dev/null; then
   line="export $ENV_VAR=\"\$(security find-generic-password -s $CODEX_ITEM -w 2>/dev/null)\""
   grep -qxF "$line" "$ZSHRC" 2>/dev/null || printf '\n# Yggdrasil MCP (Codex)\n%s\n' "$line" >> "$ZSHRC"
-  codex mcp remove yggdrasil >/dev/null 2>&1 || true
-  codex mcp add yggdrasil --url "$URL" --bearer-token-env-var "$ENV_VAR" >/dev/null
-  echo "✓ Codex 등록: $URL (토큰은 \$$ENV_VAR ← 키체인, ~/.zshrc)"
+  # Codex keeps config per CODEX_HOME; the Orca-launched panes use their own home, so register in each.
+  homes=("$HOME/.codex" "$HOME/Library/Application Support/orca/codex-runtime-home/home" "${CODEX_HOME:-}")
+  seen=""
+  for h in "${homes[@]}"; do
+    [[ -n "$h" && -d "$h" && "$seen" != *"|$h|"* ]] || continue
+    seen+="|$h|"
+    CODEX_HOME="$h" codex mcp remove yggdrasil >/dev/null 2>&1 || true
+    CODEX_HOME="$h" codex mcp add yggdrasil --url "$URL" --bearer-token-env-var "$ENV_VAR" >/dev/null
+    echo "✓ Codex 등록 ($h): $URL"
+  done
+  echo "  토큰은 \$${ENV_VAR} ← 키체인 (~/.zshrc)"
 else
   echo "- codex 명령이 없어 건너뜀"
 fi
@@ -58,4 +66,4 @@ check "Claude Code" "$claude_pat"
 [[ "$codex_pat" == "$claude_pat" ]] || check "Codex" "$codex_pat"
 
 echo
-echo "다음: Claude Code와 Codex를 새로 시작하세요 (tmux pane 포함). Codex는 새 터미널에서 \$$ENV_VAR를 읽어요."
+echo "다음: Claude Code와 Codex를 새로 시작하세요 (tmux pane 포함). Codex는 새 터미널에서 \$${ENV_VAR}를 읽어요."
