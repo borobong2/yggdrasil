@@ -14,7 +14,10 @@ export type Issue = WorkRecord & { epicId: string; status: IssueStatus; position
   hold: Hold | null; holdReason: string | null; scheduledAt: string | null; notes: string; estimateMinutes: number | null; source: string | null; key: string | null; github?: GitHubSummary | null };
 export type Todo = Issue & { area: string; epic: string };
 export type TodoVia = 'ui' | 'mcp' | 'import';
-export type TodayView = { date: string; today: Todo[]; overdue: Todo[]; waiting: Todo[] };
+export type TodayView = { date: string; today: Todo[]; overdue: Todo[]; waiting: Todo[]; week: Todo[] };
+/** Fields a bulk action can change (YG-26); sending them back with action 'restore' undoes it. */
+export type TodoSnapshot = Pick<Issue, 'id' | 'status' | 'dueAt' | 'scheduledAt' | 'hold' | 'holdReason'>;
+export type BulkResult = { todos: Todo[]; previous: TodoSnapshot[] };
 export type DeliveryPlanStatus = 'pending' | 'accepted' | 'dismissed';
 export type DeliveryPlanAcceptance = { proposalId: string; captureId: string; documentId: string; goalId: string; epicId: string; issueIds: string[]; acceptedAt: string };
 export type DeliveryPlanActivityPayload = { proposalId: string; captureId: string; documentId?: string; goalId?: string; epicId?: string; issueIds?: string[] };

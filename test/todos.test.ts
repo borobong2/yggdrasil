@@ -86,8 +86,9 @@ it('builds today/overdue/waiting with Asia/Seoul date boundaries and owner isola
   expect(view.today.map((t) => t.id).sort()).toEqual([dueToday.id, overdue.id, p1.id, scheduled.id].sort());
   expect(view.overdue.map((t) => t.id)).toEqual([overdue.id]);
   expect(view.waiting.map((t) => t.id).sort()).toEqual([waiting.id, blocked.id].sort());
-  for (const id of [later.id, tomorrow.id, finished.id]) expect(JSON.stringify(view)).not.toContain(id);
+  for (const id of [later.id, tomorrow.id, finished.id]) expect(JSON.stringify({ ...view, week: [] })).not.toContain(id);
+  expect(view.week.map((t) => t.id).sort()).toEqual([later.id, tomorrow.id].sort()); // YG-25 이번 주 예정
   expect(view.today[0]!.priority).toBe('p1');
 
-  expect(await todayView(fresh(), now)).toEqual({ date: '2026-10-12', today: [], overdue: [], waiting: [] });
+  expect(await todayView(fresh(), now)).toEqual({ date: '2026-10-12', today: [], overdue: [], waiting: [], week: [] });
 });

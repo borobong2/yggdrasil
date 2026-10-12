@@ -69,7 +69,7 @@
   .btn-ghost { background: transparent; border-color: transparent; box-shadow: none; color: var(--color-muted); }
   .btn-ghost:hover:not(:disabled) { background: var(--color-sunken); color: var(--color-ink); }
   .btn-danger { color: var(--color-danger); }
-  .btn svg { width: 14px; height: 14px; }
+  .btn svg { width: 14px; height: 14px; flex-shrink: 0; }
 
   .field {
     width: 100%; min-width: 0; height: 32px; padding: 0 10px; border-radius: var(--radius-md);
