@@ -165,6 +165,10 @@ scripts/connect-repo.sh borobong2/yggdrasil YG 24                          # 다
 이미 있는 YG-24 티켓에 키를 붙이려면 연결 후 MCP `update_todo { id, prefix: "YG" }`(키가 없을 때만 다음 번호 = YG-24 부여).
 비밀을 바꾸면 재배포 후 `connect-repo.sh`를 다시 실행해 웹훅 비밀도 갱신한다.
 
+## 8. 아침 브리핑 (YG-29, 선택)
+
+텔레그램 봇 만들기 → `scripts/briefing-setup.sh $P` → `scripts/deploy.sh $P`. 자세한 순서: [briefing.md](briefing.md).
+
 ## 검증 체크리스트
 
 - [ ] `curl -fsS <URL>/api/health` → `{"ok":true}`
@@ -174,6 +178,7 @@ scripts/connect-repo.sh borobong2/yggdrasil YG 24                          # 다
 - [ ] `~/yggdrasil-backups`에 오늘 날짜 `.dump` 생성
 - [ ] 예산 알림 5,000원 존재
 - [ ] (YG-24) 설정 → GitHub 연결에 저장소가 보이고 마지막 이벤트가 `ping`
+- [ ] (YG-29) 설정 → 아침 브리핑 「지금 테스트 보내기」로 텔레그램 메시지 도착
 
 ## 예상 비용 (월)
 

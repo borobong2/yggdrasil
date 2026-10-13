@@ -95,3 +95,5 @@ export type DeliveryPlanProposal = {
   createdAt: string;
   acceptance?: DeliveryPlanAcceptance;
 };
+/** YG-29 아침 브리핑 settings. `missing`: server env names still unset (nothing is sent until empty). `isOwner`: this user is BRIEFING_OWNER_ID. */
+export type BriefingSettings = { enabled: boolean; sendTime: string; lastSentDate: string | null; missing: string[]; isOwner: boolean };
