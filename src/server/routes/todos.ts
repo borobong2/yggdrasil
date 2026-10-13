@@ -1,7 +1,7 @@
 import type { Context, Hono } from 'hono';
 import { z } from 'zod';
 import { type AppEnv, ownerAuth } from '../auth.js';
-import { calendarView, completeTodo, completedAtInput, keyPrefix, promoteTodo, setArchived, staleView, TodoValidationError, todayView, todoChanges, updateTodo } from '../todos.js';
+import { calendarView, completeTodo, completedAtInput, keyPrefix, promoteTodo, setArchived, staleView, TodoValidationError, todayView, todoChanges, todoFields, updateTodo } from '../todos.js';
 import { listEpicPrefixes, setEpicPrefix } from '../ticket-keys.js';
 import { bulkInput, bulkUpdateTodos } from '../todo-bulk.js';
 import { NotFoundError } from '../work.js';
@@ -47,15 +47,15 @@ export function registerTodoRoutes(app: Hono<AppEnv>): void {
     const id = z.uuid().safeParse(c.req.param('id'));
     return id.success ? run(c, () => setArchived(c.get('user').id, id.data, archived, 'ui')) : c.json({ error: 'Invalid todo' }, 400);
   });
-  // Optional body { completedAt } (YG-37); no body completes now.
+  // Optional body { completedAt (YG-37), actualMinutes (YG-43) }; no body completes now.
   app.post('/api/todos/:id/complete', async (c) => {
     const id = z.uuid().safeParse(c.req.param('id'));
     const body = completeBody.safeParse(await c.req.json().catch(() => ({})));
-    return id.success && body.success ? run(c, () => completeTodo(c.get('user').id, id.data, 'ui', body.data.completedAt)) : c.json({ error: 'Invalid todo' }, 400);
+    return id.success && body.success ? run(c, () => completeTodo(c.get('user').id, id.data, 'ui', body.data.completedAt, body.data.actualMinutes)) : c.json({ error: 'Invalid todo' }, 400);
   });
 }
 
-const completeBody = z.object({ completedAt: completedAtInput.optional() }).strict();
+const completeBody = z.object({ completedAt: completedAtInput.optional(), actualMinutes: todoFields.actualMinutes.optional() }).strict();
 const promoteBody = z.object({ prefix: keyPrefix.optional() }).strict();
 const prefixBody = z.object({ prefix: keyPrefix.nullable(), start: z.number().int().min(1).max(1_000_000).optional() }).strict();
 const calendarQuery = z.object({ from: z.iso.date(), to: z.iso.date(), done: z.enum(['0', '1']).optional() })

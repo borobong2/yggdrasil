@@ -13,7 +13,7 @@ export type Goal = WorkRecord;
 export type Epic = WorkRecord & { goalId: string; keyPrefix: string | null };
 /** `dueAllDay`/`scheduledAllDay` (YG-38): the date was given without a time and means that whole Asia/Seoul day (stored at its 00:00). */
 export type Issue = WorkRecord & { epicId: string; status: IssueStatus; position: number; priority: Priority; dueAt: string | null; dueAllDay: boolean;
-  hold: Hold | null; holdReason: string | null; scheduledAt: string | null; scheduledAllDay: boolean; notes: string; estimateMinutes: number | null; source: string | null; key: string | null;
+  hold: Hold | null; holdReason: string | null; scheduledAt: string | null; scheduledAllDay: boolean; notes: string; estimateMinutes: number | null; /** YG-43 */ actualMinutes: number | null; source: string | null; key: string | null;
   /** YG-37: when it was done (null unless status is done). YG-39: archived todos are hidden from every list. */
   completedAt: string | null; archivedAt: string | null; github?: GitHubSummary | null; recurrence?: Recurrence | null;
   /** YG-42 */ links: IssueLink[] };

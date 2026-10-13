@@ -39,7 +39,7 @@ let n = 0;
 function todo(title: string, extra: Partial<Todo> = {}): Todo {
   n += 1;
   return { id: `t${n}`, title, createdAt: '2026-10-01T00:00:00Z', updatedAt: '2026-10-01T00:00:00Z', epicId: 'e', status: 'todo', position: n, priority: 'p3',
-    dueAt: null, dueAllDay: false, hold: null, holdReason: null, scheduledAt: null, scheduledAllDay: false, notes: '', estimateMinutes: null, source: null, key: null,
+    dueAt: null, dueAllDay: false, hold: null, holdReason: null, scheduledAt: null, scheduledAllDay: false, notes: '', estimateMinutes: null, actualMinutes: null, source: null, key: null,
     completedAt: null, archivedAt: null, recurrence: null, links: [], area: '일반', epic: '일반', ...extra };
 }
 const allDay = (date: string) => ({ dueAt: kst(`${date}T00:00:00`).toISOString(), dueAllDay: true });

@@ -21,7 +21,8 @@ export function TodayView({ token, onActivity }: { token: string; onActivity?: (
   const [error, setError] = useState('');
   const [hidden, setHidden] = useState<Set<string>>(() => new Set()); // optimistically completed / moved
   const [openId, setOpenId] = useState<string | null>(null);
-  const [pane, setPane] = useState<Pane>('today');
+  // YG-43: 회고's `#/today/stale` link lands on 밀린 일 and opens 정리 모드 once.
+  const [pane, setPane] = useState<Pane>(() => location.hash === '#/today/stale' ? 'late' : 'today');
   const [triage, setTriage] = useState<LateTodo[] | null>(null);
   const [toast, setToast] = useState<Toast | null>(null);
   const selection = useSelection();
@@ -31,7 +32,9 @@ export function TodayView({ token, onActivity }: { token: string; onActivity?: (
     try {
       const response = await fetch('/api/todos/today', { headers });
       if (!response.ok) throw new Error();
-      setView(await response.json()); setHidden(new Set()); setError('');
+      const next: Today = await response.json();
+      setView(next); setHidden(new Set()); setError('');
+      if (location.hash === '#/today/stale') { history.replaceState(null, '', '#/today'); if (next.late.length) setTriage(next.late); }
     } catch { setError('오늘 할 일을 불러오지 못했습니다.'); }
   }
   useEffect(() => { void load(); }, [token]);

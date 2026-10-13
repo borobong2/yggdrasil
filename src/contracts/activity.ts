@@ -8,7 +8,7 @@ export const kindLabels: Record<Activity['kind'], string> = {
 };
 const viaLabels: Record<string, string> = { mcp: 'Claude·Codex (mcp)', ui: '웹', github: 'GitHub', import: '가져오기' };
 const fieldLabels: Record<string, string> = {
-  title: '제목', status: '상태', priority: '우선순위', dueAt: '마감', scheduledAt: '예정', hold: '보류', holdReason: '보류 사유', notes: '메모', estimateMinutes: '예상(분)',
+  title: '제목', status: '상태', priority: '우선순위', dueAt: '마감', scheduledAt: '예정', hold: '보류', holdReason: '보류 사유', notes: '메모', estimateMinutes: '예상(분)', actualMinutes: '실제(분)',
   area: '영역', epic: '에픽', recurrence: '반복', links: '링크', key: '키', completedAt: '완료일', source: '출처', evidence: '근거', ci: 'CI', body: '본문', append: '본문 추가', parentId: '상위 문서', icon: '아이콘'
 };
 const statusLabels: Record<IssueStatus, string> = { backlog: '백로그', todo: '할 일', doing: '진행 중', done: '완료' };
