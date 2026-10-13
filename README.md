@@ -23,6 +23,20 @@ One Cloud Run service + Supabase, plus a daily local `pg_dump`: see the [deploy 
 
 Run `docker compose up -d postgres`, then `DATABASE_URL=postgres://yggdrasil:yggdrasil@127.0.0.1:54330/yggdrasil npm run db:migrate`. For local browser use only, set `YGGDRASIL_DEV_OWNER_ID` to a UUID; it is ignored in production and bearer tokens still take precedence.
 
+## Run tests
+
+Tests write and truncate tables, so they refuse to start without `DATABASE_URL`, against the live local `yggdrasil` database, or against any Supabase host. Use a dedicated database:
+
+```sh
+docker compose up -d postgres
+docker compose exec postgres createdb -U yggdrasil yggdrasil_test   # once
+export DATABASE_URL=postgres://yggdrasil:yggdrasil@127.0.0.1:54330/yggdrasil_test
+npm run db:migrate
+npx vitest run --dir test
+```
+
+Per-ticket worktrees use their own DB (`yggdrasil_yg<n>`) the same way. Vitest ignores `.worktrees/**`.
+
 ## Working contract
 
 - [Product contract](docs/loop/PRODUCT.md)
