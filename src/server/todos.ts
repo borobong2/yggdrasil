@@ -33,6 +33,7 @@ export const todoFields = {
   scheduledAt: day.nullable(),
   notes: z.string().max(20_000),
   estimateMinutes: z.number().int().positive().max(100_000).nullable(),
+  actualMinutes: z.number().int().positive().max(100_000).nullable().describe('YG-43: minutes it really took'),
   recurrence: recurrenceInput.nullable(),
   links: issueLinks
 };
@@ -43,7 +44,7 @@ export const todoChanges = z.object({ area: todoName, ...todoFields, completedAt
 export type DateInput = Date | string | null;
 export type TodoInput = {
   area: string; epic?: string; title: string; status?: IssueStatus; priority?: Priority; dueAt?: DateInput;
-  hold?: Hold | null; holdReason?: string | null; scheduledAt?: DateInput; notes?: string; estimateMinutes?: number | null; source?: string | null;
+  hold?: Hold | null; holdReason?: string | null; scheduledAt?: DateInput; notes?: string; estimateMinutes?: number | null; actualMinutes?: number | null; source?: string | null;
   /**
    * Ticket key prefix (e.g. 'YG'): assigns the next key on create, or on update when the todo has none.
    * YG-36: on create, omitted means the epic's default prefix (if any); null opts out of a key.
@@ -57,7 +58,7 @@ export type TodoInput = {
 /** `area` alone moves the todo to that area's default Epic; `epic` alone moves it within its current area. `completedAt` only applies to a done todo. */
 export type TodoChanges = Partial<TodoInput> & { completedAt?: Date | string };
 
-const fields = ['title', 'status', 'priority', 'hold', 'holdReason', 'notes', 'estimateMinutes', 'source', 'links'] as const;
+const fields = ['title', 'status', 'priority', 'hold', 'holdReason', 'notes', 'estimateMinutes', 'actualMinutes', 'source', 'links'] as const;
 
 export function parseTodoDate(value: DateInput): Date | null {
   if (value === null || value instanceof Date) return value;
@@ -145,11 +146,14 @@ export async function promoteTodo(ownerId: string, id: string, prefix?: string, 
   return updateTodo(ownerId, id, { prefix: value }, via);
 }
 
-/** Idempotent: completing a done todo changes nothing and logs nothing — unless a different completedAt is given (YG-37), which only moves the date. */
-export async function completeTodo(ownerId: string, id: string, via: TodoVia = 'ui', completedAt?: Date | string): Promise<Todo> {
+/**
+ * Idempotent: completing a done todo changes nothing and logs nothing — unless completedAt (YG-37) or actualMinutes (YG-43) is given,
+ * which only sets those.
+ */
+export async function completeTodo(ownerId: string, id: string, via: TodoVia = 'ui', completedAt?: Date | string, actualMinutes?: number | null): Promise<Todo> {
   const current = await getTodo(ownerId, id);
-  if (current.status !== 'done') return updateTodo(ownerId, id, { status: 'done', completedAt }, via);
-  return completedAt === undefined ? current : updateTodo(ownerId, id, { completedAt }, via);
+  if (current.status !== 'done') return updateTodo(ownerId, id, { status: 'done', completedAt, actualMinutes }, via);
+  return completedAt === undefined && actualMinutes === undefined ? current : updateTodo(ownerId, id, { completedAt, actualMinutes }, via);
 }
 
 /** YG-39 soft hide. Archived todos drop out of every list, the board, today, the calendar, resources and search; nothing is deleted. */

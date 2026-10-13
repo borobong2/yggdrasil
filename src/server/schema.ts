@@ -82,6 +82,8 @@ export const issues = pgTable('issues', {
   scheduledAllDay: boolean('scheduled_all_day').notNull().default(false),
   notes: text('notes').notNull().default(''),
   estimateMinutes: integer('estimate_minutes'),
+  /** YG-43: minutes it really took. */
+  actualMinutes: integer('actual_minutes'),
   source: text('source'),
   key: text('key'),
   links: jsonb('links').$type<import('../contracts/items.js').IssueLink[]>().notNull().default([]),

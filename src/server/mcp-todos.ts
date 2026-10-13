@@ -51,14 +51,14 @@ export function registerTodoTools(server: McpServer, ownerId: string): void {
     return { todos: page.todos.map((todo) => compact(todo, includeNotes)), nextCursor: page.nextCursor };
   }));
   server.registerTool('update_todo', {
-    description: 'Update fields of your todo (by id or key); set area/epic to move it. Use null to clear dueAt, hold, holdReason, scheduledAt, estimateMinutes. recurrence replaces the repeat rule (null ends the series); changing dueAt only moves this occurrence. completedAt only applies to a done todo.',
+    description: 'Update fields of your todo (by id or key); set area/epic to move it. Use null to clear dueAt, hold, holdReason, scheduledAt, estimateMinutes, actualMinutes. recurrence replaces the repeat rule (null ends the series); changing dueAt only moves this occurrence. completedAt only applies to a done todo.',
     inputSchema: z.object({ ...ref, area: name, ...todoFields, completedAt: completedAtInput, prefix, ...linkEdits }).partial().strict()
       .refine(oneRef, 'Pass exactly one of id or key').refine((input) => Object.keys(input).length > 1, 'No changes'), annotations: todoWrite
   }, ({ id, key, ...changes }) => result(async () => updateTodo(ownerId, await todoIdOf(ownerId, { id, key }), changes, 'mcp')));
   server.registerTool('complete_todo', {
-    description: 'Mark your todo done (by id or key), optionally when it was really done (completedAt). Completing a done todo changes nothing unless completedAt differs. Completing a repeating todo creates its next occurrence after the later of its slot and completedAt.',
-    inputSchema: z.object({ ...ref, completedAt: completedAtInput }).partial().strict().refine(oneRef, 'Pass exactly one of id or key'), annotations: { ...todoWrite, idempotentHint: true }
-  }, ({ completedAt, ...input }) => result(async () => completeTodo(ownerId, await todoIdOf(ownerId, input), 'mcp', completedAt)));
+    description: 'Mark your todo done (by id or key), optionally when it was really done (completedAt) and how many minutes it really took (actualMinutes). Completing a done todo changes nothing unless completedAt or actualMinutes is given. Completing a repeating todo creates its next occurrence after the later of its slot and completedAt.',
+    inputSchema: z.object({ ...ref, completedAt: completedAtInput, actualMinutes: todoFields.actualMinutes.unwrap() }).partial().strict().refine(oneRef, 'Pass exactly one of id or key'), annotations: { ...todoWrite, idempotentHint: true }
+  }, ({ completedAt, actualMinutes, ...input }) => result(async () => completeTodo(ownerId, await todoIdOf(ownerId, input), 'mcp', completedAt, actualMinutes)));
   server.registerTool('archive_todo', {
     description: 'Hide your todo (by id or key) from every list, the board, today, the calendar and search. Nothing is deleted; unarchive_todo brings it back.',
     inputSchema: refOnly, annotations: { ...todoWrite, idempotentHint: true }
@@ -118,6 +118,6 @@ function line(todo: Todo) {
 function detail(todo: Todo) {
   const rows = [['키', todo.key], ['id', todo.id], ['영역', `${todo.area}/${todo.epic}`], ['상태', todo.status], ['우선순위', todo.priority.toUpperCase()], ['마감', due(todo)], ['예정', scheduled(todo)],
     ['완료', todo.completedAt && formatDay(todo.completedAt, false)], ['보관', todo.archivedAt && formatDay(todo.archivedAt, false)],
-    ['보류', todo.hold && [todo.hold, todo.holdReason].filter(Boolean).join(': ')], ['예상', todo.estimateMinutes && `${todo.estimateMinutes}분`], ['반복', todo.recurrence && recurrenceLabel(todo.recurrence)], ['출처', todo.source]];
+    ['보류', todo.hold && [todo.hold, todo.holdReason].filter(Boolean).join(': ')], ['예상', todo.estimateMinutes && `${todo.estimateMinutes}분`], ['실제', todo.actualMinutes && `${todo.actualMinutes}분`], ['반복', todo.recurrence && recurrenceLabel(todo.recurrence)], ['출처', todo.source]];
   return `# ${todo.title}\n\n${rows.filter(([, value]) => value).map(([label, value]) => `- ${label}: ${value}`).join('\n')}\n${todo.notes ? `\n## 메모\n\n${todo.notes}\n` : ''}`;
 }

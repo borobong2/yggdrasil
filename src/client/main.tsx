@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { Activity, CalendarCheck, CalendarDays, FileText, Inbox, ListTree, Settings, SquareKanban } from 'lucide-react';
+import { Activity, CalendarCheck, CalendarDays, FileText, Inbox, ListTree, NotebookPen, Settings, SquareKanban } from 'lucide-react';
 import './styles.css';
 import { LoginScreen, SessionPanel, TreeMark, useAuth } from './LoginView.js';
 import { PatSettings } from './PatSettings.js';
@@ -14,6 +14,7 @@ import { ActivityTimeline } from './ActivityTimeline.js';
 import { InboxView } from './InboxView.js';
 import { TodayView } from './TodayView.js';
 import { CalendarView } from './CalendarView.js';
+import { ReviewView } from './ReviewView.js';
 
 const tabs = [
   { id: 'today', label: '오늘', icon: CalendarCheck },
@@ -23,6 +24,7 @@ const tabs = [
   { id: 'planning', label: '기획', icon: ListTree },
   { id: 'board', label: '보드', icon: SquareKanban },
   { id: 'activity', label: '활동', icon: Activity },
+  { id: 'review', label: '회고', icon: NotebookPen },
   { id: 'settings', label: '설정', icon: Settings },
 ] as const;
 type Tab = typeof tabs[number]['id'];
@@ -79,10 +81,11 @@ function App() {
         {tab === 'planning' && <PlanningView token={token} />}
         {tab === 'board' && <div className="space-y-6"><BoardView token={token} onActivity={refreshActivity} /><EvidenceList token={token} onActivity={refreshActivity} /></div>}
         {tab === 'activity' && <ActivityTimeline token={token} revision={activityRevision} />}
+        {tab === 'review' && <ReviewView token={token} onActivity={refreshActivity} />}
         {tab === 'settings' && <div className="max-w-2xl space-y-4"><SessionPanel auth={auth} /><PatSettings token={token} /><GitHubSettings token={token} /><TicketPrefixSettings token={token} /></div>}
       </main>
     </div>
-    <nav aria-label="주 메뉴 (모바일)" className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-8 border-t border-line bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">
+    <nav aria-label="주 메뉴 (모바일)" className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-9 border-t border-line bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">
       {tabs.map((item) => <a key={item.id} href={`#/${item.id}`} aria-current={item.id === tab ? 'page' : undefined}
         className="flex h-14 flex-col items-center justify-center gap-0.5 text-2xs font-medium text-faint aria-[current=page]:text-accent-ink">
         <item.icon className="size-5" strokeWidth={1.75} />{item.label}

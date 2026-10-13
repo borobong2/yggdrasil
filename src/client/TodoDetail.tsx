@@ -19,11 +19,11 @@ const repeatOf = (issue: Issue): Repeat => {
 const recurrenceOf = (repeat: Repeat) => repeat.freq ? { freq: repeat.freq, ...(repeat.freq === 'weekly' ? { weekdays: weekdays.filter((day) => repeat.weekdays.includes(day)) } : {}),
   ...(repeat.freq === 'monthly' ? { monthDay: Number(repeat.monthDay) } : {}), time: repeat.time || null, paused: repeat.paused } : null;
 
-type Draft = { title: string; priority: Priority; hold: '' | Hold; holdReason: string; dueAt: string; dueTime: string; scheduledAt: string; estimateMinutes: string; notes: string; repeat: Repeat; completedAt: string };
+type Draft = { title: string; priority: Priority; hold: '' | Hold; holdReason: string; dueAt: string; dueTime: string; scheduledAt: string; estimateMinutes: string; actualMinutes: string; notes: string; repeat: Repeat; completedAt: string };
 const draftOf = (issue: Issue): Draft => ({ title: issue.title, priority: issue.priority, hold: issue.hold ?? '', holdReason: issue.holdReason ?? '', dueAt: seoulDay(issue.dueAt), dueTime: issue.dueAllDay ? '' : seoulTime(issue.dueAt),
-  scheduledAt: seoulDay(issue.scheduledAt), estimateMinutes: issue.estimateMinutes?.toString() ?? '', notes: issue.notes, repeat: repeatOf(issue), completedAt: seoulDay(issue.completedAt) });
+  scheduledAt: seoulDay(issue.scheduledAt), estimateMinutes: issue.estimateMinutes?.toString() ?? '', actualMinutes: issue.actualMinutes?.toString() ?? '', notes: issue.notes, repeat: repeatOf(issue), completedAt: seoulDay(issue.completedAt) });
 const payloadOf = (draft: Draft) => ({ title: draft.title, priority: draft.priority, hold: draft.hold || null, holdReason: draft.hold && draft.holdReason.trim() ? draft.holdReason : null,
-  dueAt: draft.dueAt ? (draft.dueTime ? `${draft.dueAt}T${draft.dueTime}:00+09:00` : draft.dueAt) : null, scheduledAt: draft.scheduledAt || null, estimateMinutes: draft.estimateMinutes ? Number(draft.estimateMinutes) : null, notes: draft.notes, recurrence: recurrenceOf(draft.repeat),
+  dueAt: draft.dueAt ? (draft.dueTime ? `${draft.dueAt}T${draft.dueTime}:00+09:00` : draft.dueAt) : null, scheduledAt: draft.scheduledAt || null, estimateMinutes: draft.estimateMinutes ? Number(draft.estimateMinutes) : null, actualMinutes: draft.actualMinutes ? Number(draft.actualMinutes) : null, notes: draft.notes, recurrence: recurrenceOf(draft.repeat),
   ...(draft.completedAt ? { completedAt: draft.completedAt } : {}) });
 
 export function TodoDetail({ issue, area, headers, onClose, onSaved }: { issue: Issue; area: string; headers: Record<string, string>; onClose: () => void; onSaved: (todo: Issue) => void }) {
@@ -40,7 +40,7 @@ export function TodoDetail({ issue, area, headers, onClose, onSaved }: { issue: 
     setBusy(true); setError('');
     try {
       const response = await fetch(url, { ...init, headers: { ...headers, 'content-type': 'application/json' } });
-      if (response.status === 400) throw new Error('입력값을 확인하세요. 제목은 1~200자, 예상 시간은 양의 정수(분), 매주 반복은 요일 1개 이상, 매월은 1~31일입니다.');
+      if (response.status === 400) throw new Error('입력값을 확인하세요. 제목은 1~200자, 예상·실제 시간은 양의 정수(분), 매주 반복은 요일 1개 이상, 매월은 1~31일입니다.');
       if (!response.ok) throw new Error('저장하지 못했습니다. 다시 시도하세요.');
       onSaved(await response.json());
       onClose();
@@ -130,8 +130,13 @@ export function TodoDetail({ issue, area, headers, onClose, onSaved }: { issue: 
         </fieldset>
         {issue.status === 'done' && <label className="block"><span className="label">완료일</span>
           <input type="date" className="field" required max={seoulDay(new Date().toISOString())} value={draft.completedAt} onChange={(event) => set({ completedAt: event.target.value })} /></label>}
-        <label className="block"><span className="label">예상 시간 (분)</span>
-          <input type="number" inputMode="numeric" min={1} max={100000} step={1} className="field" value={draft.estimateMinutes} onChange={(event) => set({ estimateMinutes: event.target.value })} /></label>
+        <div className="grid grid-cols-2 gap-3">
+          <label className="block"><span className="label">예상 시간 (분)</span>
+            <input type="number" inputMode="numeric" min={1} max={100000} step={1} className="field" value={draft.estimateMinutes} onChange={(event) => set({ estimateMinutes: event.target.value })} /></label>
+          {/* YG-43: mainly for done todos; kept visible once set. */}
+          {(issue.status === 'done' || issue.actualMinutes !== null) && <label className="block"><span className="label">실제 시간 (분)</span>
+            <input type="number" inputMode="numeric" min={1} max={100000} step={1} className="field" value={draft.actualMinutes} onChange={(event) => set({ actualMinutes: event.target.value })} /></label>}
+        </div>
         <label className="block"><span className="label">메모</span>
           <textarea className="field min-h-32" maxLength={20000} value={draft.notes} onChange={(event) => set({ notes: event.target.value })} /></label>
         {error && <p role="alert" className="alert">{error}</p>}
