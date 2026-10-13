@@ -125,6 +125,8 @@ export async function updateTodo(ownerId: string, id: string, changes: TodoChang
     if (changes.addLinks || changes.removeLinks) set.links = editLinks(set.links ?? current.links, changes.addLinks, changes.removeLinks);
     if (changes.prefix && !current.key) set.key = (await allocateKeys(tx, ownerId, changes.prefix, 1))[0];
     if (set.status && set.status !== current.status) set.position = (await nextPositions(tx, ownerId, [set.status], set.status === 'done'))[0];
+    // One clock: stamp completion with the app's now (as updatedAt and spawnNext do) instead of the trigger's DB now().
+    if (set.status === 'done' && current.status !== 'done') set.completedAt ??= new Date();
     const [row] = await tx.update(issues).set({ ...set, epicId: place.epicId, updatedAt: new Date() }).where(and(eq(issues.id, id), eq(issues.ownerId, ownerId))).returning();
     const kind = set.status === 'done' && current.status !== 'done' ? 'issue.completed' : 'issue.updated';
     await appendActivity(tx, ownerId, { kind, subjectType: 'issue', subjectId: id, payload: { via, changes: changed } });
