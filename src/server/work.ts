@@ -20,11 +20,13 @@ export async function getEpic(ownerId: string, id: string): Promise<Epic> { retu
 export async function updateEpic(ownerId: string, id: string, title: string): Promise<Epic> { return epic(await changed(epics, ownerId, id, { title })); }
 export async function deleteEpic(ownerId: string, id: string): Promise<void> { await removed(epics, ownerId, id); }
 
-export async function createIssue(ownerId: string, epicId: string, title: string, priority: Priority, dueAt: Date | null, prefix?: string): Promise<Issue> {
-  await epicRow(ownerId, epicId);
+/** `prefix` undefined = the epic's default (YG-36), null = no key. */
+export async function createIssue(ownerId: string, epicId: string, title: string, priority: Priority, dueAt: Date | null, prefix?: string | null): Promise<Issue> {
+  const { keyPrefix } = await epicRow(ownerId, epicId);
+  const value = prefix === undefined ? keyPrefix : prefix;
   return db.transaction(async (tx) => {
     const last = (await tx.select({ position: issues.position }).from(issues).where(and(eq(issues.ownerId, ownerId), eq(issues.status, 'backlog'))).orderBy(desc(issues.position)).limit(1))[0];
-    const key = prefix ? await allocateKey(tx, ownerId, prefix) : null;
+    const key = value ? await allocateKey(tx, ownerId, value) : null;
     return issue((await tx.insert(issues).values({ id: crypto.randomUUID(), ownerId, epicId, title, priority, dueAt, key, position: (last?.position ?? -1) + 1 }).returning())[0]!);
   });
 }
@@ -79,5 +81,5 @@ async function removed(table: typeof goals | typeof epics | typeof issues, owner
 }
 
 function goal(row: typeof goals.$inferSelect): Goal { return { id: row.id, title: row.title, createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString() }; }
-function epic(row: typeof epics.$inferSelect): Epic { return { ...goal(row), goalId: row.goalId }; }
+function epic(row: typeof epics.$inferSelect): Epic { return { ...goal(row), goalId: row.goalId, keyPrefix: row.keyPrefix }; }
 export function issue(row: typeof issues.$inferSelect): Issue { return { id: row.id, title: row.title, epicId: row.epicId, status: row.status, position: row.position, priority: row.priority, dueAt: row.dueAt?.toISOString() ?? null, dueAllDay: row.dueAllDay, hold: row.hold, holdReason: row.holdReason, scheduledAt: row.scheduledAt?.toISOString() ?? null, scheduledAllDay: row.scheduledAllDay, notes: row.notes, estimateMinutes: row.estimateMinutes, source: row.source, key: row.key, links: row.links, completedAt: row.completedAt?.toISOString() ?? null, archivedAt: row.archivedAt?.toISOString() ?? null, createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString() }; }

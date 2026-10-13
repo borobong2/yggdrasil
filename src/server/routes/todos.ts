@@ -1,7 +1,8 @@
 import type { Context, Hono } from 'hono';
 import { z } from 'zod';
 import { type AppEnv, ownerAuth } from '../auth.js';
-import { calendarView, completeTodo, completedAtInput, TodoValidationError, todayView, todoChanges, updateTodo } from '../todos.js';
+import { calendarView, completeTodo, completedAtInput, keyPrefix, promoteTodo, staleView, TodoValidationError, todayView, todoChanges, updateTodo } from '../todos.js';
+import { listEpicPrefixes, setEpicPrefix } from '../ticket-keys.js';
 import { bulkInput, bulkUpdateTodos } from '../todo-bulk.js';
 import { NotFoundError } from '../work.js';
 
@@ -9,12 +10,28 @@ import { NotFoundError } from '../work.js';
 export function registerTodoRoutes(app: Hono<AppEnv>): void {
   app.use('/api/todos/*', ownerAuth);
   app.use('/api/calendar', ownerAuth);
+  app.use('/api/ticket-prefixes', ownerAuth);
+  app.use('/api/ticket-prefixes/*', ownerAuth);
   // YG-30: ?from=YYYY-MM-DD&to=YYYY-MM-DD (Asia/Seoul, inclusive, ≤ 62 days) &done=1 to include completed todos.
   app.get('/api/calendar', (c) => {
     const query = calendarQuery.safeParse(c.req.query());
     return query.success ? run(c, () => calendarView(c.get('user').id, query.data.from, query.data.to, query.data.done === '1')) : c.json({ error: 'Invalid range' }, 400);
   });
   app.get('/api/todos/today', (c) => run(c, () => todayView(c.get('user').id)));
+  app.get('/api/todos/stale', (c) => run(c, () => staleView(c.get('user').id))); // YG-41
+  // YG-36 「티켓으로 승격」: optional { prefix }; without it the epic's default is used (400 when the epic has none).
+  app.post('/api/todos/:id/promote', async (c) => {
+    const id = z.uuid().safeParse(c.req.param('id'));
+    const body = promoteBody.safeParse(await c.req.json().catch(() => ({})));
+    return id.success && body.success ? run(c, () => promoteTodo(c.get('user').id, id.data, body.data.prefix, 'ui')) : c.json({ error: 'Invalid todo' }, 400);
+  });
+  // YG-36 settings: epic default prefixes. { prefix: null } clears the default; `start` only ever raises the counter.
+  app.get('/api/ticket-prefixes', (c) => run(c, () => listEpicPrefixes(c.get('user').id)));
+  app.put('/api/ticket-prefixes/:epicId', async (c) => {
+    const id = z.uuid().safeParse(c.req.param('epicId'));
+    const body = prefixBody.safeParse(await c.req.json().catch(() => undefined));
+    return id.success && body.success ? run(c, () => setEpicPrefix(c.get('user').id, id.data, body.data.prefix, body.data.start)) : c.json({ error: 'Invalid prefix' }, 400);
+  });
   app.post('/api/todos/bulk', async (c) => {
     const input = bulkInput.safeParse(await c.req.json().catch(() => undefined));
     return input.success ? run(c, () => bulkUpdateTodos(c.get('user').id, input.data, 'ui')) : c.json({ error: 'Invalid bulk action' }, 400);
@@ -34,6 +51,8 @@ export function registerTodoRoutes(app: Hono<AppEnv>): void {
 }
 
 const completeBody = z.object({ completedAt: completedAtInput.optional() }).strict();
+const promoteBody = z.object({ prefix: keyPrefix.optional() }).strict();
+const prefixBody = z.object({ prefix: keyPrefix.nullable(), start: z.number().int().min(1).max(1_000_000).optional() }).strict();
 const calendarQuery = z.object({ from: z.iso.date(), to: z.iso.date(), done: z.enum(['0', '1']).optional() })
   .refine((range) => { const days = (Date.parse(range.to) - Date.parse(range.from)) / 86_400_000; return days >= 0 && days <= 62; }, 'from ≤ to, at most 62 days');
 

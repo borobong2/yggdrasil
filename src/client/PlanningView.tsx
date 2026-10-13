@@ -25,6 +25,9 @@ export function PlanningView({ token }: { token: string }) {
   useEffect(() => { let current = true; void load(() => current); return () => { current = false; }; }, [token]);
 
   const [kind, setKind] = useState<'goal' | 'epic' | 'issue'>('goal');
+  // YG-36: the 티켓 키 toggle follows the chosen epic's default prefix; turning it off sends prefix: null (no key).
+  const [ticket, setTicket] = useState({ on: false, prefix: '' });
+  const pickEpic = (id: string) => { const prefix = epics.find((epic) => epic.id === id)?.keyPrefix ?? ''; setTicket({ on: Boolean(prefix), prefix }); };
 
   async function create(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -33,10 +36,10 @@ export function PlanningView({ token }: { token: string }) {
     const title = String(form.get('title'));
     const parentId = String(form.get('parentId'));
     const path = kind === 'goal' ? '/api/goals' : kind === 'epic' ? '/api/epics' : '/api/issues';
-    const body = kind === 'goal' ? { title } : kind === 'epic' ? { title, goalId: parentId } : { title, epicId: parentId, prefix: String(form.get('prefix') ?? '') };
+    const body = kind === 'goal' ? { title } : kind === 'epic' ? { title, goalId: parentId } : { title, epicId: parentId, prefix: ticket.on ? ticket.prefix.trim() : null };
     const response = await fetch(path, { method: 'POST', headers: { ...headers, 'content-type': 'application/json' }, body: JSON.stringify(body) });
     if (!response.ok) { setError('기획 항목을 만들지 못했습니다.'); return; }
-    element.reset();
+    element.reset(); setTicket({ on: false, prefix: '' });
     await load();
   }
 
@@ -52,10 +55,11 @@ export function PlanningView({ token }: { token: string }) {
   const kindLabels = { goal: '목표', epic: '에픽', issue: '이슈' } as const;
   return <section aria-label="기획" className="space-y-4">
     <form onSubmit={create} className="card flex flex-col gap-2 p-3 sm:flex-row sm:items-end">
-      <label className="sm:w-28"><span className="label">유형</span><select name="kind" className="field" value={kind} onChange={(event) => setKind(event.target.value as typeof kind)}>{(['goal', 'epic', 'issue'] as const).map((value) => <option key={value} value={value}>{kindLabels[value]}</option>)}</select></label>
+      <label className="sm:w-28"><span className="label">유형</span><select name="kind" className="field" value={kind} onChange={(event) => { setKind(event.target.value as typeof kind); setTicket({ on: false, prefix: '' }); }}>{(['goal', 'epic', 'issue'] as const).map((value) => <option key={value} value={value}>{kindLabels[value]}</option>)}</select></label>
       <label className="min-w-0 flex-1"><span className="label">제목</span><input name="title" className="field" required maxLength={200} placeholder={`새 ${kindLabels[kind]} 제목`} /></label>
-      {kind !== 'goal' && <label className="min-w-0 sm:w-56"><span className="label">상위 항목</span><select name="parentId" className="field" required><option value="">{kind === 'epic' ? '목표 선택' : '에픽 선택'}</option>{kind === 'epic' ? goals.map((goal) => <option key={goal.id} value={goal.id}>{goal.title}</option>) : epics.map((epic) => <option key={epic.id} value={epic.id}>{epic.title}</option>)}</select></label>}
-      {kind === 'issue' && <label className="sm:w-20"><span className="label">키 접두어</span><input name="prefix" className="field font-mono uppercase" maxLength={10} pattern="[A-Za-z][A-Za-z0-9]*" placeholder="YG" /></label>}
+      {kind !== 'goal' && <label className="min-w-0 sm:w-56"><span className="label">상위 항목</span><select name="parentId" className="field" required onChange={(event) => { if (kind === 'issue') pickEpic(event.target.value); }}><option value="">{kind === 'epic' ? '목표 선택' : '에픽 선택'}</option>{kind === 'epic' ? goals.map((goal) => <option key={goal.id} value={goal.id}>{goal.title}</option>) : epics.map((epic) => <option key={epic.id} value={epic.id}>{epic.title}</option>)}</select></label>}
+      {kind === 'issue' && <div className="sm:w-32"><label className="label flex items-center gap-1.5"><input type="checkbox" checked={ticket.on} onChange={(event) => setTicket({ ...ticket, on: event.target.checked })} />티켓 키</label>
+        <input aria-label="키 접두어" className="field font-mono uppercase" maxLength={10} pattern="[A-Za-z][A-Za-z0-9]*" placeholder="YG" disabled={!ticket.on} required={ticket.on} value={ticket.prefix} onChange={(event) => setTicket({ ...ticket, prefix: event.target.value })} /></div>}
       <button className="btn btn-primary h-8"><Plus />만들기</button>
     </form>
     <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">

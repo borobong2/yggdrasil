@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { Check, ListChecks } from 'lucide-react';
-import type { Todo, TodayView as Today } from '../contracts/items.js';
+import { Check, ChevronDown, ListChecks } from 'lucide-react';
+import type { StaleTodo, StaleView, Todo, TodayView as Today } from '../contracts/items.js';
+import { staleReasons } from '../contracts/stale.js';
 import { DueBadge, HoldBadge, PriorityBadge, formatDue } from './format.js';
 import { TodoDetail } from './TodoDetail.js';
 import { BulkActions, SelectBox, useSelection, type Selection } from './BulkActions.js';
@@ -15,14 +16,18 @@ export function TodayView({ token, onActivity }: { token: string; onActivity?: (
   const [actionError, setActionError] = useState('');
   const [hidden, setHidden] = useState<Set<string>>(() => new Set()); // optimistically completed
   const [openId, setOpenId] = useState<string | null>(null);
+  const [stale, setStale] = useState<StaleTodo[]>([]); // YG-41
+  const [staleOpen, setStaleOpen] = useState(false);
   const selection = useSelection();
   const headers: Record<string, string> = token ? { authorization: `Bearer ${token}` } : {};
 
   async function load() {
     try {
-      const response = await fetch('/api/todos/today', { headers });
+      const [response, staleResponse] = await Promise.all([fetch('/api/todos/today', { headers }), fetch('/api/todos/stale', { headers })]);
       if (!response.ok) throw new Error();
       setView(await response.json()); setHidden(new Set()); setError('');
+      // ponytail: the stale list is a suggestion; if it fails, 오늘 still renders without it.
+      setStale(staleResponse.ok ? (await staleResponse.json() as StaleView).todos : []);
     } catch { setError('오늘 할 일을 불러오지 못했습니다.'); }
   }
   useEffect(() => { void load(); }, [token]);
@@ -33,8 +38,9 @@ export function TodayView({ token, onActivity }: { token: string; onActivity?: (
   const late = new Set(view.overdue.map((todo) => todo.id));
   const visible = (list: Todo[], dropLate = true) => list.filter((todo) => !hidden.has(todo.id) && !(dropLate && late.has(todo.id)));
   const sections: [Key, Todo[]][] = [['today', visible(view.today)], ['overdue', visible(view.overdue, false)], ['waiting', visible(view.waiting)], ['week', visible(view.week)]];
+  const staleList = stale.filter((todo) => !hidden.has(todo.id));
   const order = sections.flatMap(([, list]) => list.map((todo) => todo.id));
-  const all = [...view.today, ...view.overdue, ...view.waiting, ...view.week];
+  const all = [...view.today, ...view.overdue, ...view.waiting, ...view.week, ...staleList];
   const open = openId ? all.find((todo) => todo.id === openId) : undefined;
   const changed = () => { void load(); onActivity?.(); };
 
@@ -66,12 +72,22 @@ export function TodayView({ token, onActivity }: { token: string; onActivity?: (
         {list.length === 0 ? <p className="rounded-md border border-dashed border-line-strong py-4 text-center text-xs text-faint">오늘 마감인 일은 없습니다.</p> :
           <ul className="space-y-1.5">{list.map((todo) => <Row key={todo.id} todo={todo} selection={selection} order={order} onOpen={setOpenId} onComplete={complete} />)}</ul>}
       </section>)}
+    {staleList.length > 0 && <section aria-label="방치된 할 일" data-section="stale" className="rounded-lg border border-dashed border-line-strong">
+      <button type="button" aria-expanded={staleOpen} onClick={() => setStaleOpen(!staleOpen)} className="flex h-10 w-full items-center gap-2 px-3 text-left text-sm font-semibold">
+        <span className="flex-1">방치된 할 일 <span className="font-normal tabular-nums text-faint">{staleList.length}건</span></span>
+        <ChevronDown className={`size-4 text-faint transition-transform ${staleOpen ? '' : '-rotate-90'}`} />
+      </button>
+      {staleOpen && <div className="space-y-2 border-t border-line p-2">
+        <p className="px-1 text-xs text-muted">오래 마감이 지났거나 한동안 바뀌지 않은 일입니다. 선택해서 완료·백로그·미루기·보류로 정리하세요.</p>
+        <ul className="space-y-1.5">{staleList.map((todo) => <Row key={todo.id} todo={todo} reasons={staleReasons(todo.stale)} selection={selection} order={staleList.map((item) => item.id)} onOpen={setOpenId} onComplete={complete} />)}</ul>
+      </div>}
+    </section>}
     <BulkActions selection={selection} headers={headers} onApplied={changed} />
     {open && <TodoDetail key={open.id} issue={open} area={open.area} headers={headers} onClose={() => setOpenId(null)} onSaved={changed} />}
   </section>;
 }
 
-function Row({ todo, selection, order, onOpen, onComplete }: { todo: Todo; selection: Selection; order: string[]; onOpen: (id: string) => void; onComplete: (todo: Todo) => void }) {
+function Row({ todo, reasons, selection, order, onOpen, onComplete }: { todo: Todo; reasons?: string[]; selection: Selection; order: string[]; onOpen: (id: string) => void; onComplete: (todo: Todo) => void }) {
   const press = useRef<{ timer?: ReturnType<typeof setTimeout>; fired?: boolean }>({});
   const checked = selection.selected.has(todo.id);
   const toggle = (range: boolean) => selection.toggle(todo.id, range, order);
@@ -91,6 +107,7 @@ function Row({ todo, selection, order, onOpen, onComplete }: { todo: Todo; selec
       onClick={(event) => { if (press.current.fired) { press.current.fired = false; return; } if (selection.mode) toggle(event.shiftKey); else onOpen(todo.id); }}>
       <strong className="block break-words text-sm font-medium">{todo.key && <span className="mr-1.5 font-mono text-xs text-faint">{todo.key}</span>}{todo.title}</strong>
       <span className="mt-1 flex flex-wrap items-center gap-1">
+        {reasons?.map((reason) => <span key={reason} className="badge bg-warn-soft text-warn">{reason}</span>)}
         <PriorityBadge priority={todo.priority} />
         {todo.hold && <HoldBadge hold={todo.hold} reason={todo.holdReason} />}
         <DueBadge issue={todo} />

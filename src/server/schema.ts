@@ -60,6 +60,8 @@ export const epics = pgTable('epics', {
   ownerId: uuid('owner_id').notNull(),
   goalId: uuid('goal_id').notNull().references(() => goals.id, { onDelete: 'cascade' }),
   title: text('title').notNull(),
+  /** YG-36: default ticket key prefix for new todos in this epic. */
+  keyPrefix: text('key_prefix'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull()
 });

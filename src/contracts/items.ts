@@ -9,7 +9,8 @@ export type EvidenceStatus = 'linked';
 
 type WorkRecord = { id: string; title: string; createdAt: string; updatedAt: string };
 export type Goal = WorkRecord;
-export type Epic = WorkRecord & { goalId: string };
+/** keyPrefix (YG-36): new todos in this epic get the next `PREFIX-n` key unless created with prefix: null. */
+export type Epic = WorkRecord & { goalId: string; keyPrefix: string | null };
 /** `dueAllDay`/`scheduledAllDay` (YG-38): the date was given without a time and means that whole Asia/Seoul day (stored at its 00:00). */
 export type Issue = WorkRecord & { epicId: string; status: IssueStatus; position: number; priority: Priority; dueAt: string | null; dueAllDay: boolean;
   hold: Hold | null; holdReason: string | null; scheduledAt: string | null; scheduledAllDay: boolean; notes: string; estimateMinutes: number | null; source: string | null; key: string | null;
@@ -27,6 +28,11 @@ export type TodoVia = 'ui' | 'mcp' | 'import';
 export type CalendarGhost = { recurrenceId: string; todoId: string; title: string; priority: Priority; at: string; allDay: boolean };
 export type CalendarView = { from: string; to: string; todos: Todo[]; undated: Todo[]; ghosts: CalendarGhost[] };
 export type TodayView = { date: string; today: Todo[]; overdue: Todo[]; waiting: Todo[]; week: Todo[] };
+/** YG-41: why a todo is stale — days past due (≥ STALE_OVERDUE_DAYS) and/or days since the last change (≥ STALE_UNTOUCHED_DAYS); null when that rule does not apply. */
+export type StaleTodo = Todo & { stale: { overdueDays: number | null; untouchedDays: number | null } };
+export type StaleView = { date: string; todos: StaleTodo[] };
+/** YG-36 settings row: every epic, its default prefix and that prefix's next number. */
+export type EpicPrefix = { epicId: string; area: string; epic: string; keyPrefix: string | null; nextNumber: number | null };
 /** Fields a bulk action can change (YG-26); sending them back with action 'restore' undoes it. All-day dates come back as 'YYYY-MM-DD'. */
 export type TodoSnapshot = Pick<Issue, 'id' | 'status' | 'dueAt' | 'scheduledAt' | 'hold' | 'holdReason'>;
 /** `skipped`: restore left these done because their recurring series already has a newer open occurrence (YG-28). */
