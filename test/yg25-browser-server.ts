@@ -6,7 +6,7 @@ import { createApp } from '../src/server/app.js';
 import { createTodo, seoulDate } from '../src/server/todos.js';
 
 assert.equal(process.env.NODE_ENV, 'test');
-assert.equal(new URL(process.env.DATABASE_URL!).pathname, '/yggdrasil_yg25');
+assert.match(new URL(process.env.DATABASE_URL!).pathname, /^\/yggdrasil_yg\d+$/); // a per-ticket test DB, never the main one
 const owner = process.env.YGGDRASIL_DEV_OWNER_ID = crypto.randomUUID();
 const day = (offset: number) => seoulDate(new Date(Date.now() + offset * 86_400_000));
 for (const [title, area, extra] of [

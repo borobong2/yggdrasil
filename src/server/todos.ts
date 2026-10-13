@@ -1,7 +1,7 @@
 import { and, asc, desc, eq, ilike, inArray, isNotNull, isNull, ne, or, sql, type SQL } from 'drizzle-orm';
 import { z } from 'zod';
-import type { CalendarGhost, CalendarView, Hold, IssueLink, IssueStatus, Priority, StaleView, TodayView, Todo, TodoVia } from '../contracts/items.js';
-import { STALE_OVERDUE_DAYS, STALE_UNTOUCHED_DAYS } from '../contracts/stale.js';
+import type { CalendarGhost, CalendarView, Hold, IssueLink, IssueStatus, LateTodo, Priority, StaleView, TodayView, Todo, TodoVia } from '../contracts/items.js';
+import { STALE_OVERDUE_DAYS, STALE_UNTOUCHED_DAYS, lateBucket } from '../contracts/stale.js';
 import { seoulDay } from '../contracts/dates.js';
 import { appendActivity, type Transaction } from './activity.js';
 import { getDb } from './db.js';
@@ -226,15 +226,34 @@ export async function todayView(ownerId: string, now = new Date()): Promise<Toda
   const open = and(eq(issues.ownerId, ownerId), ne(issues.status, 'done'), active)!;
   const weekEnd = seoulDate(new Date(now.getTime() + 7 * 86_400_000));
   const upcoming = (column: typeof issues.dueAt | typeof issues.scheduledAt) => sql`(${column} AT TIME ZONE 'Asia/Seoul')::date BETWEEN (${date}::date + 1) AND ${weekEnd}::date`;
-  const [today, overdue, waiting, later] = await Promise.all([
+  const [today, overdue, waiting, later, stale, calendar] = await Promise.all([
     todoRows(and(open, or(isNull(issues.hold), and(eq(issues.hold, 'scheduled'), day(issues.scheduledAt, '<='))), or(day(issues.dueAt, '<='), eq(issues.priority, 'p1'), day(issues.scheduledAt, '<=')))!),
     todoRows(and(open, sql`CASE WHEN ${issues.dueAllDay} THEN ${day(issues.dueAt, '<')} ELSE ${issues.dueAt} < ${now} END`)!),
     todoRows(and(open, inArray(issues.hold, ['waiting', 'blocked']))!),
     // 이번 주 예정 (YG-25): due or scheduled in the next 7 days, not waiting/blocked, not already in today.
-    todoRows(and(open, or(isNull(issues.hold), eq(issues.hold, 'scheduled')), or(upcoming(issues.dueAt), upcoming(issues.scheduledAt)))!)
+    todoRows(and(open, or(isNull(issues.hold), eq(issues.hold, 'scheduled')), or(upcoming(issues.dueAt), upcoming(issues.scheduledAt)))!),
+    staleView(ownerId, now),
+    calendarView(ownerId, date, date, false, now)
   ]);
   const inToday = new Set(today.map((todo) => todo.id));
-  return { date, today, overdue, waiting, week: later.filter((todo) => !inToday.has(todo.id)) };
+  // YG-34 밀린 일 = past-due by Seoul day ∪ stale, once each. Like YG-41, backlog and held todos are already put away (a held one only
+  // comes back by going untouched). A timed todo due earlier today stays in 오늘.
+  const days = (from: number, to: number) => Math.floor((to - from) / 86_400_000);
+  const late = new Map<string, LateTodo>();
+  for (const todo of [...overdue.filter((item) => item.status !== 'backlog' && !item.hold && seoulDate(new Date(item.dueAt!)) < date), ...stale.todos]) {
+    if (late.has(todo.id)) continue;
+    const lateDays = todo.dueAt && seoulDate(new Date(todo.dueAt)) < date ? days(Date.parse(seoulDate(new Date(todo.dueAt))), Date.parse(date)) : null;
+    const untouchedDays = days(Date.parse(todo.updatedAt), now.getTime());
+    const { stale: _, ...plain } = todo as Todo & { stale?: unknown };
+    const age = lateDays ?? untouchedDays;
+    late.set(todo.id, { ...plain, lateDays, untouchedDays, age, bucket: lateBucket(age) });
+  }
+  const timed = (todo: Todo) => todo.dueAt ? !todo.dueAllDay : !todo.scheduledAllDay;
+  return {
+    date, today, overdue, waiting, week: later.filter((todo) => !inToday.has(todo.id)),
+    late: [...late.values()].sort((a, b) => b.age - a.age),
+    timeline: { todos: calendar.todos.filter(timed), ghosts: calendar.ghosts.filter((ghost) => !ghost.allDay) }
+  };
 }
 
 /**
