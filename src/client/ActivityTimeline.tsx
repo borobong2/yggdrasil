@@ -1,27 +1,11 @@
 import { useEffect, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
-import type { Activity, IssueStatus } from '../contracts/items.js';
-import { formatDateTime, statusLabels } from './format.js';
+import type { Activity } from '../contracts/items.js';
+import { activityChanges, activityWhat, activityWho } from '../contracts/activity.js';
+import { formatDateTime } from './format.js';
 
-const labels: Record<Activity['kind'], string> = {
-  'issue.created': '이슈 생성',
-  'issue.updated': '이슈 수정',
-  'issue.completed': '이슈 완료',
-  'issue.moved': '이슈 이동',
-  'issue.archived': '이슈 보관',
-  'issue.unarchived': '이슈 보관 해제',
-  'delivery-plan.created': '납품 계획 생성',
-  'delivery-plan.accepted': '납품 계획 승인',
-  'delivery-plan.dismissed': '납품 계획 거절',
-  'evidence.added': '근거 추가',
-  'document.created': '문서 생성',
-  'document.updated': '문서 수정',
-  'document.linked': '문서 연결',
-  'document.unlinked': '문서 연결 해제',
-};
 const subjects: Record<Activity['subjectType'], string> = { issue: '이슈', 'delivery-plan-proposal': '납품 계획', document: '문서' };
 const tones: Partial<Record<Activity['kind'], string>> = { 'issue.completed': 'bg-accent', 'delivery-plan.accepted': 'bg-accent', 'delivery-plan.dismissed': 'bg-faint', 'evidence.added': 'bg-info' };
-const status = (value: unknown) => statusLabels[value as IssueStatus] ?? String(value ?? '');
 
 export function ActivityTimeline({ token, revision }: { token: string; revision: number }) {
   const [refresh, setRefresh] = useState(0);
@@ -60,12 +44,12 @@ export function ActivityTimeline({ token, revision }: { token: string; revision:
         <span className={`mt-2 size-2 shrink-0 rounded-full ${tones[activity.kind] ?? 'bg-line-strong'}`} />
         <div className="min-w-0 flex-1 text-sm">
           <div className="flex flex-wrap items-baseline justify-between gap-x-3">
-            <strong className="font-medium">{labels[activity.kind] ?? activity.kind}</strong>
+            <strong className="font-medium">{activityWhat(activity)}</strong>
             <time dateTime={activity.createdAt} className="text-xs tabular-nums text-faint">{formatDateTime(activity.createdAt)}</time>
           </div>
           <p className="truncate text-xs text-faint">{subjects[activity.subjectType] ?? activity.subjectType} · <span className="font-mono">{activity.subjectId.slice(0, 8)}</span>
-            {typeof activity.payload.via === 'string' && <> · {activity.payload.via}</>}</p>
-          {activity.kind === 'issue.moved' && <p className="mt-1 text-muted">{status(activity.payload.from)} → {status(activity.payload.to)}</p>}
+            {activityWho(activity) && <> · {activityWho(activity)}</>}</p>
+          {activityChanges(activity).length > 0 && <p className="mt-1 text-muted">{activityChanges(activity).join(' · ')}</p>}
           {activity.kind === 'evidence.added' && <p className="mt-1 truncate text-muted">{String(activity.payload.kind ?? '')}: {String(activity.payload.url ?? '')}</p>}
           {typeof activity.payload.captureId === 'string' && <a href={`#capture-${activity.payload.captureId}`} className="mt-1 inline-block text-xs text-accent-ink hover:underline">원본 캡처 보기</a>}
         </div>

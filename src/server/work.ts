@@ -35,9 +35,16 @@ export async function listIssues(ownerId: string): Promise<Issue[]> {
   return rows.map((row) => ({ ...issue(row.issue), github: github.get(row.issue.id) ?? null, recurrence: toRecurrence(row.recurrence) }));
 }
 
-/** Latest PR and successful deploy per issue, from webhook-written evidence (YG-24). */
-async function githubSummaries(ownerId: string): Promise<Map<string, GitHubSummary>> {
-  const rows = await db.select().from(issueEvidence).where(and(eq(issueEvidence.ownerId, ownerId), inArray(issueEvidence.kind, ['github_pr', 'deployment']))).orderBy(desc(issueEvidence.createdAt), desc(issueEvidence.id));
+/** YG-44: the board's GitHub chips (PR number/state/url + CI, deploy) on todos read over MCP. */
+export async function withGitHub<T extends Issue>(ownerId: string, todos: T[]): Promise<T[]> {
+  if (!todos.length) return todos;
+  const github = await githubSummaries(ownerId, todos.map((todo) => todo.id));
+  return todos.map((todo) => ({ ...todo, github: github.get(todo.id) ?? null }));
+}
+
+/** Latest PR and successful deploy per issue, from webhook-written evidence (YG-24). `issueIds` narrows it to those issues. */
+async function githubSummaries(ownerId: string, issueIds?: string[]): Promise<Map<string, GitHubSummary>> {
+  const rows = await db.select().from(issueEvidence).where(and(eq(issueEvidence.ownerId, ownerId), inArray(issueEvidence.kind, ['github_pr', 'deployment']), issueIds && inArray(issueEvidence.issueId, issueIds))).orderBy(desc(issueEvidence.createdAt), desc(issueEvidence.id));
   const out = new Map<string, GitHubSummary>();
   for (const row of rows) {
     const summary = out.get(row.issueId) ?? { pr: null, deploy: null };
