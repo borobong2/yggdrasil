@@ -44,7 +44,7 @@ function todo(title: string, extra: Partial<Todo> = {}): Todo {
 }
 const allDay = (date: string) => ({ dueAt: kst(`${date}T00:00:00`).toISOString(), dueAllDay: true });
 const now = kst('2026-10-14T07:00:00');
-const empty = { date: '2026-10-14', today: [], overdue: [], waiting: [], week: [] };
+const empty = { date: '2026-10-14', today: [], overdue: [], waiting: [], week: [], late: [], timeline: { todos: [], ghosts: [] } }; // YG-34 added late/timeline to TodayView
 
 it('builds the empty briefing', () => {
   expect(buildBriefing(empty, { date: '2026-10-14', todos: [] }, now)).toMatchInlineSnapshot(`

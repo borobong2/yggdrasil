@@ -47,7 +47,7 @@ it('serves today/overdue/waiting/area/issue as read-only markdown on Asia/Seoul 
   try {
     const { resources } = await client.listResources();
     expect(resources.map((r) => r.uri)).toEqual(expect.arrayContaining(['todo://today', 'todo://overdue', 'todo://waiting', `todo://area/${encodeURIComponent('잡일')}`, `todo://area/${encodeURIComponent('커리어')}`]));
-    expect((await client.listResourceTemplates()).resourceTemplates.map((t) => t.uriTemplate).sort()).toEqual(['todo://area/{name}', 'todo://issue/{id}']);
+    expect((await client.listResourceTemplates()).resourceTemplates.map((t) => t.uriTemplate).sort()).toEqual(['todo://area/{name}', 'todo://history/{id}', 'todo://issue/{id}']);
 
     const today = await read('todo://today');
     expect(today).toContain('2026-10-12');

@@ -2,7 +2,8 @@ import { and, asc, desc, eq, ilike, inArray, isNotNull, isNull, ne, or, sql, typ
 import { z } from 'zod';
 import type { CalendarGhost, CalendarView, Hold, IssueLink, IssueStatus, LateTodo, Priority, StaleView, TodayView, Todo, TodoVia } from '../contracts/items.js';
 import { STALE_OVERDUE_DAYS, STALE_UNTOUCHED_DAYS, lateBucket } from '../contracts/stale.js';
-import { seoulDay } from '../contracts/dates.js';
+import { formatDay, seoulDay } from '../contracts/dates.js';
+import { recurrenceLabel } from '../contracts/recurrence.js';
 import { appendActivity, type Transaction } from './activity.js';
 import { getDb } from './db.js';
 import { epics, goals, issues, recurrences } from './schema.js';
@@ -129,13 +130,37 @@ export async function updateTodo(ownerId: string, id: string, changes: TodoChang
     if (set.status === 'done' && current.status !== 'done') set.completedAt ??= new Date();
     const [row] = await tx.update(issues).set({ ...set, epicId: place.epicId, updatedAt: new Date() }).where(and(eq(issues.id, id), eq(issues.ownerId, ownerId))).returning();
     const kind = set.status === 'done' && current.status !== 'done' ? 'issue.completed' : 'issue.updated';
-    await appendActivity(tx, ownerId, { kind, subjectType: 'issue', subjectId: id, payload: { via, changes: changed } });
-    // Completing rolls the series; an active rule set on a done occurrence (resume / late attach) rolls it once too.
-    if (kind === 'issue.completed' || (changes.recurrence && !changes.recurrence.paused && row!.status === 'done')) await spawnNext(tx, row!, { via });
     const rule = changes.recurrence;
     const recurrence = rule === undefined ? current.recurrence ?? null : rule && { id: row!.recurrenceId!, ...ruleOf(rule) };
-    return { ...issue(row!), area: place.area, epic: place.epic, recurrence };
+    const updated = { ...issue(row!), area: place.area, epic: place.epic, recurrence };
+    await appendActivity(tx, ownerId, { kind, subjectType: 'issue', subjectId: id, payload: { via, changes: changed, diff: todoDiff(current, updated, changed) } });
+    // Completing rolls the series; an active rule set on a done occurrence (resume / late attach) rolls it once too.
+    if (kind === 'issue.completed' || (changes.recurrence && !changes.recurrence.paused && row!.status === 'done')) await spawnNext(tx, row!, { via });
+    return updated;
   });
+}
+
+/**
+ * YG-44 activity `diff`: { field: [old, new] } for the fields that really changed, as short display values
+ * (dates in Asia/Seoul, recurrence and links as labels, long text cut to 120 characters). Added next to the `changes` name list.
+ */
+export function todoDiff(before: Partial<Todo>, after: Partial<Todo>, keys: string[]): Record<string, [unknown, unknown]> {
+  const field = (key: string) => key === 'prefix' ? 'key' : key === 'addLinks' || key === 'removeLinks' ? 'links' : key;
+  const shown = (todo: Partial<Todo>, key: string): unknown => {
+    const value = todo[key as keyof Todo];
+    if (value === null || value === undefined) return null;
+    if (key === 'dueAt' || key === 'scheduledAt') return formatDay(value as string, Boolean(key === 'dueAt' ? todo.dueAllDay : todo.scheduledAllDay));
+    if (key === 'completedAt') return formatDay(value as string, false);
+    if (key === 'recurrence') return recurrenceLabel(value as NonNullable<Todo['recurrence']>);
+    if (key === 'links') return (value as IssueLink[]).map((link) => link.label).join(', ');
+    return typeof value === 'string' && value.length > 120 ? `${value.slice(0, 120)}…` : value;
+  };
+  const out: Record<string, [unknown, unknown]> = {};
+  for (const key of new Set(keys.map(field))) {
+    const pair: [unknown, unknown] = [shown(before, key), shown(after, key)];
+    if (JSON.stringify(pair[0]) !== JSON.stringify(pair[1])) out[key] = pair;
+  }
+  return out;
 }
 
 /** YG-36 「티켓으로 승격」: gives a keyless todo the next key from `prefix`, else its epic's default. Keys are permanent: a keyed todo is returned as is. */

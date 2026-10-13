@@ -20,7 +20,7 @@ export async function moveIssue(ownerId: string, id: string, status: IssueStatus
     target.splice(Math.min(position, target.length), 0, { ...current, status });
     for (const [index, item] of source.entries()) await tx.update(issues).set({ position: index, updatedAt: new Date() }).where(eq(issues.id, item.id));
     for (const [index, item] of target.entries()) await tx.update(issues).set({ status, position: index, updatedAt: new Date() }).where(eq(issues.id, item.id));
-    await appendActivity(tx, ownerId, { kind: 'issue.moved', subjectType: 'issue', subjectId: id, payload: { from: current.status, to: status, position } });
+    await appendActivity(tx, ownerId, { kind: 'issue.moved', subjectType: 'issue', subjectId: id, payload: { via: 'ui', from: current.status, to: status, position } });
     if (status === 'done' && current.status !== 'done') await spawnNext(tx, { ...current, status }, { via: 'ui' });
     return asIssue({ ...current, status, position: target.findIndex((item) => item.id === id), completedAt: status === 'done' ? current.completedAt ?? new Date() : null, updatedAt: new Date() });
   });
