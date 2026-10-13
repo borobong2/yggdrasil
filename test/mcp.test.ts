@@ -63,7 +63,7 @@ it('rejects missing, invalid, revoked, session-fixture PATs even with dev overri
   } finally { if (prior === undefined) delete process.env.YGGDRASIL_DEV_OWNER_ID; else process.env.YGGDRASIL_DEV_OWNER_ID = prior; }
 });
 
-it('runs the complete SDK client flow with exactly eight tools, shared search and preserved source/work', async () => {
+it('runs the complete SDK client flow with exactly thirteen tools, shared search and preserved source/work', async () => {
   const q = `MCP-${crypto.randomUUID()}`;
   const doc = await createDocument(owner, q, 'Body', null);
   const goal = await createGoal(owner, q);
@@ -79,7 +79,7 @@ it('runs the complete SDK client flow with exactly eight tools, shared search an
   const { client, close } = await connect(pat.token);
   try {
     const tools = await client.listTools();
-    expect(tools.tools.map(tool => tool.name).sort()).toEqual(['complete_todo', 'create_capture', 'create_todo', 'read_document', 'read_planning_tree', 'request_delivery_plan', 'search_workspace', 'update_todo']);
+    expect(tools.tools.map(tool => tool.name).sort()).toEqual(['complete_todo', 'create_capture', 'create_document', 'create_todo', 'link_document_todo', 'list_documents', 'read_document', 'read_planning_tree', 'request_delivery_plan', 'search_workspace', 'unlink_document_todo', 'update_document', 'update_todo']);
     const search = data(await client.callTool({ name: 'search_workspace', arguments: { q } }));
     const rest = await createApp().request(`/api/search?q=${q}`, { headers: { authorization: 'Bearer yg08-owner-token' } });
     expect(search).toEqual(await rest.json());

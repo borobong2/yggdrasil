@@ -80,6 +80,7 @@ export const issues = pgTable('issues', {
   estimateMinutes: integer('estimate_minutes'),
   source: text('source'),
   key: text('key'),
+  links: jsonb('links').$type<import('../contracts/items.js').IssueLink[]>().notNull().default([]),
   recurrenceId: uuid('recurrence_id').references(() => recurrences.id, { onDelete: 'set null' }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull()

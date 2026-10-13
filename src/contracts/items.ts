@@ -11,7 +11,10 @@ type WorkRecord = { id: string; title: string; createdAt: string; updatedAt: str
 export type Goal = WorkRecord;
 export type Epic = WorkRecord & { goalId: string };
 export type Issue = WorkRecord & { epicId: string; status: IssueStatus; position: number; priority: Priority; dueAt: string | null;
-  hold: Hold | null; holdReason: string | null; scheduledAt: string | null; notes: string; estimateMinutes: number | null; source: string | null; key: string | null; github?: GitHubSummary | null; recurrence?: Recurrence | null };
+  hold: Hold | null; holdReason: string | null; scheduledAt: string | null; notes: string; estimateMinutes: number | null; source: string | null; key: string | null; github?: GitHubSummary | null; recurrence?: Recurrence | null;
+  /** YG-42 */ links: IssueLink[] };
+/** YG-42: doc → Yggdrasil document id in `path` or an external `url`; web/pr → `url` (http/https); local → `path`. */
+export type IssueLink = { label: string; url?: string; path?: string; kind: 'doc' | 'web' | 'local' | 'pr' };
 export type Todo = Issue & { area: string; epic: string };
 export type Weekday = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun';
 /** YG-28 series rule. Times are Asia/Seoul 'HH:mm'; monthDay past the month's end means its last day. */
@@ -28,7 +31,8 @@ export type BulkResult = { todos: Todo[]; previous: TodoSnapshot[]; skipped: str
 export type DeliveryPlanStatus = 'pending' | 'accepted' | 'dismissed';
 export type DeliveryPlanAcceptance = { proposalId: string; captureId: string; documentId: string; goalId: string; epicId: string; issueIds: string[]; acceptedAt: string };
 export type DeliveryPlanActivityPayload = { proposalId: string; captureId: string; documentId?: string; goalId?: string; epicId?: string; issueIds?: string[] };
-export type Activity = { id: string; ownerId: string; actorId: string; kind: 'issue.created' | 'issue.updated' | 'issue.completed' | 'issue.moved' | 'delivery-plan.created' | 'delivery-plan.accepted' | 'delivery-plan.dismissed' | 'evidence.added'; subjectType: 'issue' | 'delivery-plan-proposal'; subjectId: string; payload: Record<string, unknown>; createdAt: string };
+export type Activity = { id: string; ownerId: string; actorId: string; kind: 'issue.created' | 'issue.updated' | 'issue.completed' | 'issue.moved' | 'delivery-plan.created' | 'delivery-plan.accepted' | 'delivery-plan.dismissed' | 'evidence.added'
+  | 'document.created' | 'document.updated' | 'document.linked' | 'document.unlinked'; subjectType: 'issue' | 'delivery-plan-proposal' | 'document'; subjectId: string; payload: Record<string, unknown>; createdAt: string };
 export type IssueEvidence = { id: string; issueId: string; url: string; kind: EvidenceKind; status: EvidenceStatus; createdAt: string;
   state: string | null; ci: string | null; prNumber: number | null; metadata: Record<string, unknown> };
 /** Latest GitHub state per issue for card/detail chips (YG-24). */

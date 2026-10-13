@@ -91,6 +91,19 @@ export async function linkIssue(ownerId: string, documentId: string, issueId: st
   return linkFor(row);
 }
 
+/** Returns whether a link existed; the issue's owner is enforced through the document's owner. */
+export async function unlinkIssue(ownerId: string, documentId: string, issueId: string): Promise<boolean> {
+  await documentRow(ownerId, documentId);
+  return (await db.delete(documentIssueLinks).where(and(eq(documentIssueLinks.documentId, documentId), eq(documentIssueLinks.issueId, issueId))).returning()).length > 0;
+}
+
+/** Live documents linked to one of the owner's issues (YG-33), in tree order. */
+export async function listIssueDocuments(ownerId: string, issueId: string): Promise<Document[]> {
+  return (await db.select({ doc: documents }).from(documentIssueLinks).innerJoin(documents, eq(documentIssueLinks.documentId, documents.id))
+    .where(and(eq(documentIssueLinks.issueId, issueId), eq(documents.ownerId, ownerId), isNull(documents.archivedAt)))
+    .orderBy(asc(documents.position), asc(documents.id))).map((row) => document(row.doc));
+}
+
 async function validParent(ownerId: string, id: string, parentId: string | null) {
   if (!parentId) return;
   let parent = await liveParent(ownerId, parentId);

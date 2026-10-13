@@ -18,7 +18,9 @@ export async function searchWorkspace(ownerId: string, query: string): Promise<S
       UNION ALL SELECT 'epic', id, title, title FROM epics WHERE owner_id = ${ownerId} AND title ILIKE ${pattern}
       UNION ALL SELECT 'issue', id, concat_ws(': ', key, title), title FROM issues WHERE owner_id = ${ownerId} AND (title ILIKE ${pattern} OR key ILIKE ${pattern})
       UNION ALL SELECT 'capture', id, text, text FROM captures WHERE owner_id = ${ownerId} AND text ILIKE ${pattern}
-    ) matches ORDER BY kind, id LIMIT 50
+    ) matches
+    -- Documents first, raw captures last: alphabetical kind order let 50 captures crowd out every document (YG-33).
+    ORDER BY array_position(ARRAY['document', 'issue', 'epic', 'goal', 'capture'], kind), id LIMIT 50
   `);
   return result.rows as SearchResult[];
 }

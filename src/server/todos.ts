@@ -1,12 +1,13 @@
 import { and, asc, eq, inArray, isNull, ne, or, sql, type SQL } from 'drizzle-orm';
 import { z } from 'zod';
-import type { CalendarGhost, CalendarView, Hold, IssueStatus, Priority, TodayView, Todo, TodoVia } from '../contracts/items.js';
+import type { CalendarGhost, CalendarView, Hold, IssueLink, IssueStatus, Priority, TodayView, Todo, TodoVia } from '../contracts/items.js';
 import { appendActivity, type Transaction } from './activity.js';
 import { getDb } from './db.js';
 import { epics, goals, issues, recurrences } from './schema.js';
 import { nextSlot, recurrenceInput, setRecurrence, spawnNext, toRecurrence, type RecurrenceInput } from './recurrences.js';
 import { NotFoundError, issue } from './work.js';
 import { allocateKey } from './ticket-keys.js';
+import { editLinks, issueLinks } from './links.js';
 
 const db = getDb();
 export const DEFAULT_EPIC = '일반';
@@ -25,7 +26,8 @@ export const todoFields = {
   scheduledAt: day.nullable(),
   notes: z.string().max(20_000),
   estimateMinutes: z.number().int().positive().max(100_000).nullable(),
-  recurrence: recurrenceInput.nullable()
+  recurrence: recurrenceInput.nullable(),
+  links: issueLinks
 };
 export const todoChanges = z.object({ area: todoName, ...todoFields }).partial().strict().refine((input) => Object.keys(input).length > 0, 'No changes');
 
@@ -38,11 +40,13 @@ export type TodoInput = {
   prefix?: string;
   /** YG-28 repeat rule; null ends the series. */
   recurrence?: RecurrenceInput | null;
+  /** YG-42: `links` replaces the list; addLinks/removeLinks (update only) edit it in place. */
+  links?: IssueLink[]; addLinks?: IssueLink[]; removeLinks?: string[];
 };
 /** `area` alone moves the todo to that area's default Epic; `epic` alone moves it within its current area. */
 export type TodoChanges = Partial<TodoInput>;
 
-const fields = ['title', 'status', 'priority', 'dueAt', 'hold', 'holdReason', 'scheduledAt', 'notes', 'estimateMinutes', 'source'] as const;
+const fields = ['title', 'status', 'priority', 'dueAt', 'hold', 'holdReason', 'scheduledAt', 'notes', 'estimateMinutes', 'source', 'links'] as const;
 
 export function parseTodoDate(value: DateInput): Date | null {
   if (value === null || value instanceof Date) return value;
@@ -78,6 +82,7 @@ export async function updateTodo(ownerId: string, id: string, changes: TodoChang
       : await resolveEpic(tx, ownerId, changes.area ?? current.area, changes.epic ?? (changes.area === undefined ? current.epic : DEFAULT_EPIC));
     let set = columns(changes);
     if (changes.recurrence !== undefined) set = { ...await setRecurrence(tx, ownerId, current, changes.recurrence), ...set };
+    if (changes.addLinks || changes.removeLinks) set.links = editLinks(set.links ?? current.links, changes.addLinks, changes.removeLinks);
     if (changes.prefix && !current.key) set.key = await allocateKey(tx, ownerId, changes.prefix);
     if (set.status && set.status !== current.status) set.position = await nextPosition(tx, ownerId, set.status, set.status === 'done');
     const [row] = await tx.update(issues).set({ ...set, epicId: place.epicId, updatedAt: new Date() }).where(and(eq(issues.id, id), eq(issues.ownerId, ownerId))).returning();

@@ -12,8 +12,12 @@ const labels: Record<Activity['kind'], string> = {
   'delivery-plan.accepted': '납품 계획 승인',
   'delivery-plan.dismissed': '납품 계획 거절',
   'evidence.added': '근거 추가',
+  'document.created': '문서 생성',
+  'document.updated': '문서 수정',
+  'document.linked': '문서 연결',
+  'document.unlinked': '문서 연결 해제',
 };
-const subjects: Record<Activity['subjectType'], string> = { issue: '이슈', 'delivery-plan-proposal': '납품 계획' };
+const subjects: Record<Activity['subjectType'], string> = { issue: '이슈', 'delivery-plan-proposal': '납품 계획', document: '문서' };
 const tones: Partial<Record<Activity['kind'], string>> = { 'issue.completed': 'bg-accent', 'delivery-plan.accepted': 'bg-accent', 'delivery-plan.dismissed': 'bg-faint', 'evidence.added': 'bg-info' };
 const status = (value: unknown) => statusLabels[value as IssueStatus] ?? String(value ?? '');
 

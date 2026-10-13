@@ -2,6 +2,8 @@ import { McpServer, ResourceTemplate } from '@modelcontextprotocol/sdk/server/mc
 import { z } from 'zod';
 import { createCapture } from './captures.js';
 import { getDocument } from './documents.js';
+import { registerDocumentTools, todoResourceExtras } from './mcp-documents.js';
+import { linkEdits } from './links.js';
 import { planningTree } from './planning.js';
 import { searchWorkspace } from './search.js';
 import { findDeliveryPlanCapture, generateDeliveryPlan } from './delivery-plans.js';
@@ -49,13 +51,14 @@ export function createMcpServer(ownerId: string, provider: DeliveryPlanProvider 
   }, (input) => result(() => createTodo(ownerId, input, 'mcp')));
   server.registerTool('update_todo', {
     description: 'Update fields of your todo; set area/epic to move it. Use null to clear dueAt, hold, holdReason, scheduledAt, estimateMinutes. recurrence replaces the repeat rule (null ends the series); changing dueAt only moves this occurrence.',
-    inputSchema: z.object({ id: z.string().uuid(), area: name, ...todoFields, prefix }).partial().required({ id: true }).strict()
+    inputSchema: z.object({ id: z.string().uuid(), area: name, ...todoFields, prefix, ...linkEdits }).partial().required({ id: true }).strict()
       .refine((input) => Object.keys(input).length > 1, 'No changes'), annotations: todoWrite
   }, ({ id, ...changes }) => result(() => updateTodo(ownerId, id, changes, 'mcp')));
   server.registerTool('complete_todo', {
     description: 'Mark your todo done. Completing a done todo changes nothing. Completing a repeating todo creates its next occurrence.',
     inputSchema: z.object({ id: z.string().uuid() }).strict(), annotations: { ...todoWrite, idempotentHint: true }
   }, ({ id }) => result(() => completeTodo(ownerId, id, 'mcp')));
+  registerDocumentTools(server, ownerId);
   registerTodoResources(server, ownerId);
   return server;
 }
@@ -79,7 +82,7 @@ function registerTodoResources(server: McpServer, ownerId: string) {
   server.registerResource('todo-issue', new ResourceTemplate('todo://issue/{id}', { list: undefined }), { title: '할 일 상세', mimeType: 'text/markdown' }, async (uri, { id }) => {
     const todo = z.string().uuid().safeParse(id).success ? await getTodo(ownerId, String(id)).catch(() => undefined) : undefined;
     if (!todo) throw new Error('Todo not found');
-    return markdown(uri, detail(todo));
+    return markdown(uri, detail(todo) + await todoResourceExtras(ownerId, todo));
   });
 }
 

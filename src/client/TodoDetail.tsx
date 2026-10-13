@@ -3,6 +3,7 @@ import { Check, X } from 'lucide-react';
 import type { Hold, Issue, Priority, Recurrence, Weekday } from '../contracts/items.js';
 import { recurrenceLabel, weekdayLabels, weekdays } from '../contracts/recurrence.js';
 import { statusLabels } from './format.js';
+import { TodoLinks } from './LinkChips.js';
 
 // Date inputs speak Asia/Seoul calendar days, matching how the server parses 'YYYY-MM-DD'.
 const seoulDay = (iso: string | null) => iso ? new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul' }).format(new Date(iso)) : '';
@@ -68,6 +69,7 @@ export function TodoDetail({ issue, area, headers, onClose, onSaved }: { issue: 
       <div className="flex-1 space-y-3 px-4 py-4">
         <label className="block"><span className="label">제목</span>
           <input className="field" required maxLength={200} value={draft.title} onChange={(event) => set({ title: event.target.value })} /></label>
+        <TodoLinks issue={issue} headers={headers} />
         <div className="grid grid-cols-2 gap-3">
           <label className="block"><span className="label">우선순위</span>
             <select className="field" value={draft.priority} onChange={(event) => set({ priority: event.target.value as Priority })}>
