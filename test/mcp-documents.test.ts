@@ -128,6 +128,10 @@ it('stores validated todo links over MCP and the UI route, and resources show li
     const updated = await call('update_todo', { id: todo.id, removeLinks: ['~/notes/yg.md', '참고'], addLinks: [{ label: '구글 문서', kind: 'doc', url: 'https://docs.google.com/d/1' }] });
     expect(updated.links.map((link: { label: string }) => link.label)).toEqual(['스펙', 'PR', '구글 문서']);
 
+    const [batch] = (await call('create_todos', { items: [{ area: '개발', title: '배치', prefix: 'LK', links: [{ label: 'w', kind: 'web', url: 'https://a.b' }] }] }));
+    expect(batch.links).toEqual([{ label: 'w', kind: 'web', url: 'https://a.b' }]);
+    expect((await call('update_todo', { key: 'lk-1', removeLinks: ['w'] })).links).toEqual([]);
+
     const text = await read(`todo://issue/${todo.id}`);
     expect(text).toContain('## 링크');
     expect(text).toContain('- [pr] [PR](https://github.com/borobong2/yggdrasil/pull/1)');

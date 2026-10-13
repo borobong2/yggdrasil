@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Check, ListChecks } from 'lucide-react';
 import type { Todo, TodayView as Today } from '../contracts/items.js';
-import { DueBadge, HoldBadge, PriorityBadge, formatDate } from './format.js';
+import { DueBadge, HoldBadge, PriorityBadge, formatDue } from './format.js';
 import { TodoDetail } from './TodoDetail.js';
 import { BulkActions, SelectBox, useSelection, type Selection } from './BulkActions.js';
 
@@ -94,7 +94,7 @@ function Row({ todo, selection, order, onOpen, onComplete }: { todo: Todo; selec
         <PriorityBadge priority={todo.priority} />
         {todo.hold && <HoldBadge hold={todo.hold} reason={todo.holdReason} />}
         <DueBadge issue={todo} />
-        {todo.scheduledAt && <span className="badge">예정 {formatDate(todo.scheduledAt)}</span>}
+        {todo.scheduledAt && <span className="badge">예정 {formatDue(todo.scheduledAt, todo.scheduledAllDay)}</span>}
         <span className="badge bg-transparent px-0 font-medium text-faint">{todo.area}</span>
       </span>
     </button>

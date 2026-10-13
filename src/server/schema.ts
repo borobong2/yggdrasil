@@ -73,15 +73,20 @@ export const issues = pgTable('issues', {
   position: integer('position').notNull().default(0),
   priority: text('priority').$type<import('../contracts/items.js').Priority>().notNull().default('p3'),
   dueAt: timestamp('due_at', { withTimezone: true }),
+  dueAllDay: boolean('due_all_day').notNull().default(false),
   hold: text('hold').$type<import('../contracts/items.js').Hold>(),
   holdReason: text('hold_reason'),
   scheduledAt: timestamp('scheduled_at', { withTimezone: true }),
+  scheduledAllDay: boolean('scheduled_all_day').notNull().default(false),
   notes: text('notes').notNull().default(''),
   estimateMinutes: integer('estimate_minutes'),
   source: text('source'),
   key: text('key'),
   links: jsonb('links').$type<import('../contracts/items.js').IssueLink[]>().notNull().default([]),
   recurrenceId: uuid('recurrence_id').references(() => recurrences.id, { onDelete: 'set null' }),
+  /** Set by the issues_completed_at trigger when status becomes done (unless written explicitly); cleared on reopen. */
+  completedAt: timestamp('completed_at', { withTimezone: true }),
+  archivedAt: timestamp('archived_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull()
 }, (table) => [unique('issues_id_owner_key').on(table.id, table.ownerId), uniqueIndex('issues_owner_key_idx').on(table.ownerId, table.key)]);

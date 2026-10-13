@@ -4,7 +4,7 @@ import { DndContext, DragOverlay, KeyboardCode, KeyboardSensor, MouseSensor, Tou
 import { ChevronDown, ChevronLeft, ChevronRight, Repeat, Undo2, X } from 'lucide-react';
 import type { CalendarGhost, CalendarView as Calendar, Priority, Todo } from '../contracts/items.js';
 import { addDays, dayOf, modes, monthGrid, moveKeepingTime, parseCalendarHash, rangeOf, seoulMinutes, shift, slotAt, today, type CalendarMode } from './calendar-dates.js';
-import { HoldBadge, PriorityBadge } from './format.js';
+import { HoldBadge, isOverdue, PriorityBadge } from './format.js';
 import { TodoDetail } from './TodoDetail.js';
 
 // YG-30 calendar. Position lives in the hash (#/calendar/<mode>/<day>); data comes from GET /api/calendar for the visible range.
@@ -17,7 +17,8 @@ const label = (day: string, options: Intl.DateTimeFormatOptions) => new Date(`${
 const dayLabel = (day: string) => label(day, { month: 'long', day: 'numeric', weekday: 'short' });
 const dateOf = (todo: Todo) => todo.dueAt ?? todo.scheduledAt;
 const hhmm = (minutes: number) => `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
-const isLate = (todo: Todo, now: string) => todo.status !== 'done' && Boolean(todo.dueAt) && dayOf(todo.dueAt!) < now;
+// YG-38: the date shown is dueAt (else scheduledAt); its all-day flag decides the all-day row vs the time grid.
+const allDayOf = (todo: Todo) => todo.dueAt ? todo.dueAllDay : todo.scheduledAllDay;
 
 type Drop = { day?: string; hour?: number; allDay?: boolean; undated?: boolean; label: string };
 type Entry = { kind: 'todo'; todo: Todo; minutes: number } | { kind: 'ghost'; ghost: CalendarGhost; minutes: number };
@@ -134,7 +135,7 @@ export function CalendarView({ token, onActivity }: { token: string; onActivity?
       const column = document.querySelector(`[data-day-column="${target.day}"]`)?.getBoundingClientRect();
       const raw = card && column ? (card.top - column.top) / HOUR * 60 : target.hour * 60;
       value = slotAt(target.day!, Math.min(Math.max(Math.round(raw / 15) * 15, 0), 24 * 60 - 15));
-    } else value = target.allDay || !current ? target.day! : moveKeepingTime(current, target.day!);
+    } else value = target.allDay || !current ? target.day! : moveKeepingTime(current, target.day!, allDayOf(todo));
     if (current && new Date(/T/.test(value) ? value : `${value}T00:00:00+09:00`).getTime() === Date.parse(current)) return;
     void patch(todo, { [field]: value }, `'${todo.title}'을(를) ${target.label}(으)로 옮겼습니다.`);
   }
@@ -143,7 +144,7 @@ export function CalendarView({ token, onActivity }: { token: string; onActivity?
 
   const entries = new Map<string, Entry[]>();
   const push = (key: string, entry: Entry) => entries.set(key, [...entries.get(key) ?? [], entry]);
-  for (const todo of data?.todos ?? []) push(dayOf(dateOf(todo)!), { kind: 'todo', todo, minutes: seoulMinutes(dateOf(todo)!) });
+  for (const todo of data?.todos ?? []) push(dayOf(dateOf(todo)!), { kind: 'todo', todo, minutes: allDayOf(todo) ? 0 : seoulMinutes(dateOf(todo)!) });
   for (const ghost of data?.ghosts ?? []) push(dayOf(ghost.at), { kind: 'ghost', ghost, minutes: ghost.allDay ? 0 : seoulMinutes(ghost.at) });
   for (const list of entries.values()) list.sort((a, b) => a.minutes - b.minutes || (a.kind === 'todo' ? a.todo.priority : a.ghost.priority).localeCompare(b.kind === 'todo' ? b.todo.priority : b.ghost.priority));
   const open = openId ? [...data?.todos ?? [], ...data?.undated ?? []].find((todo) => todo.id === openId) : undefined;
@@ -333,7 +334,7 @@ function Chip({ todo, now, onOpen, idPrefix = '', ...look }: ChipProps) {
 }
 
 function ChipFace({ todo, now, time, fill, row, lifted }: Omit<ChipProps, 'onOpen'> & { lifted?: boolean }) {
-  const late = isLate(todo, now);
+  const late = isOverdue(todo);
   return <span data-late={late || undefined} className={`flex min-w-0 gap-1.5 overflow-hidden rounded-md border ${late ? 'border-danger/30 bg-danger-soft text-danger' : 'border-line bg-surface'} ${lifted ? 'shadow-pop' : ''}
     ${row ? 'items-center px-2.5 py-1.5 text-sm' : `px-1 text-2xs leading-4 md:text-xs ${fill ? 'h-full items-start py-0.5' : 'items-center py-px'}`}`}>
     <span className={`size-1.5 shrink-0 rounded-full ${priorityDots[todo.priority]} ${fill ? 'mt-[5px]' : ''}`} title={`우선순위 ${todo.priority.toUpperCase()}`} />

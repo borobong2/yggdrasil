@@ -2,7 +2,7 @@ import { FormEvent, useEffect, useState } from 'react';
 import type { Issue, PlanningEpic, PlanningGoal } from '../contracts/items.js';
 import { Plus } from 'lucide-react';
 import { PlanningTree } from './PlanningTree.js';
-import { DueBadge, formatDate, HoldBadge, PriorityBadge, ProgressBar, statusLabels } from './format.js';
+import { DueBadge, formatDue, HoldBadge, PriorityBadge, ProgressBar, statusLabels } from './format.js';
 import { GitHubChips } from './GitHubChips.js';
 
 export function PlanningView({ token }: { token: string }) {
@@ -78,7 +78,7 @@ function Detail({ item }: { item: PlanningGoal | PlanningEpic | Issue }) {
         {item.github && <><dt className="text-muted">GitHub</dt><dd className="flex flex-wrap gap-1"><GitHubChips issue={{ key: null, github: item.github }} /></dd></>}
         <dt className="text-muted">우선순위</dt><dd><PriorityBadge priority={item.priority} /></dd>
         <dt className="text-muted">마감</dt><dd>{item.dueAt ? <DueBadge issue={item} /> : <span className="text-faint">없음</span>}</dd>
-        {item.hold && <><dt className="text-muted">보류</dt><dd className="space-y-1"><HoldBadge hold={item.hold} reason={item.holdReason} />{item.holdReason && <p className="text-xs text-muted">{item.holdReason}</p>}{item.scheduledAt && <p className="text-xs text-muted">예정일 {formatDate(item.scheduledAt)}</p>}</dd></>}
+        {item.hold && <><dt className="text-muted">보류</dt><dd className="space-y-1"><HoldBadge hold={item.hold} reason={item.holdReason} />{item.holdReason && <p className="text-xs text-muted">{item.holdReason}</p>}{item.scheduledAt && <p className="text-xs text-muted">예정일 {formatDue(item.scheduledAt, item.scheduledAllDay)}</p>}</dd></>}
         {item.estimateMinutes != null && <><dt className="text-muted">예상</dt><dd>{item.estimateMinutes}분</dd></>}
       </dl>
       {item.notes && <p className="whitespace-pre-wrap break-words rounded-md bg-sunken p-3 text-sm text-muted">{item.notes}</p>}

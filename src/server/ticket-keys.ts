@@ -13,12 +13,18 @@ export function normalizePrefix(value: string): string {
 
 /** Next `PREFIX-n` for the owner. One atomic upsert: concurrent callers serialize on the counter row, so no duplicates. */
 export async function allocateKey(executor: Executor, ownerId: string, value: string): Promise<string> {
+  return (await allocateKeys(executor, ownerId, value, 1))[0]!;
+}
+
+/** `count` consecutive keys in one upsert (YG-40 batches). The counter row stays locked until the caller's transaction ends. */
+export async function allocateKeys(executor: Executor, ownerId: string, value: string, count: number): Promise<string[]> {
   const prefix = normalizePrefix(value);
   const result = await executor.execute<{ n: number }>(sql`
-    INSERT INTO ticket_counters (owner_id, prefix, next_number) VALUES (${ownerId}, ${prefix}, 2)
-    ON CONFLICT (owner_id, prefix) DO UPDATE SET next_number = ticket_counters.next_number + 1
-    RETURNING next_number - 1 AS n`);
-  return `${prefix}-${result.rows[0]!.n}`;
+    INSERT INTO ticket_counters (owner_id, prefix, next_number) VALUES (${ownerId}, ${prefix}, ${count + 1})
+    ON CONFLICT (owner_id, prefix) DO UPDATE SET next_number = ticket_counters.next_number + ${count}
+    RETURNING next_number - ${count} AS n`);
+  const first = Number(result.rows[0]!.n);
+  return Array.from({ length: count }, (_, i) => `${prefix}-${first + i}`);
 }
 
 /** Ensure the next allocated number is at least `start` (never moves a counter backwards). */

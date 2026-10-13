@@ -157,6 +157,8 @@ it('PR open → doing, CI result stored, merge → done with commit evidence, de
   expect((await evidence(todo.id))[0].ci).toBe('success');
   await hook('pull_request', { action: 'closed', pull_request: pr(repo, { state: 'closed', merged: true, merge_commit_sha: 'c'.repeat(40) }), repository: { full_name: repo } });
   expect((await issueRow(todo.id)).status).toBe('done');
+  // YG-37: the webhook completion path stamps completed_at too (issues_completed_at trigger).
+  expect((await pool.query('SELECT completed_at FROM issues WHERE id = $1', [todo.id])).rows[0].completed_at).toBeInstanceOf(Date);
   expect(await evidence(todo.id)).toEqual([
     expect.objectContaining({ kind: 'github_pr', state: 'merged', ci: 'success' }),
     expect.objectContaining({ kind: 'github_commit', url: `https://github.com/${repo}/commit/${'c'.repeat(40)}` })

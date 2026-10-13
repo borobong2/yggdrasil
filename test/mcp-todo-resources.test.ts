@@ -58,7 +58,7 @@ it('serves today/overdue/waiting/area/issue as read-only markdown on Asia/Seoul 
 
     const late = await read('todo://overdue');
     expect(late).toContain('어제 마감');
-    expect(late).toContain('2026-10-11');
+    expect(late).toContain('마감 2026-10-11 23:59'); // YG-38: timed shows its Seoul time
     expect(late).not.toContain('가계부 정리');
 
     const waiting = await read('todo://waiting');
@@ -67,6 +67,7 @@ it('serves today/overdue/waiting/area/issue as read-only markdown on Asia/Seoul 
 
     const area = await read(`todo://area/${encodeURIComponent('커리어')}`);
     expect(area).toContain('내일 마감');
+    expect(area).toMatch(/내일 마감 — .*마감 2026-10-13 \(id/); // all-day: date only
     expect(area).toContain('백엔드');
     expect(area).toContain('추천인 답장');
     expect(area).not.toContain('가계부');

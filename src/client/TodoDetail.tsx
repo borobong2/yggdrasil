@@ -7,7 +7,7 @@ import { TodoLinks } from './LinkChips.js';
 
 // Date inputs speak Asia/Seoul calendar days, matching how the server parses 'YYYY-MM-DD'.
 const seoulDay = (iso: string | null) => iso ? new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul' }).format(new Date(iso)) : '';
-const seoulTime = (iso: string | null) => { const time = iso ? new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(iso)) : ''; return time === '00:00' ? '' : time; };
+const seoulTime = (iso: string | null) => iso ? new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(iso)) : '';
 const seoulWeekday = (iso: string | null) => weekdays[(new Date(`${seoulDay(iso) || seoulDay(new Date().toISOString())}T00:00:00Z`).getUTCDay() + 6) % 7]!;
 
 // YG-28 repeat rule draft. '' = no rule (choosing it on a series ends the series).
@@ -19,11 +19,12 @@ const repeatOf = (issue: Issue): Repeat => {
 const recurrenceOf = (repeat: Repeat) => repeat.freq ? { freq: repeat.freq, ...(repeat.freq === 'weekly' ? { weekdays: weekdays.filter((day) => repeat.weekdays.includes(day)) } : {}),
   ...(repeat.freq === 'monthly' ? { monthDay: Number(repeat.monthDay) } : {}), time: repeat.time || null, paused: repeat.paused } : null;
 
-type Draft = { title: string; priority: Priority; hold: '' | Hold; holdReason: string; dueAt: string; dueTime: string; scheduledAt: string; estimateMinutes: string; notes: string; repeat: Repeat };
-const draftOf = (issue: Issue): Draft => ({ title: issue.title, priority: issue.priority, hold: issue.hold ?? '', holdReason: issue.holdReason ?? '', dueAt: seoulDay(issue.dueAt), dueTime: seoulTime(issue.dueAt),
-  scheduledAt: seoulDay(issue.scheduledAt), estimateMinutes: issue.estimateMinutes?.toString() ?? '', notes: issue.notes, repeat: repeatOf(issue) });
+type Draft = { title: string; priority: Priority; hold: '' | Hold; holdReason: string; dueAt: string; dueTime: string; scheduledAt: string; estimateMinutes: string; notes: string; repeat: Repeat; completedAt: string };
+const draftOf = (issue: Issue): Draft => ({ title: issue.title, priority: issue.priority, hold: issue.hold ?? '', holdReason: issue.holdReason ?? '', dueAt: seoulDay(issue.dueAt), dueTime: issue.dueAllDay ? '' : seoulTime(issue.dueAt),
+  scheduledAt: seoulDay(issue.scheduledAt), estimateMinutes: issue.estimateMinutes?.toString() ?? '', notes: issue.notes, repeat: repeatOf(issue), completedAt: seoulDay(issue.completedAt) });
 const payloadOf = (draft: Draft) => ({ title: draft.title, priority: draft.priority, hold: draft.hold || null, holdReason: draft.hold && draft.holdReason.trim() ? draft.holdReason : null,
-  dueAt: draft.dueAt ? (draft.dueTime ? `${draft.dueAt}T${draft.dueTime}:00+09:00` : draft.dueAt) : null, scheduledAt: draft.scheduledAt || null, estimateMinutes: draft.estimateMinutes ? Number(draft.estimateMinutes) : null, notes: draft.notes, recurrence: recurrenceOf(draft.repeat) });
+  dueAt: draft.dueAt ? (draft.dueTime ? `${draft.dueAt}T${draft.dueTime}:00+09:00` : draft.dueAt) : null, scheduledAt: draft.scheduledAt || null, estimateMinutes: draft.estimateMinutes ? Number(draft.estimateMinutes) : null, notes: draft.notes, recurrence: recurrenceOf(draft.repeat),
+  ...(draft.completedAt ? { completedAt: draft.completedAt } : {}) });
 
 export function TodoDetail({ issue, area, headers, onClose, onSaved }: { issue: Issue; area: string; headers: Record<string, string>; onClose: () => void; onSaved: (todo: Issue) => void }) {
   const dialog = useRef<HTMLDialogElement>(null);
@@ -109,6 +110,8 @@ export function TodoDetail({ issue, area, headers, onClose, onSaved }: { issue: 
             ? `${recurrenceLabel({ ...recurrenceOf(draft.repeat)!, weekdays: draft.repeat.weekdays, monthDay: Number(draft.repeat.monthDay) })} · 완료하면 다음 회차가 생깁니다. 마감일만 바꾸면 이번 회차만 옮겨집니다.`
             : issue.recurrence ? '저장하면 반복이 끝납니다. 이 할 일은 남습니다.' : '매일·매주·매월 반복할 수 있습니다.'}</p>
         </fieldset>
+        {issue.status === 'done' && <label className="block"><span className="label">완료일</span>
+          <input type="date" className="field" required max={seoulDay(new Date().toISOString())} value={draft.completedAt} onChange={(event) => set({ completedAt: event.target.value })} /></label>}
         <label className="block"><span className="label">예상 시간 (분)</span>
           <input type="number" inputMode="numeric" min={1} max={100000} step={1} className="field" value={draft.estimateMinutes} onChange={(event) => set({ estimateMinutes: event.target.value })} /></label>
         <label className="block"><span className="label">메모</span>

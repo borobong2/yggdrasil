@@ -1,12 +1,11 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Document, IssueLink, Todo } from '../contracts/items.js';
 import { appendActivity } from './activity.js';
 import { getDb } from './db.js';
 import { createDocument, DocumentValidationError, getDocument, linkIssue, listDocuments, listIssueDocuments, unlinkIssue, updateDocument } from './documents.js';
-import { issues } from './schema.js';
-import { NotFoundError } from './work.js';
+import { result } from './mcp.js';
+import { getTodo, todoIdOf } from './todos.js';
 
 // YG-33: document writes over MCP. Same service functions and limits as the 문서 tab (YG-23); bodies are markdown,
 // mentions are `[@title](#issue-<id>)`. Every write logs an activity with payload.via = 'mcp'. No delete tool by design.
@@ -86,24 +85,12 @@ function linkLine(link: IssueLink) {
   return link.url ? `- [${link.kind}] [${link.label}](${target})` : `- [${link.kind}] ${link.label}: ${target}`;
 }
 
-// ponytail: own key lookup (todo key → id) so this module doesn't depend on concurrent todos.ts changes; fold into a shared helper later.
+/** Owner-scoped todo id from an id or ticket key; getTodo rejects another owner's id before anything is written. */
 async function resolveTodo(ownerId: string, ref: string): Promise<string> {
-  const byId = z.uuid().safeParse(ref).success;
-  const row = (await getDb().select({ id: issues.id }).from(issues).where(and(eq(issues.ownerId, ownerId), byId ? eq(issues.id, ref) : eq(issues.key, ref.toUpperCase()))).limit(1))[0];
-  if (!row) throw new NotFoundError();
-  return row.id;
+  return (await getTodo(ownerId, await todoIdOf(ownerId, z.uuid().safeParse(ref).success ? { id: ref } : { key: ref }))).id;
 }
 
 async function log(ownerId: string, kind: 'document.created' | 'document.updated' | 'document.linked' | 'document.unlinked', documentId: string, payload: Record<string, unknown>) {
   // ponytail: logged right after the service call, not in its transaction; the services own their writes (YG-23).
   await getDb().transaction((tx) => appendActivity(tx, ownerId, { kind, subjectType: 'document', subjectId: documentId, payload: { via: 'mcp', ...payload } }));
-}
-
-async function result(run: () => Promise<unknown>) {
-  try {
-    return { content: [{ type: 'text' as const, text: JSON.stringify(await run()) }] };
-  } catch (error) {
-    const text = error instanceof NotFoundError ? 'Not found' : error instanceof DocumentValidationError ? error.message : 'Operation failed. Please try again.';
-    return { isError: true, content: [{ type: 'text' as const, text }] };
-  }
 }

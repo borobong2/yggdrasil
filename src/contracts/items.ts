@@ -10,8 +10,11 @@ export type EvidenceStatus = 'linked';
 type WorkRecord = { id: string; title: string; createdAt: string; updatedAt: string };
 export type Goal = WorkRecord;
 export type Epic = WorkRecord & { goalId: string };
-export type Issue = WorkRecord & { epicId: string; status: IssueStatus; position: number; priority: Priority; dueAt: string | null;
-  hold: Hold | null; holdReason: string | null; scheduledAt: string | null; notes: string; estimateMinutes: number | null; source: string | null; key: string | null; github?: GitHubSummary | null; recurrence?: Recurrence | null;
+/** `dueAllDay`/`scheduledAllDay` (YG-38): the date was given without a time and means that whole Asia/Seoul day (stored at its 00:00). */
+export type Issue = WorkRecord & { epicId: string; status: IssueStatus; position: number; priority: Priority; dueAt: string | null; dueAllDay: boolean;
+  hold: Hold | null; holdReason: string | null; scheduledAt: string | null; scheduledAllDay: boolean; notes: string; estimateMinutes: number | null; source: string | null; key: string | null;
+  /** YG-37: when it was done (null unless status is done). YG-39: archived todos are hidden from every list. */
+  completedAt: string | null; archivedAt: string | null; github?: GitHubSummary | null; recurrence?: Recurrence | null;
   /** YG-42 */ links: IssueLink[] };
 /** YG-42: doc → Yggdrasil document id in `path` or an external `url`; web/pr → `url` (http/https); local → `path`. */
 export type IssueLink = { label: string; url?: string; path?: string; kind: 'doc' | 'web' | 'local' | 'pr' };
@@ -24,14 +27,14 @@ export type TodoVia = 'ui' | 'mcp' | 'import';
 export type CalendarGhost = { recurrenceId: string; todoId: string; title: string; priority: Priority; at: string; allDay: boolean };
 export type CalendarView = { from: string; to: string; todos: Todo[]; undated: Todo[]; ghosts: CalendarGhost[] };
 export type TodayView = { date: string; today: Todo[]; overdue: Todo[]; waiting: Todo[]; week: Todo[] };
-/** Fields a bulk action can change (YG-26); sending them back with action 'restore' undoes it. */
+/** Fields a bulk action can change (YG-26); sending them back with action 'restore' undoes it. All-day dates come back as 'YYYY-MM-DD'. */
 export type TodoSnapshot = Pick<Issue, 'id' | 'status' | 'dueAt' | 'scheduledAt' | 'hold' | 'holdReason'>;
 /** `skipped`: restore left these done because their recurring series already has a newer open occurrence (YG-28). */
 export type BulkResult = { todos: Todo[]; previous: TodoSnapshot[]; skipped: string[] };
 export type DeliveryPlanStatus = 'pending' | 'accepted' | 'dismissed';
 export type DeliveryPlanAcceptance = { proposalId: string; captureId: string; documentId: string; goalId: string; epicId: string; issueIds: string[]; acceptedAt: string };
 export type DeliveryPlanActivityPayload = { proposalId: string; captureId: string; documentId?: string; goalId?: string; epicId?: string; issueIds?: string[] };
-export type Activity = { id: string; ownerId: string; actorId: string; kind: 'issue.created' | 'issue.updated' | 'issue.completed' | 'issue.moved' | 'delivery-plan.created' | 'delivery-plan.accepted' | 'delivery-plan.dismissed' | 'evidence.added'
+export type Activity = { id: string; ownerId: string; actorId: string; kind: 'issue.created' | 'issue.updated' | 'issue.completed' | 'issue.moved' | 'issue.archived' | 'issue.unarchived' | 'delivery-plan.created' | 'delivery-plan.accepted' | 'delivery-plan.dismissed' | 'evidence.added'
   | 'document.created' | 'document.updated' | 'document.linked' | 'document.unlinked'; subjectType: 'issue' | 'delivery-plan-proposal' | 'document'; subjectId: string; payload: Record<string, unknown>; createdAt: string };
 export type IssueEvidence = { id: string; issueId: string; url: string; kind: EvidenceKind; status: EvidenceStatus; createdAt: string;
   state: string | null; ci: string | null; prNumber: number | null; metadata: Record<string, unknown> };
