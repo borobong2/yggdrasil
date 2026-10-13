@@ -1,7 +1,7 @@
 import type { Context, Hono } from 'hono';
 import { z } from 'zod';
 import { type AppEnv, ownerAuth } from '../auth.js';
-import { calendarView, completeTodo, todayView, todoChanges, updateTodo } from '../todos.js';
+import { calendarView, completeTodo, completedAtInput, TodoValidationError, todayView, todoChanges, updateTodo } from '../todos.js';
 import { bulkInput, bulkUpdateTodos } from '../todo-bulk.js';
 import { NotFoundError } from '../work.js';
 
@@ -25,16 +25,23 @@ export function registerTodoRoutes(app: Hono<AppEnv>): void {
     if (!id.success || !changes.success) return c.json({ error: 'Invalid todo' }, 400);
     return run(c, () => updateTodo(c.get('user').id, id.data, changes.data, 'ui'));
   });
+  // Optional body { completedAt } (YG-37); no body completes now.
   app.post('/api/todos/:id/complete', async (c) => {
     const id = z.uuid().safeParse(c.req.param('id'));
-    return id.success ? run(c, () => completeTodo(c.get('user').id, id.data, 'ui')) : c.json({ error: 'Invalid todo' }, 400);
+    const body = completeBody.safeParse(await c.req.json().catch(() => ({})));
+    return id.success && body.success ? run(c, () => completeTodo(c.get('user').id, id.data, 'ui', body.data.completedAt)) : c.json({ error: 'Invalid todo' }, 400);
   });
 }
 
+const completeBody = z.object({ completedAt: completedAtInput.optional() }).strict();
 const calendarQuery = z.object({ from: z.iso.date(), to: z.iso.date(), done: z.enum(['0', '1']).optional() })
   .refine((range) => { const days = (Date.parse(range.to) - Date.parse(range.from)) / 86_400_000; return days >= 0 && days <= 62; }, 'from ≤ to, at most 62 days');
 
 async function run(c: Context<AppEnv>, operation: () => Promise<unknown>) {
   try { return c.json(await operation()); }
-  catch (error) { if (error instanceof NotFoundError) return c.json({ error: 'Not found' }, 404); throw error; }
+  catch (error) {
+    if (error instanceof NotFoundError) return c.json({ error: 'Not found' }, 404);
+    if (error instanceof TodoValidationError) return c.json({ error: error.message }, 400);
+    throw error;
+  }
 }

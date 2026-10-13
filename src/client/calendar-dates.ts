@@ -13,11 +13,11 @@ export const addDays = (day: string, n: number) => iso(utc(day) + n * 86_400_000
 export const weekStart = (day: string) => addDays(day, -((new Date(utc(day)).getUTCDay() + 6) % 7));
 export const dayOf = (instant: string | Date) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul' }).format(new Date(instant));
 export const today = () => dayOf(new Date());
-/** Minutes after Seoul midnight; 0 means all-day (matches TodoDetail, where 00:00 has no time). */
+/** Minutes after Seoul midnight. ponytail: the grid treats 0 as the all-day row, so a timed 00:00 todo shows there too. */
 export const seoulMinutes = (instant: string) => Math.floor(((Date.parse(instant) + 9 * 3_600_000) % 86_400_000) / 60_000);
 export const slotAt = (day: string, minutes: number) => `${day}T${pad(Math.floor(minutes / 60))}:${pad(minutes % 60)}:00+09:00`;
-/** PATCH value that moves `instant` to `day`, keeping its Seoul time; all-day stays a date-only string. */
-export const moveKeepingTime = (instant: string, day: string) => { const minutes = seoulMinutes(instant); return minutes ? slotAt(day, minutes) : day; };
+/** PATCH value that moves `instant` to `day`, keeping its Seoul time; all-day stays a date-only string (YG-38 flag). */
+export const moveKeepingTime = (instant: string, day: string, allDay: boolean) => allDay ? day : slotAt(day, seoulMinutes(instant));
 
 /** Whole weeks (Mon–Sun) covering the month of `day`: 35 or 42 days (28 for a Feb starting on Monday). */
 export function monthGrid(day: string): string[] {

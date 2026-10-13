@@ -96,6 +96,7 @@ it('date math: grids, ranges, hash, KST minutes and moves', () => {
   expect(seoulMinutes('2026-10-12T15:00:00.000Z')).toBe(0);
   expect(seoulMinutes('2026-10-13T12:15:00.000Z')).toBe(21 * 60 + 15);
   expect(slotAt('2026-10-13', 9 * 60 + 45)).toBe('2026-10-13T09:45:00+09:00');
-  expect(moveKeepingTime('2026-10-13T01:30:00.000Z', '2026-10-20')).toBe('2026-10-20T10:30:00+09:00');
-  expect(moveKeepingTime('2026-10-12T15:00:00.000Z', '2026-10-20')).toBe('2026-10-20'); // all-day stays all-day
+  expect(moveKeepingTime('2026-10-13T01:30:00.000Z', '2026-10-20', false)).toBe('2026-10-20T10:30:00+09:00');
+  expect(moveKeepingTime('2026-10-12T15:00:00.000Z', '2026-10-20', false)).toBe('2026-10-20T00:00:00+09:00'); // timed midnight stays timed
+  expect(moveKeepingTime('2026-10-12T15:00:00.000Z', '2026-10-20', true)).toBe('2026-10-20'); // all-day stays all-day
 });

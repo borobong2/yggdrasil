@@ -47,9 +47,14 @@ export function toRecurrence(row: typeof recurrences.$inferSelect | null): Recur
   return row && { id: row.id, freq: row.freq, weekdays: row.weekdays, monthDay: row.monthDay, time: row.time, paused: row.paused };
 }
 
+export function ruleOf(input: RecurrenceInput) {
+  return { freq: input.freq, weekdays: input.weekdays ?? null, monthDay: input.monthDay ?? null, time: input.time ?? null, paused: input.paused ?? false };
+}
+
 /**
  * Creates, replaces or (input null) ends a todo's series and returns the issue columns to write.
- * Only the rule changes: the open occurrence keeps its date (so one-off exceptions survive); a todo without a due date gets the first slot.
+ * Only the rule changes: the open occurrence keeps its date (so one-off exceptions survive); a todo without a due date gets the first slot
+ * (all-day when the rule has no time, YG-38).
  */
 export async function setRecurrence(tx: Transaction, ownerId: string, todo: { recurrence?: Recurrence | null; dueAt: unknown }, input: RecurrenceInput | null) {
   const id = todo.recurrence?.id;
@@ -58,16 +63,18 @@ export async function setRecurrence(tx: Transaction, ownerId: string, todo: { re
     if (id) await tx.delete(recurrences).where(mine(id)); // FK sets recurrence_id null on every occurrence.
     return { recurrenceId: null };
   }
-  const rule = { freq: input.freq, weekdays: input.weekdays ?? null, monthDay: input.monthDay ?? null, time: input.time ?? null, paused: input.paused ?? false };
+  const rule = ruleOf(input);
   if (id) await tx.update(recurrences).set({ ...rule, updatedAt: new Date() }).where(mine(id));
   const recurrenceId = id ?? (await tx.insert(recurrences).values({ ...rule, id: crypto.randomUUID(), ownerId }).returning({ id: recurrences.id }))[0]!.id;
-  return todo.dueAt ? { recurrenceId } : { recurrenceId, dueAt: firstSlot(rule) };
+  return todo.dueAt ? { recurrenceId } : { recurrenceId, dueAt: firstSlot(rule), dueAllDay: !rule.time };
 }
 
 /**
  * Call inside the transaction that just marked `done` complete. Creates the series' next occurrence at the first slot after
- * max(now, this occurrence's date), so missed slots are skipped. No-op for non-recurring, paused or ended series, or when an
- * occurrence is already open — which makes double completes and retries create nothing extra.
+ * max(completedAt, this occurrence's date), so missed slots are skipped — and a backdated completion (YG-37) resumes right after
+ * the day it was really done instead of after now. completedAt falls back to now for callers that pass a pre-update row.
+ * No-op for non-recurring, paused or ended series, or when an occurrence is already open — which makes double completes and
+ * retries create nothing extra.
  */
 export async function spawnNext(tx: Transaction, done: typeof issues.$inferSelect, payload: Record<string, unknown>, now = new Date()): Promise<void> {
   if (!done.recurrenceId) return;
@@ -77,13 +84,15 @@ export async function spawnNext(tx: Transaction, done: typeof issues.$inferSelec
   const open = await tx.select({ id: issues.id }).from(issues).where(and(eq(issues.recurrenceId, rule.id), ne(issues.status, 'done'), ne(issues.id, done.id))).limit(1);
   if (open.length) return;
   const anchor = done.dueAt ?? done.scheduledAt;
-  const slot = nextSlot(rule, anchor && anchor > now ? anchor : now);
+  const completed = done.completedAt ?? now;
+  const slot = nextSlot(rule, anchor && anchor > completed ? anchor : completed);
+  const allDay = !rule.time;
   const [{ next }] = (await tx.execute<{ next: number }>(sql`SELECT coalesce(max(position), -1)::int + 1 AS next FROM issues WHERE owner_id = ${done.ownerId} AND status = 'todo'`)).rows as [{ next: number }];
   const id = crypto.randomUUID();
   await tx.insert(issues).values({
     id, ownerId: done.ownerId, epicId: done.epicId, recurrenceId: rule.id, title: done.title, status: 'todo', position: next, priority: done.priority,
-    notes: done.notes, estimateMinutes: done.estimateMinutes, source: done.source, dueAt: done.dueAt || !done.scheduledAt ? slot : null,
-    scheduledAt: done.scheduledAt ? slot : null, hold: done.hold === 'scheduled' ? 'scheduled' : null
+    notes: done.notes, estimateMinutes: done.estimateMinutes, source: done.source, dueAt: done.dueAt || !done.scheduledAt ? slot : null, dueAllDay: (done.dueAt || !done.scheduledAt) ? allDay : false,
+    scheduledAt: done.scheduledAt ? slot : null, scheduledAllDay: done.scheduledAt ? allDay : false, hold: done.hold === 'scheduled' ? 'scheduled' : null
   });
   await appendActivity(tx, done.ownerId, { kind: 'issue.created', subjectType: 'issue', subjectId: id, payload: { ...payload, recurrenceId: rule.id, previousId: done.id } });
 }

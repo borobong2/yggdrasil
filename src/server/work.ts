@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull } from 'drizzle-orm';
 import type { Epic, GitHubSummary, Goal, Issue, IssueStatus, Priority } from '../contracts/items.js';
 import { getDb } from './db.js';
 import { epics, goals, issueEvidence, issues, recurrences } from './schema.js';
@@ -29,7 +29,7 @@ export async function createIssue(ownerId: string, epicId: string, title: string
   });
 }
 export async function listIssues(ownerId: string): Promise<Issue[]> {
-  const [rows, github] = await Promise.all([db.select({ issue: issues, recurrence: recurrences }).from(issues).leftJoin(recurrences, eq(issues.recurrenceId, recurrences.id)).where(eq(issues.ownerId, ownerId)).orderBy(asc(issues.status), asc(issues.position), asc(issues.id)), githubSummaries(ownerId)]);
+  const [rows, github] = await Promise.all([db.select({ issue: issues, recurrence: recurrences }).from(issues).leftJoin(recurrences, eq(issues.recurrenceId, recurrences.id)).where(and(eq(issues.ownerId, ownerId), isNull(issues.archivedAt))).orderBy(asc(issues.status), asc(issues.position), asc(issues.id)), githubSummaries(ownerId)]);
   return rows.map((row) => ({ ...issue(row.issue), github: github.get(row.issue.id) ?? null, recurrence: toRecurrence(row.recurrence) }));
 }
 
@@ -46,7 +46,9 @@ async function githubSummaries(ownerId: string): Promise<Map<string, GitHubSumma
   return out;
 }
 export async function getIssue(ownerId: string, id: string): Promise<Issue> { return issue(await issueRow(ownerId, id)); }
-export async function updateIssue(ownerId: string, id: string, changes: Partial<{ title: string; status: IssueStatus; priority: Priority; dueAt: Date | null }>): Promise<Issue> {
+export async function updateIssue(ownerId: string, id: string, input: Partial<{ title: string; status: IssueStatus; priority: Priority; dueAt: Date | null }>): Promise<Issue> {
+  // This legacy route takes instants only, so a new due date is always timed (YG-38).
+  const changes = input.dueAt === undefined ? input : { ...input, dueAllDay: false };
   if (changes.status !== 'done') return issue(await changed(issues, ownerId, id, changes));
   // Completing here must also roll a recurring series forward (YG-28), atomically with the status change.
   return db.transaction(async (tx) => {
@@ -65,7 +67,7 @@ async function issueRow(ownerId: string, id: string) { const row = (await db.sel
 
 async function changed(table: typeof goals, ownerId: string, id: string, changes: Partial<{ title: string }>): Promise<typeof goals.$inferSelect>;
 async function changed(table: typeof epics, ownerId: string, id: string, changes: Partial<{ title: string }>): Promise<typeof epics.$inferSelect>;
-async function changed(table: typeof issues, ownerId: string, id: string, changes: Partial<{ title: string; status: IssueStatus; priority: Priority; dueAt: Date | null }>): Promise<typeof issues.$inferSelect>;
+async function changed(table: typeof issues, ownerId: string, id: string, changes: Partial<{ title: string; status: IssueStatus; priority: Priority; dueAt: Date | null; dueAllDay: boolean }>): Promise<typeof issues.$inferSelect>;
 async function changed(table: typeof goals | typeof epics | typeof issues, ownerId: string, id: string, changes: object) {
   const row = (await db.update(table).set({ ...changes, updatedAt: new Date() }).where(and(eq(table.id, id), eq(table.ownerId, ownerId))).returning())[0];
   if (!row) throw new NotFoundError();
@@ -78,4 +80,4 @@ async function removed(table: typeof goals | typeof epics | typeof issues, owner
 
 function goal(row: typeof goals.$inferSelect): Goal { return { id: row.id, title: row.title, createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString() }; }
 function epic(row: typeof epics.$inferSelect): Epic { return { ...goal(row), goalId: row.goalId }; }
-export function issue(row: typeof issues.$inferSelect): Issue { return { id: row.id, title: row.title, epicId: row.epicId, status: row.status, position: row.position, priority: row.priority, dueAt: row.dueAt?.toISOString() ?? null, hold: row.hold, holdReason: row.holdReason, scheduledAt: row.scheduledAt?.toISOString() ?? null, notes: row.notes, estimateMinutes: row.estimateMinutes, source: row.source, key: row.key, createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString() }; }
+export function issue(row: typeof issues.$inferSelect): Issue { return { id: row.id, title: row.title, epicId: row.epicId, status: row.status, position: row.position, priority: row.priority, dueAt: row.dueAt?.toISOString() ?? null, dueAllDay: row.dueAllDay, hold: row.hold, holdReason: row.holdReason, scheduledAt: row.scheduledAt?.toISOString() ?? null, scheduledAllDay: row.scheduledAllDay, notes: row.notes, estimateMinutes: row.estimateMinutes, source: row.source, key: row.key, completedAt: row.completedAt?.toISOString() ?? null, archivedAt: row.archivedAt?.toISOString() ?? null, createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString() }; }

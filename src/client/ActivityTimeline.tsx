@@ -8,6 +8,8 @@ const labels: Record<Activity['kind'], string> = {
   'issue.updated': '이슈 수정',
   'issue.completed': '이슈 완료',
   'issue.moved': '이슈 이동',
+  'issue.archived': '이슈 보관',
+  'issue.unarchived': '이슈 보관 해제',
   'delivery-plan.created': '납품 계획 생성',
   'delivery-plan.accepted': '납품 계획 승인',
   'delivery-plan.dismissed': '납품 계획 거절',
