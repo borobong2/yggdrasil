@@ -17,6 +17,7 @@
     { "idx": 12, "version": "7", "when": 1791810000000, "tag": "0012_document_tree", "breakpoints": true },
     { "idx": 13, "version": "7", "when": 1791900000000, "tag": "0013_github_tracking", "breakpoints": true },
     { "idx": 14, "version": "7", "when": 1791990000000, "tag": "0014_recurrences", "breakpoints": true },
-    { "idx": 15, "version": "7", "when": 1792080000000, "tag": "0015_todo_dates_archive", "breakpoints": true }
+    { "idx": 15, "version": "7", "when": 1792080000000, "tag": "0015_todo_dates_archive", "breakpoints": true },
+    { "idx": 16, "version": "7", "when": 1792170000000, "tag": "0016_issue_links", "breakpoints": true }
   ]
 }

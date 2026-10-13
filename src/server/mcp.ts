@@ -1,7 +1,8 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { createCapture } from './captures.js';
-import { getDocument } from './documents.js';
+import { DocumentValidationError, getDocument } from './documents.js';
+import { registerDocumentTools } from './mcp-documents.js';
 import { planningTree } from './planning.js';
 import { searchWorkspace } from './search.js';
 import { findDeliveryPlanCapture, generateDeliveryPlan } from './delivery-plans.js';
@@ -44,16 +45,17 @@ export function createMcpServer(ownerId: string, provider: DeliveryPlanProvider 
     return generateDeliveryPlan(ownerId, capture, provider);
   }));
   registerTodoTools(server, ownerId);
+  registerDocumentTools(server, ownerId);
   return server;
 }
 
-/** Tool result wrapper: JSON text, or a safe error message. Shared with the tool modules (mcp-todos.ts). */
+/** Tool result wrapper: JSON text, or a safe error message. Shared with the tool modules (mcp-todos.ts, mcp-documents.ts). */
 export async function result(run: () => Promise<unknown>) {
   try {
     return { content: [{ type: 'text' as const, text: JSON.stringify(await run()) }] };
   } catch (error) {
     const text = error instanceof NotFoundError ? 'Not found' : error instanceof AIConfigurationRequired ? 'AI configuration required'
-      : error instanceof TodoValidationError ? error.message : error instanceof InvalidPrefixError ? 'Invalid prefix' : 'Operation failed. Please try again.';
+      : error instanceof TodoValidationError || error instanceof DocumentValidationError ? error.message : error instanceof InvalidPrefixError ? 'Invalid prefix' : 'Operation failed. Please try again.';
     return { isError: true, content: [{ type: 'text' as const, text }] };
   }
 }

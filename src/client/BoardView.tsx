@@ -6,6 +6,7 @@ import { Ellipsis, ListChecks, X } from 'lucide-react';
 import type { Epic, Goal, Hold, Issue, IssueStatus, Priority } from '../contracts/items.js';
 import { DueBadge, HoldBadge, PriorityBadge, RecurrenceBadge, statusLabels } from './format.js';
 import { GitHubChips } from './GitHubChips.js';
+import { LinkChips } from './LinkChips.js';
 import { TodoDetail } from './TodoDetail.js';
 import { BulkActions, SelectBox, useSelection, type Selection } from './BulkActions.js';
 
@@ -219,7 +220,7 @@ function SortableCard({ issue, onOpen, onMove, selection, order }: { issue: Issu
       className={`block w-full cursor-grab touch-manipulation rounded-[inherit] p-3 pr-9 text-left active:cursor-grabbing ${selection.mode ? 'pl-9' : 'md:pl-9'}`}>
       <CardBody issue={issue} />
     </button>
-    {(issue.key || issue.github?.pr || issue.github?.deploy) && <div className={`-mt-1.5 flex flex-wrap gap-1 px-3 pb-3 ${selection.mode ? 'pl-9' : 'md:pl-9'}`}><GitHubChips issue={issue} /></div>}
+    {(issue.key || issue.github?.pr || issue.github?.deploy || issue.links.length > 0) && <div className={`-mt-1.5 flex flex-wrap gap-1 px-3 pb-3 ${selection.mode ? 'pl-9' : 'md:pl-9'}`}><GitHubChips issue={issue} /><LinkChips links={issue.links} max={3} /></div>}
     <CardMenu issue={issue} onMove={onMove} />
   </li>;
 }

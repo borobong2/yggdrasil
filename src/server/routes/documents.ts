@@ -1,6 +1,6 @@
 import type { Context, Hono } from 'hono';
 import { type AppEnv, ownerAuth } from '../auth.js';
-import { archiveDocument, createDocument, DocumentValidationError, getDocument, linkIssue, listDocuments, listIssueLinks, moveDocument, restoreDocument, updateDocument } from '../documents.js';
+import { archiveDocument, createDocument, DocumentValidationError, getDocument, linkIssue, listDocuments, listIssueDocuments, listIssueLinks, moveDocument, restoreDocument, updateDocument } from '../documents.js';
 import { NotFoundError } from '../work.js';
 
 type AppContext = Context<AppEnv>;
@@ -8,7 +8,13 @@ type AppContext = Context<AppEnv>;
 export function registerDocumentRoutes(app: Hono<AppEnv>): void {
   app.use('/api/documents/*', ownerAuth);
   app.post('/api/documents', async (c) => { const body = await bodyOf(c); const title = text(body.title); const content = body.body === undefined ? '' : bodyText(body.body); const parentId = body.parentId === undefined ? null : optionalUuid(body.parentId); const iconValue = body.icon === undefined ? null : icon(body.icon); return !title || content === null || parentId === undefined || iconValue === undefined ? c.json({ error: 'Invalid document' }, 400) : execute(c, () => createDocument(c.get('user').id, title, content, parentId, iconValue), 201); });
-  app.get('/api/documents', (c) => execute(c, () => listDocuments(c.get('user').id, c.req.query('archived') === 'true'), 200));
+  // ?issueId=<uuid> lists the live documents linked to that todo (YG-33 TodoDetail chips).
+  app.get('/api/documents', (c) => {
+    const issueId = c.req.query('issueId');
+    if (issueId === undefined) return execute(c, () => listDocuments(c.get('user').id, c.req.query('archived') === 'true'), 200);
+    const id = uuid(issueId);
+    return id ? execute(c, () => listIssueDocuments(c.get('user').id, id), 200) : c.json({ error: 'Invalid ID' }, 400);
+  });
   app.get('/api/documents/:id', (c) => byId(c, (id) => getDocument(c.get('user').id, id)));
   app.patch('/api/documents/:id', async (c) => {
     const body = await bodyOf(c); const id = uuid(c.req.param('id')); const title = body.title === undefined ? undefined : text(body.title); const bodyValue = body.body === undefined ? undefined : bodyText(body.body); const parentId = body.parentId === undefined ? undefined : optionalUuid(body.parentId); const iconValue = body.icon === undefined ? undefined : icon(body.icon);

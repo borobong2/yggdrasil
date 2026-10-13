@@ -4,6 +4,8 @@ import type { Todo } from '../contracts/items.js';
 import { formatDay } from '../contracts/dates.js';
 import { recurrenceLabel } from '../contracts/recurrence.js';
 import { result } from './mcp.js';
+import { todoResourceExtras } from './mcp-documents.js';
+import { linkEdits } from './links.js';
 import {
   completedAtInput, completeTodo, createTodo, createTodos, getTodo, listAreas, listAreaTodos, listTodos, setArchived, todayView, todoFields, todoIdOf,
   todoName as name, updateTodo
@@ -50,7 +52,7 @@ export function registerTodoTools(server: McpServer, ownerId: string): void {
   }));
   server.registerTool('update_todo', {
     description: 'Update fields of your todo (by id or key); set area/epic to move it. Use null to clear dueAt, hold, holdReason, scheduledAt, estimateMinutes. recurrence replaces the repeat rule (null ends the series); changing dueAt only moves this occurrence. completedAt only applies to a done todo.',
-    inputSchema: z.object({ ...ref, area: name, ...todoFields, completedAt: completedAtInput, prefix }).partial().strict()
+    inputSchema: z.object({ ...ref, area: name, ...todoFields, completedAt: completedAtInput, prefix, ...linkEdits }).partial().strict()
       .refine(oneRef, 'Pass exactly one of id or key').refine((input) => Object.keys(input).length > 1, 'No changes'), annotations: todoWrite
   }, ({ id, key, ...changes }) => result(async () => updateTodo(ownerId, await todoIdOf(ownerId, { id, key }), changes, 'mcp')));
   server.registerTool('complete_todo', {
@@ -96,7 +98,7 @@ function registerTodoResources(server: McpServer, ownerId: string) {
   server.registerResource('todo-issue', new ResourceTemplate('todo://issue/{id}', { list: undefined }), { title: '할 일 상세', mimeType: 'text/markdown' }, async (uri, { id }) => {
     const todo = z.uuid().safeParse(id).success ? await getTodo(ownerId, String(id)).catch(() => undefined) : undefined;
     if (!todo) throw new Error('Todo not found');
-    return markdown(uri, detail(todo));
+    return markdown(uri, detail(todo) + await todoResourceExtras(ownerId, todo));
   });
 }
 
