@@ -1,6 +1,7 @@
 import { CalendarClock, CircleAlert, Hourglass, Repeat } from 'lucide-react';
 import type { Hold, Issue, IssueStatus, Priority, Recurrence } from '../contracts/items.js';
 import { recurrenceLabel } from '../contracts/recurrence.js';
+import { formatDue, isOverdue } from '../contracts/dates.js';
 
 export const statusLabels: Record<IssueStatus, string> = { backlog: '백로그', todo: '할 일', doing: '진행 중', done: '완료' };
 const holdLabels: Record<Hold, string> = { waiting: '대기', blocked: '막힘', scheduled: '예정' };
@@ -9,13 +10,8 @@ const holdTones: Record<Hold, string> = { waiting: 'bg-warn-soft text-warn', blo
 const priorityTones: Record<Priority, string> = { p1: 'bg-danger text-white', p2: 'bg-warn-soft text-warn', p3: 'bg-info-soft text-info', p4: '' };
 
 export const formatDateTime = (iso: string) => new Date(iso).toLocaleString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-export const formatDate = (iso: string) => new Date(iso).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' });
 
-export function isOverdue(issue: Pick<Issue, 'dueAt' | 'status'>) {
-  if (!issue.dueAt || issue.status === 'done') return false;
-  const today = new Date(); today.setHours(0, 0, 0, 0);
-  return new Date(issue.dueAt) < today;
-}
+export { formatDue, isOverdue };
 
 export function PriorityBadge({ priority }: { priority: Priority }) {
   return <span className={`badge ${priorityTones[priority]}`} title={`우선순위 ${priority.toUpperCase()}`}>{priority.toUpperCase()}</span>;
@@ -26,11 +22,12 @@ export function HoldBadge({ hold, reason }: { hold: Hold; reason?: string | null
   return <span className={`badge ${holdTones[hold]}`} title={reason ?? undefined}><Icon />{holdLabels[hold]}</span>;
 }
 
-export function DueBadge({ issue }: { issue: Pick<Issue, 'dueAt' | 'status'> }) {
+// YG-38: all-day shows '10/13' and is overdue from the next day; timed shows '10/13 21:00' and is overdue once past.
+export function DueBadge({ issue }: { issue: Pick<Issue, 'dueAt' | 'dueAllDay' | 'status'> }) {
   if (!issue.dueAt) return null;
   const overdue = isOverdue(issue);
   return <span className={`badge ${overdue ? 'bg-danger-soft text-danger' : ''}`} data-overdue={overdue || undefined}>
-    {overdue ? '기한 지남 · ' : '마감 '}{formatDate(issue.dueAt)}
+    {overdue ? '기한 지남 · ' : '마감 '}{formatDue(issue.dueAt, issue.dueAllDay)}
   </span>;
 }
 

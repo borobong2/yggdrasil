@@ -5,8 +5,9 @@ import { activities } from './schema.js';
 
 export type Transaction = Parameters<Parameters<ReturnType<typeof getDb>['transaction']>[0]>[0];
 
-export async function appendActivity(tx: Transaction, ownerId: string, event: Pick<Activity, 'kind' | 'subjectType' | 'subjectId' | 'payload'>): Promise<void> {
-  await tx.insert(activities).values({ ...event, id: crypto.randomUUID(), ownerId, actorId: ownerId });
+type ActivityEvent = Pick<Activity, 'kind' | 'subjectType' | 'subjectId' | 'payload'>;
+export async function appendActivity(tx: Transaction, ownerId: string, ...events: ActivityEvent[]): Promise<void> {
+  if (events.length) await tx.insert(activities).values(events.map((event) => ({ ...event, id: crypto.randomUUID(), ownerId, actorId: ownerId })));
 }
 
 export async function listActivities(ownerId: string): Promise<Activity[]> {

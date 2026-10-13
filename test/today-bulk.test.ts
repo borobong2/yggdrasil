@@ -56,7 +56,7 @@ it('applies each bulk action in one call and logs via=ui per issue', async () =>
   expect(snooze.status).toBe(200);
   const result = await snooze.json();
   expect(result.todos).toHaveLength(2);
-  expect(result.previous).toEqual(expect.arrayContaining([expect.objectContaining({ id: b.id, scheduledAt: '2026-10-13T15:00:00.000Z', hold: 'scheduled' })]));
+  expect(result.previous).toEqual(expect.arrayContaining([expect.objectContaining({ id: b.id, scheduledAt: '2026-10-14', hold: 'scheduled' })]));
   expect(await row(a.id)).toMatchObject({ due_at: new Date('2026-10-19T15:00:00Z'), scheduled_at: null });
   expect(await row(b.id)).toMatchObject({ due_at: null, scheduled_at: new Date('2026-10-19T15:00:00Z') });
 
