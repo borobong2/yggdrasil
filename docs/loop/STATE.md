@@ -1,11 +1,25 @@
 # Execution state
 
-**Updated:** 2026-09-12
-**Phase:** YG-00 제품 계약 작업 진행 중
+**Updated:** 2026-10-14
+**Phase:** 운영 중 (배포됨). 티켓은 이그드라실 자체에서 `YG-<n>` 키로 관리한다.
 
-## Current objective
+## Current state
 
-AI-native 개발 워크스페이스 계약을 확정한 뒤, YG-01부터 기능 티켓 단위로 구현한다.
+- **배포:** https://yg.justrunlab.com — Cloud Run 단일 서비스 + Supabase Postgres/Auth, 매일 로컬 `pg_dump` 백업. 런북은 [docs/deploy/README.md](../deploy/README.md).
+- **티켓 관리:** 티켓은 이그드라실 안에서 만든다(MCP `create_todo`, `YG` 접두사). 브랜치 `feat/yg-<n>-…`, PR 제목 `YG-<n>: …`로 GitHub webhook이 PR·CI·배포를 자동 반영한다([github-tracking.md](../github-tracking.md)). GitHub 이슈는 더 이상 쓰지 않는다.
+- **출시된 티켓 (YG-13…YG-42):**
+  - YG-13 할 일 필드(보류·예정일·p1–p4·메모·추정)와 todo service, YG-16 one-thing 할 일 이관
+  - YG-14/15 MCP 할 일 쓰기 도구와 `todo://` 리소스
+  - YG-18 구글 로그인 + 허용 이메일, YG-19 주인 ID 이관 + DB SSL, YG-21 전 테이블 RLS
+  - YG-20 Cloud Run 배포 + 매일 백업
+  - YG-12b 전체 화면 자체 디자인(PR #41; Nexus 기반 YG-12는 폐기)
+  - YG-22 보드 드래그앤드롭, YG-23 노션형 문서(페이지 트리 + 블록 에디터)
+  - YG-24 GitHub 티켓 키 추적(PR·CI·배포)
+  - YG-25/26 오늘 화면·일괄 정리, YG-28 반복 할 일, YG-30 캘린더 뷰
+  - YG-33/42 문서 MCP·링크 필드
+  - YG-35/37/38/39/40 하루 종일·completedAt·보관·일괄 처리 등 할 일 서버/MCP 개선
+  - YG-36/41 에픽 티켓 키 기본값·오래된 할 일 감지
+- **테스트 안전장치(YG-46):** `test/setup.ts`는 `DATABASE_URL` 미설정, 라이브 로컬 DB `yggdrasil`, Supabase 호스트를 거부한다. 티켓별 전용 DB(`yggdrasil_yg<n>`)를 쓴다.
 
 ## Auto-continuation policy
 
@@ -15,13 +29,11 @@ After independent checks pass, dispatch the next already-approved loop automatic
 
 - Personal, single-user, Inbox-first workspace.
 - Captures are immutable source records for organization purposes: never delete a capture during conversion.
-- AI makes reviewable title/type/target suggestions only; acceptance is the sole mutation trigger.
+- AI makes reviewable title/type/target suggestions only; acceptance is the sole mutation trigger (MCP 할 일 예외는 [PRODUCT.md](PRODUCT.md) 규칙 2).
 - Core item types: inbox, document, project, issue.
 - Stack: TypeScript, React/Vite, Hono, Supabase Postgres/Auth, Drizzle, one Cloud Run service.
 
-## 현재 티켓
-
-YG-00: [AI-native 제품 계약](../superpowers/specs/2026-09-15-ai-native-workspace-design.md)을 검토·확정한다. 구현 코드는 변경하지 않는다.
+> 아래 evidence ledger는 YG-01…YG-16 시기의 기록이다. 이후 티켓의 검증 근거는 각 PR 본문에 남긴다.
 
 ## Evidence ledger
 
