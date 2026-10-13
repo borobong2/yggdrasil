@@ -48,6 +48,19 @@ export function TodoDetail({ issue, area, headers, onClose, onSaved }: { issue: 
     setBusy(false);
   }
 
+  // YG-36: keys are permanent, so there is promote but no remove. Empty prefix = the epic's default.
+  const [prefix, setPrefix] = useState('');
+  async function promote() {
+    setBusy(true); setError('');
+    try {
+      const response = await fetch(`/api/todos/${issue.id}/promote`, { method: 'POST', headers: { ...headers, 'content-type': 'application/json' }, body: JSON.stringify(prefix.trim() ? { prefix: prefix.trim() } : {}) });
+      if (response.status === 400) throw new Error(prefix.trim() ? '접두사는 영문으로 시작하는 1~10자(영문·숫자)입니다.' : '이 에픽에는 기본 접두사가 없습니다. 접두사를 입력하세요.');
+      if (!response.ok) throw new Error('티켓으로 승격하지 못했습니다.');
+      onSaved(await response.json());
+    } catch (failure) { setError(failure instanceof Error ? failure.message : '티켓으로 승격하지 못했습니다.'); }
+    setBusy(false);
+  }
+
   function save(event: FormEvent) {
     event.preventDefault();
     const [before, after] = [payloadOf(draftOf(issue)), payloadOf(draft)];
@@ -62,7 +75,7 @@ export function TodoDetail({ issue, area, headers, onClose, onSaved }: { issue: 
     <form onSubmit={save} className="flex min-h-full flex-col">
       <header className="sticky top-0 z-10 flex items-center gap-2 border-b border-line bg-surface px-4 py-3">
         <div className="min-w-0 flex-1">
-          <p className="eyebrow truncate">{[area, statusLabels[issue.status]].filter(Boolean).join(' · ')}</p>
+          <p className="eyebrow truncate">{[issue.key, area, statusLabels[issue.status]].filter(Boolean).join(' · ')}</p>
           <h2 id="todo-detail-title" className="truncate font-semibold">{issue.title}</h2>
         </div>
         <button type="button" className="btn btn-ghost size-8 p-0" aria-label="상세 닫기" onClick={onClose}><X /></button>
@@ -70,6 +83,11 @@ export function TodoDetail({ issue, area, headers, onClose, onSaved }: { issue: 
       <div className="flex-1 space-y-3 px-4 py-4">
         <label className="block"><span className="label">제목</span>
           <input className="field" required maxLength={200} value={draft.title} onChange={(event) => set({ title: event.target.value })} /></label>
+        {!issue.key && <div className="flex items-end gap-2">
+          <label className="block w-28"><span className="label">티켓 키</span>
+            <input className="field font-mono uppercase" maxLength={10} placeholder="에픽 기본값" value={prefix} onChange={(event) => setPrefix(event.target.value)} /></label>
+          <button type="button" className="btn" disabled={busy} onClick={() => void promote()}>티켓으로 승격</button>
+        </div>}
         <TodoLinks issue={issue} headers={headers} />
         <div className="grid grid-cols-2 gap-3">
           <label className="block"><span className="label">우선순위</span>

@@ -23,8 +23,9 @@ export function registerWorkRoutes(app: Hono<AppEnv>): void {
 
   app.post('/api/issues', async (c) => {
     const body = await bodyOf(c); const title = text(body.title); const epicId = uuid(body.epicId); const priority = body.priority === undefined ? 'p3' : choice(body.priority, priorities); const dueAt = body.dueAt === undefined ? null : date(body.dueAt);
-    const prefix = body.prefix === undefined || body.prefix === '' ? undefined : typeof body.prefix === 'string' && /^[A-Za-z][A-Za-z0-9]{0,9}$/.test(body.prefix.trim()) ? body.prefix.trim() : null;
-    return !title || !epicId || !priority || dueAt === undefined || prefix === null ? c.json({ error: 'Invalid issue' }, 400) : execute(c, () => createIssue(c.get('user').id, epicId, title, priority, dueAt, prefix), 201);
+    // YG-36: omitted/'' = the epic's default prefix, null = no key.
+    const prefix = body.prefix === undefined || body.prefix === '' ? undefined : body.prefix === null ? null : typeof body.prefix === 'string' && /^[A-Za-z][A-Za-z0-9]{0,9}$/.test(body.prefix.trim()) ? body.prefix.trim() : false;
+    return !title || !epicId || !priority || dueAt === undefined || prefix === false ? c.json({ error: 'Invalid issue' }, 400) : execute(c, () => createIssue(c.get('user').id, epicId, title, priority, dueAt, prefix), 201);
   });
   app.get('/api/issues', async (c) => c.json(await listIssues(c.get('user').id)));
   app.get('/api/issues/:id', (c) => byId(c, (id) => getIssue(c.get('user').id, id)));

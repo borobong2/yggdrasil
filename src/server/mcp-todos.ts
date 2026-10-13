@@ -3,11 +3,12 @@ import { z } from 'zod';
 import type { Todo } from '../contracts/items.js';
 import { formatDay } from '../contracts/dates.js';
 import { recurrenceLabel } from '../contracts/recurrence.js';
+import { staleReasons } from '../contracts/stale.js';
 import { result } from './mcp.js';
 import { todoResourceExtras } from './mcp-documents.js';
 import { linkEdits } from './links.js';
 import {
-  completedAtInput, completeTodo, createTodo, createTodos, getTodo, listAreas, listAreaTodos, listTodos, setArchived, todayView, todoFields, todoIdOf,
+  completedAtInput, completeTodo, createTodo, createTodos, getTodo, keyPrefix as prefix, listAreas, listAreaTodos, listTodos, setArchived, staleView, todayView, todoFields, todoIdOf,
   todoName as name, updateTodo
 } from './todos.js';
 
@@ -15,18 +16,17 @@ import {
 // every write logs via=mcp. No hard delete by design: archive_todo hides, unarchive_todo brings back.
 const todoWrite = { readOnlyHint: false, destructiveHint: false, openWorldHint: false };
 const readOnly = { readOnlyHint: true, destructiveHint: false, openWorldHint: false };
-const prefix = z.string().trim().regex(/^[A-Za-z][A-Za-z0-9]{0,9}$/).describe("Ticket key prefix, e.g. 'YG' → next key YG-<n>. On update, only assigns a key when the todo has none.");
 const ref = {
   id: z.uuid().describe('Todo id. Pass exactly one of id or key.'),
   key: z.string().trim().regex(/^[A-Za-z][A-Za-z0-9]{0,9}-[1-9]\d*$/).describe("Ticket key like 'YG-24' (case-insensitive). Pass exactly one of id or key.")
 };
 const oneRef = (input: { id?: string; key?: string }) => (input.id === undefined) !== (input.key === undefined);
 const refOnly = z.object(ref).partial().strict().refine(oneRef, 'Pass exactly one of id or key');
-const createItem = z.object({ area: name, ...todoFields, prefix }).partial().required({ area: true, title: true }).strict();
+const createItem = z.object({ area: name, ...todoFields, prefix: prefix.nullable().describe("Ticket key prefix, e.g. 'YG' → next key YG-<n>. Omit to use the epic's default prefix (if it has one); null for no key.") }).partial().required({ area: true, title: true }).strict();
 
 export function registerTodoTools(server: McpServer, ownerId: string): void {
   server.registerTool('create_todo', {
-    description: 'Create a todo in an area (커리어, 개인, 루틴, 잡일, 수익화, 부동산, 결혼, …). Missing area/epic are created. Defaults: status todo, priority p3. dueAt/scheduledAt as a date is all-day, as a timestamp is timed. Optional recurrence makes it a repeating series (dueAt defaults to the first slot). For several todos use create_todos.',
+    description: 'Create a todo in an area (커리어, 개인, 루틴, 잡일, 수익화, 부동산, 결혼, …). Missing area/epic are created. Defaults: status todo, priority p3. dueAt/scheduledAt as a date is all-day, as a timestamp is timed. Optional recurrence makes it a repeating series (dueAt defaults to the first slot). An epic with a default ticket prefix (e.g. 프로젝트/yggdrasil → YG) gives the todo its next key unless prefix is null. For several todos use create_todos.',
     inputSchema: createItem, annotations: todoWrite
   }, (input) => result(() => createTodo(ownerId, input, 'mcp')));
   server.registerTool('create_todos', {
@@ -84,10 +84,15 @@ function registerTodoResources(server: McpServer, ownerId: string) {
   const views = [['today', '오늘 할 일'], ['overdue', '마감 지남'], ['waiting', '대기·막힘']] as const;
   for (const [key, title] of views) {
     server.registerResource(`todo-${key}`, `todo://${key}`, { title, mimeType: 'text/markdown' }, async (uri) => {
-      const view = await todayView(ownerId);
-      return markdown(uri, list(`${title} (${view.date})`, view[key]));
+      const [view, stale] = await Promise.all([todayView(ownerId), key === 'today' ? staleView(ownerId) : undefined]);
+      return markdown(uri, list(`${title} (${view.date})${stale ? ` · 방치 ${stale.todos.length}건` : ''}`, view[key]));
     });
   }
+  // YG-41: suggestions only — the reader decides what to do with them.
+  server.registerResource('todo-stale', 'todo://stale', { title: '방치된 할 일', mimeType: 'text/markdown' }, async (uri) => {
+    const view = await staleView(ownerId);
+    return markdown(uri, `# 방치된 할 일 (${view.date})\n\n${view.todos.length ? view.todos.map((todo) => `${line(todo)} — ${staleReasons(todo.stale).join(' · ')}`).join('\n') : '_없음_'}\n`);
+  });
   const area = new ResourceTemplate('todo://area/{name}', {
     list: async () => ({ resources: (await listAreas(ownerId)).map((name) => ({ uri: `todo://area/${encodeURIComponent(name)}`, name: `todo-area-${name}`, title: `영역: ${name}`, mimeType: 'text/markdown' })) })
   });

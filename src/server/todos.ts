@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, ilike, inArray, isNotNull, isNull, ne, or, sql, type SQL } from 'drizzle-orm';
 import { z } from 'zod';
-import type { CalendarGhost, CalendarView, Hold, IssueLink, IssueStatus, Priority, TodayView, Todo, TodoVia } from '../contracts/items.js';
+import type { CalendarGhost, CalendarView, Hold, IssueLink, IssueStatus, Priority, StaleView, TodayView, Todo, TodoVia } from '../contracts/items.js';
+import { STALE_OVERDUE_DAYS, STALE_UNTOUCHED_DAYS } from '../contracts/stale.js';
 import { seoulDay } from '../contracts/dates.js';
 import { appendActivity, type Transaction } from './activity.js';
 import { getDb } from './db.js';
@@ -35,15 +36,19 @@ export const todoFields = {
   recurrence: recurrenceInput.nullable(),
   links: issueLinks
 };
-export const todoChanges = z.object({ area: todoName, ...todoFields, completedAt: completedAtInput }).partial().strict().refine((input) => Object.keys(input).length > 0, 'No changes');
+export const keyPrefix = z.string().trim().regex(/^[A-Za-z][A-Za-z0-9]{0,9}$/).describe("Ticket key prefix, e.g. 'YG' → next key YG-<n>. On update, only assigns a key when the todo has none.");
+export const todoChanges = z.object({ area: todoName, ...todoFields, completedAt: completedAtInput, prefix: keyPrefix }).partial().strict().refine((input) => Object.keys(input).length > 0, 'No changes');
 
 /** Date-only strings ('YYYY-MM-DD') are all-day: stored at 00:00 Asia/Seoul with the *AllDay flag. Anything else is a timed instant. */
 export type DateInput = Date | string | null;
 export type TodoInput = {
   area: string; epic?: string; title: string; status?: IssueStatus; priority?: Priority; dueAt?: DateInput;
   hold?: Hold | null; holdReason?: string | null; scheduledAt?: DateInput; notes?: string; estimateMinutes?: number | null; source?: string | null;
-  /** Ticket key prefix (e.g. 'YG'): assigns the next key on create, or on update when the todo has none. */
-  prefix?: string;
+  /**
+   * Ticket key prefix (e.g. 'YG'): assigns the next key on create, or on update when the todo has none.
+   * YG-36: on create, omitted means the epic's default prefix (if any); null opts out of a key.
+   */
+  prefix?: string | null;
   /** YG-28 repeat rule; null ends the series. */
   recurrence?: RecurrenceInput | null;
   /** YG-42: `links` replaces the list; addLinks/removeLinks (update only) edit it in place. */
@@ -86,7 +91,8 @@ export async function createTodos(ownerId: string, inputs: TodoInput[], via: Tod
     const positions = await nextPositions(tx, ownerId, rows.map((row) => row.status));
     rows.forEach((row, i) => Object.assign(row, { position: positions[i] }));
     // Keys last: the counter row lock is held until commit, so keep what follows it short.
-    for (const [prefix, indexes] of grouped(inputs.map((input, i) => [input.prefix?.trim().toUpperCase(), i] as const))) {
+    const prefixes = inputs.map((input, i) => [input.prefix === null ? undefined : (input.prefix ?? places[i]!.keyPrefix ?? undefined)?.trim().toUpperCase(), i] as const);
+    for (const [prefix, indexes] of grouped(prefixes)) {
       const keys = await allocateKeys(tx, ownerId, prefix, indexes.length);
       indexes.forEach((index, n) => Object.assign(rows[index]!, { key: keys[n] }));
     }
@@ -128,6 +134,15 @@ export async function updateTodo(ownerId: string, id: string, changes: TodoChang
     const recurrence = rule === undefined ? current.recurrence ?? null : rule && { id: row!.recurrenceId!, ...ruleOf(rule) };
     return { ...issue(row!), area: place.area, epic: place.epic, recurrence };
   });
+}
+
+/** YG-36 「티켓으로 승격」: gives a keyless todo the next key from `prefix`, else its epic's default. Keys are permanent: a keyed todo is returned as is. */
+export async function promoteTodo(ownerId: string, id: string, prefix?: string, via: TodoVia = 'ui'): Promise<Todo> {
+  const todo = await getTodo(ownerId, id);
+  if (todo.key) return todo;
+  const value = prefix ?? (await db.select({ keyPrefix: epics.keyPrefix }).from(epics).where(and(eq(epics.id, todo.epicId), eq(epics.ownerId, ownerId))))[0]?.keyPrefix;
+  if (!value) throw new TodoValidationError('No prefix: pass one, or set a default prefix on the epic');
+  return updateTodo(ownerId, id, { prefix: value }, via);
 }
 
 /** Idempotent: completing a done todo changes nothing and logs nothing — unless a different completedAt is given (YG-37), which only moves the date. */
@@ -222,6 +237,29 @@ export async function todayView(ownerId: string, now = new Date()): Promise<Toda
   return { date, today, overdue, waiting, week: later.filter((todo) => !inToday.has(todo.id)) };
 }
 
+/**
+ * YG-41 방치 감지 (suggest only). Stale = todo/doing, not archived, not in an active (unpaused) series, and
+ * (a) due ≥ STALE_OVERDUE_DAYS ago — all-day by Asia/Seoul day, timed by instant — or (b) unchanged for ≥ STALE_UNTOUCHED_DAYS.
+ * A held todo only counts by (b): there is no hold timestamp, so updated_at stands in for "held since".
+ */
+export async function staleView(ownerId: string, now = new Date()): Promise<StaleView> {
+  const date = seoulDate(now);
+  const dueCutoff = new Date(now.getTime() - STALE_OVERDUE_DAYS * 86_400_000);
+  const touchCutoff = new Date(now.getTime() - STALE_UNTOUCHED_DAYS * 86_400_000);
+  const overdue = and(isNull(issues.hold), sql`CASE WHEN ${issues.dueAllDay} THEN (${issues.dueAt} AT TIME ZONE 'Asia/Seoul')::date <= ${seoulDate(dueCutoff)}::date ELSE ${issues.dueAt} <= ${dueCutoff} END`);
+  const rows = await todoRows(and(eq(issues.ownerId, ownerId), inArray(issues.status, ['todo', 'doing']), active,
+    or(isNull(issues.recurrenceId), eq(recurrences.paused, true)), or(overdue, sql`${issues.updatedAt} <= ${touchCutoff}`))!);
+  const days = (from: number, to: number) => Math.floor((to - from) / 86_400_000);
+  return {
+    date,
+    todos: rows.map((todo) => {
+      const late = todo.dueAt && !todo.hold ? todo.dueAllDay ? days(Date.parse(seoulDate(new Date(todo.dueAt))), Date.parse(date)) : days(Date.parse(todo.dueAt), now.getTime()) : 0;
+      const idle = days(Date.parse(todo.updatedAt), now.getTime());
+      return { ...todo, stale: { overdueDays: late >= STALE_OVERDUE_DAYS ? late : null, untouchedDays: idle >= STALE_UNTOUCHED_DAYS ? idle : null } };
+    })
+  };
+}
+
 export async function todoRows(where: SQL, executor: Transaction | typeof db = db, lock = false, order: SQL[] = []): Promise<Todo[]> {
   const query = executor.select({ issue: issues, area: goals.title, epic: epics.title, recurrence: recurrences }).from(issues)
     .innerJoin(epics, eq(issues.epicId, epics.id)).innerJoin(goals, eq(epics.goalId, goals.id)).leftJoin(recurrences, eq(issues.recurrenceId, recurrences.id)).where(where)
@@ -229,7 +267,7 @@ export async function todoRows(where: SQL, executor: Transaction | typeof db = d
   return (await (lock ? query.for('update', { of: issues }) : query)).map((row) => ({ ...issue(row.issue), area: row.area, epic: row.epic, recurrence: toRecurrence(row.recurrence) }));
 }
 
-type Place = { epicId: string; area: string; epic: string };
+type Place = { epicId: string; area: string; epic: string; keyPrefix: string | null };
 /**
  * Finds (or creates) the area Goal and Epic for each [area, epic] pair, in input order. One lookup query when they all exist;
  * only a miss takes the per-owner lock (so concurrent creates cannot duplicate a Goal/Epic) and re-reads before inserting.
@@ -240,14 +278,14 @@ async function resolveEpics(tx: Transaction, ownerId: string, pairs: [string, st
   const areas = [...new Set(wanted.map(([area]) => area))];
   const titles = [...new Set(wanted.map(([, epic]) => epic))];
   const lookup = async () => {
-    const rows = await tx.select({ goalId: goals.id, area: goals.title, epicId: epics.id, epic: epics.title }).from(goals)
+    const rows = await tx.select({ goalId: goals.id, area: goals.title, epicId: epics.id, epic: epics.title, keyPrefix: epics.keyPrefix }).from(goals)
       .leftJoin(epics, and(eq(epics.goalId, goals.id), eq(epics.ownerId, ownerId), inArray(epics.title, titles)))
       .where(and(eq(goals.ownerId, ownerId), inArray(goals.title, areas))).orderBy(asc(goals.createdAt), asc(goals.id), asc(epics.createdAt), asc(epics.id));
     const goalOf = new Map<string, string>();
-    const epicOf = new Map<string, string>();
+    const epicOf = new Map<string, { id: string; keyPrefix: string | null }>();
     for (const row of rows) {
       if (!goalOf.has(row.area)) goalOf.set(row.area, row.goalId);
-      if (row.epicId && goalOf.get(row.area) === row.goalId && !epicOf.has(`${row.area}\n${row.epic}`)) epicOf.set(`${row.area}\n${row.epic}`, row.epicId);
+      if (row.epicId && goalOf.get(row.area) === row.goalId && !epicOf.has(`${row.area}\n${row.epic}`)) epicOf.set(`${row.area}\n${row.epic}`, { id: row.epicId, keyPrefix: row.keyPrefix });
     }
     return { goalOf, epicOf };
   };
@@ -261,9 +299,9 @@ async function resolveEpics(tx: Transaction, ownerId: string, pairs: [string, st
     const missing = [...new Set(wanted.filter(([area, epic]) => !epicOf.has(`${area}\n${epic}`)).map(([area, epic]) => `${area}\n${epic}`))];
     const newEpics = missing.map((key) => { const [area, title] = key.split('\n') as [string, string]; return { id: crypto.randomUUID(), ownerId, goalId: goalOf.get(area)!, title }; });
     if (newEpics.length) await tx.insert(epics).values(newEpics);
-    missing.forEach((key, i) => epicOf.set(key, newEpics[i]!.id));
+    missing.forEach((key, i) => epicOf.set(key, { id: newEpics[i]!.id, keyPrefix: null }));
   }
-  return wanted.map(([area, epic]) => ({ epicId: epicOf.get(`${area}\n${epic}`)!, area, epic }));
+  return wanted.map(([area, epic]) => { const found = epicOf.get(`${area}\n${epic}`)!; return { epicId: found.id, keyPrefix: found.keyPrefix, area, epic }; });
 }
 
 /**

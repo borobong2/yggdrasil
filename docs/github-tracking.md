@@ -5,7 +5,9 @@ Yggdrasil 이슈에 `YG-24` 같은 키를 붙이고, 연결된 저장소의 GitH
 ## 에이전트 규칙
 
 1. 티켓은 Yggdrasil에 만든다: MCP `create_todo`에 `prefix: "YG"`를 넘기면 다음 키(예: `YG-25`)가 붙는다. GitHub 이슈는 만들지 않는다.
-   키가 없는 기존 할 일은 `update_todo`에 `prefix`를 넘기면 키가 붙는다(이미 있으면 그대로).
+   에픽에 기본 접두사가 있으면(YG-36, 예: `프로젝트 › yggdrasil` → `YG`) `prefix`를 생략해도 키가 붙는다. 키 없이 만들려면 `prefix: null`.
+   키가 없는 기존 할 일은 `update_todo`에 `prefix`를 넘기거나 상세의 「티켓으로 승격」으로 키를 붙인다(이미 있으면 그대로). 키는 지우지 않는다.
+   에픽 기본 접두사와 시작 번호는 설정 › 티켓 접두사에서 바꾼다(번호는 앞으로만 간다).
 2. 브랜치: `feat/yg-<n>-<slug>` (예: `feat/yg-24-github-tracking`)
 3. PR 제목: `YG-<n>: <요약>`. 본문에 `Closes #…`는 쓰지 않는다.
 
