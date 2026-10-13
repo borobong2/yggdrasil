@@ -11,37 +11,29 @@ mkdirSync(shots, { recursive: true });
 const pass = (label) => console.log(`PASS ${label}`);
 const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH || undefined });
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
-const stale = page.locator('section[data-section="stale"]');
-const staleTitles = async () => (await stale.locator('li[data-todo-id] strong').allTextContents()).map((text) => text.replace(/^YG-\d+/, ''));
+// YG-34: 방치 (YG-41) is merged into the 밀린 일 rail together with 마감 지남 — once each, aged, backlog left out.
+const late = page.locator('section[data-section="late"]');
+const lateRows = async () => Object.fromEntries((await late.locator('li[data-todo-id] button').evaluateAll((buttons) => buttons.map((button) => [button.children[0].textContent, button.children[1].textContent]))));
 
 await page.goto(base);
-await page.locator('section[data-section="today"]').waitFor();
-const toggle = stale.getByRole('button', { name: /방치된 할 일/ });
-assert.equal(await toggle.getAttribute('aria-expanded'), 'false');
-assert.match(await toggle.textContent(), /방치된 할 일 3건/);
-assert.equal(await stale.locator('li').count(), 0);
-await page.screenshot({ path: `${shots}/1-today-stale-collapsed.png`, fullPage: true });
-pass('오늘 shows a collapsed 방치된 할 일 3건 section');
+await late.waitFor();
+assert.deepEqual(await lateRows(), { '어제 마감': '1일', '보험 서류 정리': '15일', '운동화 수선': '23일', '포트폴리오 개편': '40일 그대로' });
+assert.match(await late.locator('[data-bucket="older"]').textContent(), /한 달 넘음1/);
+assert.equal(await page.getByText('방치된 할 일').count(), 0);
+await page.screenshot({ path: `${shots}/1-today-late-merged.png`, fullPage: true });
+pass('stale todos sit in 밀린 일 with their age (마감 N일 / N일 그대로); backlog is left out; no separate 방치 section');
 
-await toggle.click();
-assert.deepEqual((await staleTitles()).sort(), ['보험 서류 정리', '운동화 수선', '포트폴리오 개편']);
-const chips = async (title) => (await stale.locator('li', { hasText: title }).locator('.bg-warn-soft').allTextContents());
-assert.deepEqual(await chips('운동화 수선'), ['마감 23일 지남', '47일 동안 그대로']);
-assert.deepEqual(await chips('보험 서류 정리'), ['마감 15일 지남']);
-assert.deepEqual(await chips('포트폴리오 개편'), ['40일 동안 그대로']);
-await page.waitForTimeout(250); // chevron transition
-await page.screenshot({ path: `${shots}/2-today-stale-expanded.png`, fullPage: true });
-pass('expanded section lists stale todos with reason chips; backlog is left out');
-
-for (const title of ['운동화 수선', '포트폴리오 개편']) await stale.getByRole('checkbox', { name: `${title} 선택` }).click();
-await page.getByRole('toolbar', { name: '일괄 작업' }).waitFor();
-await page.screenshot({ path: `${shots}/3-stale-bulk-selected.png`, fullPage: true });
+await late.getByRole('button', { name: '하나씩 정리' }).click();
+const triage = page.getByRole('dialog', { name: '밀린 일 정리' });
+assert.match(await triage.textContent(), /밀린 일 1 \/ 4 · 40일 동안 그대로 · 커리어.*포트폴리오 개편/);
 const bulked = page.waitForResponse((response) => response.url().endsWith('/api/todos/bulk'));
-await page.getByRole('toolbar', { name: '일괄 작업' }).getByRole('button', { name: '백로그로' }).click();
+await page.keyboard.press('b');
 await bulked;
-await page.waitForFunction(() => /방치된 할 일 1건/.test(document.querySelector('section[data-section="stale"]')?.textContent ?? ''));
-assert.deepEqual(await staleTitles(), ['보험 서류 정리']);
-pass('YG-26 bulk 백로그로 works from the stale section');
+await page.keyboard.press('Escape');
+await triage.waitFor({ state: 'detached' });
+await page.waitForFunction(() => /밀린 일3/.test(document.querySelector('section[data-section="late"] h2')?.textContent ?? ''));
+assert.ok(!('포트폴리오 개편' in await lateRows()));
+pass('정리 모드 starts with the oldest (stale) one; B moves it to 백로그');
 
 await page.locator('section[data-section="today"]').getByRole('button', { name: /보고서 제출/ }).click();
 const dialog = page.getByRole('dialog', { name: '보고서 제출' });
@@ -87,8 +79,8 @@ pass('planning create form defaults 티켓 키 from the epic');
 
 const phone = await browser.newPage({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
 await phone.goto(base);
-await phone.locator('section[data-section="stale"] button[aria-expanded]').click();
-await phone.waitForTimeout(250);
-await phone.screenshot({ path: `${shots}/7-mobile-stale.png`, fullPage: true });
+await phone.getByRole('tab', { name: /밀린 일/ }).click();
+await phone.locator('section[data-section="late"]').waitFor();
+await phone.screenshot({ path: `${shots}/7-mobile-late.png`, fullPage: true });
 pass('mobile layout');
 await browser.close();

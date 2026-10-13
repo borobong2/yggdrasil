@@ -27,7 +27,15 @@ export type TodoVia = 'ui' | 'mcp' | 'import';
 /** YG-30: a future occurrence of an active series, computed for display only (no row). `todoId` is the series' open occurrence. */
 export type CalendarGhost = { recurrenceId: string; todoId: string; title: string; priority: Priority; at: string; allDay: boolean };
 export type CalendarView = { from: string; to: string; todos: Todo[]; undated: Todo[]; ghosts: CalendarGhost[] };
-export type TodayView = { date: string; today: Todo[]; overdue: Todo[]; waiting: Todo[]; week: Todo[] };
+/**
+ * YG-34 밀린 일: one list replacing 마감 지남 + 방치 (no duplicates). Unheld todo/doing todos due before today (Asia/Seoul day), or stale (YG-41).
+ * `lateDays` = Seoul days past due (null when not past due); `untouchedDays` = days since the last change; `age` = lateDays ?? untouchedDays.
+ * bucket: recent ≤ 3 days, month ≤ 30, older > 30. Sorted oldest first.
+ */
+export type LateBucket = 'recent' | 'month' | 'older';
+export type LateTodo = Todo & { lateDays: number | null; untouchedDays: number; age: number; bucket: LateBucket };
+/** `overdue` keeps the YG-38 meaning (MCP todo://overdue). `late` and `timeline` (timed todos + ghost occurrences today) are YG-34. */
+export type TodayView = { date: string; today: Todo[]; overdue: Todo[]; waiting: Todo[]; week: Todo[]; late: LateTodo[]; timeline: { todos: Todo[]; ghosts: CalendarGhost[] } };
 /** YG-41: why a todo is stale — days past due (≥ STALE_OVERDUE_DAYS) and/or days since the last change (≥ STALE_UNTOUCHED_DAYS); null when that rule does not apply. */
 export type StaleTodo = Todo & { stale: { overdueDays: number | null; untouchedDays: number | null } };
 export type StaleView = { date: string; todos: StaleTodo[] };
