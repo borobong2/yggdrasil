@@ -1,0 +1,343 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>YG-34 오늘 화면 레이아웃 시안</title>
+<style>
+:root{
+  --bg:#f5f5f4; --surface:#ffffff; --sunken:#efefed; --line:#e3e3e0; --line-strong:#d0d0cc;
+  --ink:#1c1c1a; --muted:#6b6b66; --faint:#9a9a94;
+  --accent:#2f6b4f; --accent-soft:#e3efe8; --danger:#b4232c; --danger-soft:#fbe9ea;
+  --warn:#9a5b00; --warn-soft:#fdf1dc; --info:#1f5fa8; --info-soft:#e6eef9;
+  --p1:#b4232c; --p2:#b26a00; --p3:#1f5fa8; --p4:#6b6b66;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#141413; --surface:#1d1d1b; --sunken:#252523; --line:#2f2f2c; --line-strong:#3c3c38;
+  --ink:#ecece8; --muted:#a3a39c; --faint:#77776f; --accent:#6fbf96; --accent-soft:#1f3329;
+  --danger:#ef6b72; --danger-soft:#3a1d20; --warn:#e6a64a; --warn-soft:#3a2c14; --info:#7fb0ef; --info-soft:#1c2a3d;
+}}
+:root[data-theme="dark"]{
+  --bg:#141413; --surface:#1d1d1b; --sunken:#252523; --line:#2f2f2c; --line-strong:#3c3c38;
+  --ink:#ecece8; --muted:#a3a39c; --faint:#77776f; --accent:#6fbf96; --accent-soft:#1f3329;
+  --danger:#ef6b72; --danger-soft:#3a1d20; --warn:#e6a64a; --warn-soft:#3a2c14; --info:#7fb0ef; --info-soft:#1c2a3d;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 -apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo",Pretendard,system-ui,sans-serif}
+header.doc{max-width:1360px;margin:0 auto;padding:28px 16px 8px}
+header.doc h1{margin:0 0 6px;font-size:22px}
+header.doc p{margin:4px 0;color:var(--muted);max-width:900px}
+.problems{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}
+.problems span{background:var(--danger-soft);color:var(--danger);border-radius:999px;padding:3px 10px;font-size:12.5px}
+nav.tabs{max-width:1360px;margin:8px auto 0;padding:0 16px;display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+nav.tabs button{border:1px solid var(--line-strong);background:var(--surface);color:var(--ink);border-radius:8px;padding:7px 12px;cursor:pointer;font:inherit}
+nav.tabs button[aria-selected="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+nav.tabs .rec{color:var(--accent);font-weight:700;font-size:12px;margin-left:4px}
+nav.tabs .theme{margin-left:auto}
+section.option{display:none;max-width:1360px;margin:0 auto;padding:12px 16px 40px}
+section.option.on{display:block}
+.why{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin:10px 0 14px;display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px 20px}
+.why>div>b:first-child{display:block;margin-bottom:2px}
+.why .plus{color:var(--accent)} .why .minus{color:var(--danger)}
+
+/* app frame */
+.app{display:grid;grid-template-columns:200px 1fr;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--bg);min-height:640px}
+.side{background:var(--sunken);border-right:1px solid var(--line);padding:14px 10px}
+.side .logo{font-weight:700;margin:0 6px 14px;display:flex;gap:8px;align-items:center}
+.side .logo i{width:22px;height:22px;border-radius:6px;background:var(--accent);display:inline-block}
+.side a{display:block;padding:6px 10px;border-radius:7px;color:var(--muted);text-decoration:none;font-size:13.5px}
+.side a.cur{background:var(--surface);color:var(--ink);font-weight:600}
+.main{padding:16px 18px;min-width:0}
+.topbar{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.topbar h2{margin:0;font-size:18px}
+.topbar .date{color:var(--muted)}
+.topbar .sp{flex:1}
+.chipbtn{border:1px solid var(--line-strong);background:var(--surface);border-radius:7px;padding:5px 10px;font-size:12.5px;color:var(--ink);cursor:pointer}
+.chipbtn.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+
+/* shared bits */
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;min-width:0}
+.panel>h3{margin:0;padding:10px 12px;font-size:13px;display:flex;align-items:center;gap:6px;border-bottom:1px solid var(--line)}
+.panel>h3 .n{color:var(--faint);font-weight:500}
+.panel>h3 .sp{flex:1}
+.row{display:grid;grid-template-columns:18px 1fr auto;gap:8px;align-items:center;padding:7px 12px;border-bottom:1px solid var(--line)}
+.row:last-child{border-bottom:0}
+.row:hover{background:var(--sunken)}
+.ck{width:15px;height:15px;border:1.5px solid var(--line-strong);border-radius:50%}
+.t{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.meta{display:flex;gap:5px;align-items:center;white-space:nowrap}
+.b{font-size:11px;border-radius:5px;padding:1px 6px;background:var(--sunken);color:var(--muted)}
+.b.p1{background:var(--danger-soft);color:var(--p1)} .b.p2{background:var(--warn-soft);color:var(--p2)} .b.p3{background:var(--info-soft);color:var(--p3)}
+.b.late{background:var(--danger-soft);color:var(--danger)} .b.wait{background:var(--warn-soft);color:var(--warn)} .b.time{background:var(--accent-soft);color:var(--accent)} .b.key{font-family:ui-monospace,Menlo,monospace}
+.area{color:var(--faint);font-size:12px}
+.acts{display:none;gap:4px}
+.row:hover .acts{display:flex}
+.acts button{font-size:11.5px;border:1px solid var(--line-strong);background:var(--surface);border-radius:5px;padding:1px 6px;cursor:pointer;color:var(--ink)}
+.note{color:var(--muted);font-size:12px;padding:8px 12px}
+.ann{position:relative}
+.ann::after{content:attr(data-ann);position:absolute;top:-9px;right:10px;background:var(--accent);color:#fff;font-size:10.5px;border-radius:999px;padding:1px 8px;white-space:nowrap}
+
+/* Option A: 3-column */
+.a-grid{display:grid;grid-template-columns:minmax(240px,1fr) minmax(360px,1.6fr) minmax(260px,1fr);gap:12px;align-items:start}
+.slot{display:grid;grid-template-columns:44px 1fr;border-bottom:1px dashed var(--line);min-height:34px}
+.slot .h{color:var(--faint);font-size:11.5px;padding:6px 8px;text-align:right}
+.slot .ev{margin:3px 8px 3px 0;border-radius:6px;padding:4px 8px;font-size:12.5px;background:var(--accent-soft);color:var(--accent)}
+.slot .ev.p{background:var(--warn-soft);color:var(--warn)}
+.now{border-bottom:2px solid var(--danger)!important}
+.bucket{padding:8px 12px;border-bottom:1px solid var(--line)}
+.bucket:last-child{border-bottom:0}
+.bucket .bh{display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:4px}
+.bucket .bh b{font-weight:600}
+.bar{height:6px;border-radius:99px;background:var(--sunken);overflow:hidden;margin:4px 0 6px}
+.bar i{display:block;height:100%;background:var(--danger)}
+.mini{display:flex;justify-content:space-between;gap:6px;font-size:12.5px;padding:3px 0;color:var(--ink)}
+.mini .late{color:var(--danger);font-size:11.5px;white-space:nowrap}
+.triage{display:flex;gap:6px;padding:10px 12px;border-top:1px solid var(--line)}
+
+/* Option B: week strip + list + drawer */
+.week{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-bottom:12px}
+.day{background:var(--surface);border:1px solid var(--line);border-radius:9px;padding:8px 10px}
+.day.cur{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
+.day .dn{font-size:12px;color:var(--muted)} .day .dd{font-weight:700}
+.load{display:flex;gap:2px;margin-top:6px}
+.load i{height:5px;flex:1;border-radius:2px;background:var(--line)}
+.load i.f{background:var(--accent)} .load i.o{background:var(--warn)}
+.banner{display:flex;align-items:center;gap:10px;background:var(--danger-soft);color:var(--danger);border:1px solid color-mix(in srgb,var(--danger) 30%,transparent);border-radius:10px;padding:9px 12px;margin-bottom:12px}
+.banner .sp{flex:1}
+.b-grid{display:grid;grid-template-columns:1fr 320px;gap:12px;align-items:start}
+.group h4{margin:12px 0 6px;font-size:12px;color:var(--muted);font-weight:600;text-transform:none}
+.drawer{background:var(--surface);border:1px solid var(--line);border-radius:10px}
+.drawer .card{padding:14px}
+.drawer .q{font-size:12px;color:var(--muted)}
+.drawer .big{font-size:16px;font-weight:600;margin:6px 0}
+.drawer .opts{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:10px}
+.drawer .opts button{padding:8px;border-radius:7px;border:1px solid var(--line-strong);background:var(--surface);color:var(--ink);cursor:pointer;font:inherit;font-size:12.5px;text-align:left}
+.drawer .opts button kbd{float:right;color:var(--faint);font-size:11px}
+.progress{font-size:12px;color:var(--muted);padding:8px 14px;border-top:1px solid var(--line)}
+
+/* Option C: dashboard */
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px}
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.kpi .v{font-size:24px;font-weight:700}
+.kpi .l{color:var(--muted);font-size:12px}
+.kpi.red .v{color:var(--danger)} .kpi.amb .v{color:var(--warn)}
+.c-grid{display:grid;grid-template-columns:1.3fr 1fr;grid-template-rows:auto auto;gap:12px}
+table.age{width:100%;border-collapse:collapse;font-size:12.5px}
+table.age th,table.age td{padding:6px 10px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+table.age th{color:var(--faint);font-weight:500;font-size:11.5px}
+table.age td.t{max-width:200px}
+.heat{display:inline-block;width:46px;height:8px;border-radius:99px;background:linear-gradient(90deg,var(--warn) var(--w),var(--sunken) var(--w))}
+
+/* comparison */
+table.cmp{width:100%;border-collapse:collapse;background:var(--surface);border:1px solid var(--line);border-radius:10px;overflow:hidden;font-size:13px;margin-top:14px}
+table.cmp th,table.cmp td{border-bottom:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}
+table.cmp th{background:var(--sunken);font-weight:600}
+
+@media (max-width:1100px){.a-grid{grid-template-columns:1fr 1fr}.a-grid .col-time{grid-column:1/-1}.b-grid,.c-grid{grid-template-columns:1fr}}
+@media (max-width:720px){.app{grid-template-columns:1fr}.side{display:none}.a-grid,.kpis{grid-template-columns:1fr 1fr}.week{grid-template-columns:repeat(7,minmax(0,1fr));gap:3px}.day{padding:6px 4px}.day .dn{font-size:10px}.why{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header class="doc">
+  <h1>YG-34 오늘 화면 — 레이아웃 시안 3개</h1>
+  <p>지금 오늘 화면은 넓은 데스크톱에서 가운데 좁은 카드 한 줄이라 <b>모바일처럼</b> 보이고, 마감 지난 일을 "마감 지남"과 "방치된 할 일"에 <b>두 번</b> 보여 줍니다. 아래 세 가지는 데스크톱 폭을 쓰고, 밀린 일을 오늘 할 일과 <b>분리해서 다루는</b> 서로 다른 구조입니다.</p>
+  <div class="problems"><span>모바일 같은 좁은 한 줄</span><span>카드가 커서 한눈에 적게 보임</span><span>마감 지남 · 방치 중복</span><span>밀린 일이 오늘 할 일을 밀어냄</span><span>시간 있는 일정이 안 보임</span></div>
+</header>
+<nav class="tabs" role="tablist">
+  <button role="tab" aria-selected="true" data-o="a">A · 3단 작업대 <span class="rec">추천</span></button>
+  <button role="tab" aria-selected="false" data-o="b">B · 주간 띠 + 정리 모드</button>
+  <button role="tab" aria-selected="false" data-o="c">C · 대시보드</button>
+  <button role="tab" aria-selected="false" data-o="cmp">비교표</button>
+  <button class="theme" id="theme" type="button">테마</button>
+</nav>
+
+<!-- ============ A ============ -->
+<section class="option on" id="o-a">
+  <div class="why">
+    <div><b>구조</b>왼쪽 <b>오늘 타임라인</b>(시간 있는 일정), 가운데 <b>오늘 할 일 목록</b>(촘촘한 한 줄 행), 오른쪽 <b>밀린 일 레일</b>(얼마나 밀렸나로 묶음).</div>
+    <div><b class="plus">좋은 점</b>"지금 할 것"이 가운데를 독차지. 밀린 일은 옆에서 숫자·나이로만 보이고 오늘 목록을 밀어내지 않음. 시간 있는 스터디 21:00이 바로 보임.</div>
+    <div><b class="minus">아쉬운 점</b>세 칸이라 1100px 이하에선 2단으로 접힘. 화면 구성 요소가 가장 많음.</div>
+  </div>
+  <div class="app">
+    <aside class="side"><div class="logo"><i></i>Yggdrasil</div><a class="cur">오늘</a><a>캘린더</a><a>인박스</a><a>문서</a><a>기획</a><a>보드</a><a>활동</a><a>설정</a></aside>
+    <div class="main">
+      <div class="topbar"><h2>오늘</h2><span class="date">10월 13일 화요일</span><span class="sp"></span><button class="chipbtn">선택</button><button class="chipbtn">⌘K</button></div>
+      <div class="a-grid">
+        <div class="panel col-time ann" data-ann="시간 있는 일정만">
+          <h3>타임라인 <span class="n">2</span></h3>
+          <div class="slot"><div class="h">09</div><div></div></div>
+          <div class="slot"><div class="h">10</div><div></div></div>
+          <div class="slot now"><div class="h">14</div><div></div></div>
+          <div class="slot"><div class="h">18</div><div class="ev p">LLM 퀴즈 준비 (예정)</div></div>
+          <div class="slot"><div class="h">20</div><div></div></div>
+          <div class="slot"><div class="h">21</div><div class="ev">제2의 월급 스터디 · 반복</div></div>
+          <div class="slot"><div class="h">22</div><div></div></div>
+          <div class="note">종일 할 일은 가운데 목록에. 빨간 선 = 지금.</div>
+        </div>
+        <div class="panel ann" data-ann="한 줄 행 · 그룹은 우선순위">
+          <h3>오늘 할 일 <span class="n">7</span><span class="sp"></span><span class="area">P1 2 · P2 3 · P3 2</span></h3>
+          <div class="row"><span class="ck"></span><span class="t">논문 추가 실험 결과 전달</span><span class="meta"><span class="b p1">P1</span><span class="b">오늘</span><span class="area">개인</span><span class="acts"><button>내일</button><button>완료</button></span></span></div>
+          <div class="row"><span class="ck"></span><span class="t">회사 백엔드 2주 스프린트 — lab02 트랜잭션</span><span class="meta"><span class="b p1">P1</span><span class="area">커리어</span></span></div>
+          <div class="row"><span class="ck"></span><span class="t">제2의 월급 스터디</span><span class="meta"><span class="b p2">P2</span><span class="b time">21:00</span><span class="b">반복</span></span></div>
+          <div class="row"><span class="ck"></span><span class="t">LLM 6주차 퀴즈 응시</span><span class="meta"><span class="b p2">P2</span><span class="b">금 10/16</span><span class="area">개인</span></span></div>
+          <div class="row"><span class="ck"></span><span class="t"><span class="b key">YG-34</span> 오늘 탭 레이아웃 개선</span><span class="meta"><span class="b p2">P2</span><span class="area">프로젝트</span></span></div>
+          <div class="row"><span class="ck"></span><span class="t">대학원의 목표 정하기</span><span class="meta"><span class="b p3">P3</span><span class="area">개인</span></span></div>
+          <div class="row"><span class="ck"></span><span class="t">가계부 정리 + 작성</span><span class="meta"><span class="b p3">P3</span><span class="area">잡일</span></span></div>
+          <div class="note">행에 마우스를 올리면 <b>내일 · 완료</b> 바로가기. 클릭하면 오른쪽에 상세 패널(지금과 같음).</div>
+        </div>
+        <div style="display:grid;gap:12px">
+          <div class="panel ann" data-ann="밀린 일 = 나이로 묶음 · 중복 없음">
+            <h3>밀린 일 <span class="n">13</span><span class="sp"></span><button class="chipbtn">정리 모드</button></h3>
+            <div class="bucket"><div class="bh"><b>어제~3일</b><span class="area">1</span></div><div class="bar"><i style="width:8%"></i></div><div class="mini"><span class="t">보험 서류 정리</span><span class="late">1일</span></div></div>
+            <div class="bucket"><div class="bh"><b>이번 달</b><span class="area">2</span></div><div class="bar"><i style="width:16%"></i></div><div class="mini"><span class="t">대학원 목표 정하기</span><span class="late">3일</span></div><div class="mini"><span class="t">frontend-lab 첫 학습</span><span class="late">8일</span></div></div>
+            <div class="bucket"><div class="bh"><b>한 달 넘음</b><span class="area">10</span></div><div class="bar"><i style="width:77%"></i></div><div class="mini"><span class="t">이력서 업데이트</span><span class="late">140일</span></div><div class="mini"><span class="t">KIS Developers API 신청</span><span class="late">134일</span></div><div class="mini" style="color:var(--muted)">+ 8개</div></div>
+            <div class="triage"><button class="chipbtn">전부 백로그로</button><button class="chipbtn">하나씩 정리</button></div>
+          </div>
+          <div class="panel">
+            <h3>기다리는 중 <span class="n">3</span></h3>
+            <div class="row"><span class="ck"></span><span class="t">ML 중간 과제</span><span class="meta"><span class="b wait">대기</span><span class="area">10/17 공지</span></span></div>
+            <div class="row"><span class="ck"></span><span class="t">공저자 피드백 반영</span><span class="meta"><span class="b wait">대기</span></span></div>
+            <div class="row"><span class="ck"></span><span class="t">딥러닝 6주차 음성</span><span class="meta"><span class="b wait">대기</span></span></div>
+          </div>
+          <div class="panel"><h3>이번 주 예정 <span class="n">4</span></h3>
+            <div class="row"><span class="ck"></span><span class="t">딥러닝 스터디</span><span class="meta"><span class="b time">수 20:00</span></span></div>
+            <div class="row"><span class="ck"></span><span class="t">ML 수업 투표</span><span class="meta"><span class="b">토 10/17</span></span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ B ============ -->
+<section class="option" id="o-b">
+  <div class="why">
+    <div><b>구조</b>맨 위 <b>7일 띠</b>(날마다 일의 양), 가운데 <b>오늘 목록</b>(오전·오후·저녁·언제든), 밀린 일은 <b>빨간 띠 하나</b>로 접고, 누르면 오른쪽에 <b>정리 모드</b>(한 장씩 결정).</div>
+    <div><b class="plus">좋은 점</b>밀린 일이 오늘 화면을 거의 차지하지 않음. 정리는 "하나씩 → 단축키로 결정"이라 13건도 1~2분. 이번 주 부담이 한눈에.</div>
+    <div><b class="minus">아쉬운 점</b>밀린 일 목록 전체를 훑어보기는 불편(정리 모드에 들어가야 함). 시간 그리드는 없음.</div>
+  </div>
+  <div class="app">
+    <aside class="side"><div class="logo"><i></i>Yggdrasil</div><a class="cur">오늘</a><a>캘린더</a><a>인박스</a><a>문서</a><a>기획</a><a>보드</a><a>활동</a><a>설정</a></aside>
+    <div class="main">
+      <div class="topbar"><h2>오늘</h2><span class="date">10월 13일 화요일</span><span class="sp"></span><button class="chipbtn">선택</button></div>
+      <div class="week ann" data-ann="막대 = 그날 일 개수 (주황 = 밀린 일 포함)">
+        <div class="day"><div class="dn">월</div><div class="dd">12</div><div class="load"><i class="f"></i><i class="f"></i><i></i><i></i><i></i></div></div>
+        <div class="day cur"><div class="dn">화 · 오늘</div><div class="dd">13</div><div class="load"><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="o"></i></div></div>
+        <div class="day"><div class="dn">수</div><div class="dd">14</div><div class="load"><i class="f"></i><i class="f"></i><i></i><i></i><i></i></div></div>
+        <div class="day"><div class="dn">목</div><div class="dd">15</div><div class="load"><i class="f"></i><i></i><i></i><i></i><i></i></div></div>
+        <div class="day"><div class="dn">금</div><div class="dd">16</div><div class="load"><i class="f"></i><i class="f"></i><i class="f"></i><i></i><i></i></div></div>
+        <div class="day"><div class="dn">토</div><div class="dd">17</div><div class="load"><i class="f"></i><i></i><i></i><i></i><i></i></div></div>
+        <div class="day"><div class="dn">일</div><div class="dd">18</div><div class="load"><i></i><i></i><i></i><i></i><i></i></div></div>
+      </div>
+      <div class="banner"><b>밀린 일 13건</b><span>가장 오래된 것 140일 · 이번 달 3건</span><span class="sp"></span><button class="chipbtn primary">정리 시작</button></div>
+      <div class="b-grid">
+        <div class="panel">
+          <h3>오늘 할 일 <span class="n">7</span></h3>
+          <div class="group" style="padding:0 12px"><h4>지금 · 오후</h4></div>
+          <div class="row"><span class="ck"></span><span class="t">논문 추가 실험 결과 전달</span><span class="meta"><span class="b p1">P1</span><span class="area">개인</span></span></div>
+          <div class="row"><span class="ck"></span><span class="t">회사 백엔드 스프린트 — lab02 트랜잭션</span><span class="meta"><span class="b p1">P1</span><span class="area">커리어</span></span></div>
+          <div class="group" style="padding:0 12px"><h4>저녁</h4></div>
+          <div class="row"><span class="ck"></span><span class="t">제2의 월급 스터디</span><span class="meta"><span class="b time">21:00</span><span class="b">반복</span></span></div>
+          <div class="group" style="padding:0 12px"><h4>오늘 중 언제든</h4></div>
+          <div class="row"><span class="ck"></span><span class="t"><span class="b key">YG-34</span> 오늘 탭 레이아웃 개선</span><span class="meta"><span class="b p2">P2</span></span></div>
+          <div class="row"><span class="ck"></span><span class="t">LLM 6주차 퀴즈 응시</span><span class="meta"><span class="b p2">P2</span><span class="b">금</span></span></div>
+          <div class="row"><span class="ck"></span><span class="t">대학원의 목표 정하기</span><span class="meta"><span class="b p3">P3</span></span></div>
+          <div class="row"><span class="ck"></span><span class="t">가계부 정리 + 작성</span><span class="meta"><span class="b p3">P3</span></span></div>
+        </div>
+        <div class="drawer ann" data-ann="정리 모드 (열린 상태)">
+          <div class="card">
+            <div class="q">밀린 일 1 / 13 · 마감 140일 지남 · 커리어</div>
+            <div class="big">이력서 업데이트 (스터디 준비)</div>
+            <div class="meta"><span class="b p1">P1</span><span class="b late">5/26</span><span class="b">5개월 동안 그대로</span></div>
+            <div class="opts">
+              <button>✓ 이미 했어 <kbd>D</kbd></button><button>→ 오늘 <kbd>T</kbd></button>
+              <button>→ 다음 주 <kbd>W</kbd></button><button>→ 백로그 <kbd>B</kbd></button>
+              <button>⏸ 대기로 <kbd>H</kbd></button><button>🗄 보관 <kbd>A</kbd></button>
+            </div>
+          </div>
+          <div class="progress">결정하면 다음 장으로 · Esc 닫기 · 되돌리기 가능</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ C ============ -->
+<section class="option" id="o-c">
+  <div class="why">
+    <div><b>구조</b>맨 위 <b>숫자 4개</b>, 아래 <b>2×2 칸</b>: 오늘 할 일 · 이번 주 · 밀린 일(표: 나이 순, 줄마다 바로 처리) · 기다리는 중.</div>
+    <div><b class="plus">좋은 점</b>전체 상황을 한 화면에 요약. 밀린 일을 표로 보며 정렬·일괄 처리하기 좋음. 주간 회고(YG-41)와 잘 맞음.</div>
+    <div><b class="minus">아쉬운 점</b>"오늘 집중"보다 "관리" 느낌. 매일 아침 보기엔 정보가 많음. 오늘 할 일 칸이 작아짐.</div>
+  </div>
+  <div class="app">
+    <aside class="side"><div class="logo"><i></i>Yggdrasil</div><a class="cur">오늘</a><a>캘린더</a><a>인박스</a><a>문서</a><a>기획</a><a>보드</a><a>활동</a><a>설정</a></aside>
+    <div class="main">
+      <div class="topbar"><h2>오늘</h2><span class="date">10월 13일 화요일</span></div>
+      <div class="kpis">
+        <div class="kpi"><div class="v">7</div><div class="l">오늘 할 일 · P1 2</div></div>
+        <div class="kpi red"><div class="v">13</div><div class="l">밀린 일 · 최장 140일</div></div>
+        <div class="kpi amb"><div class="v">3</div><div class="l">기다리는 중</div></div>
+        <div class="kpi"><div class="v">4</div><div class="l">이번 주 예정</div></div>
+      </div>
+      <div class="c-grid">
+        <div class="panel"><h3>오늘 할 일 <span class="n">7</span></h3>
+          <div class="row"><span class="ck"></span><span class="t">논문 추가 실험 결과 전달</span><span class="meta"><span class="b p1">P1</span></span></div>
+          <div class="row"><span class="ck"></span><span class="t">회사 백엔드 스프린트 — lab02</span><span class="meta"><span class="b p1">P1</span></span></div>
+          <div class="row"><span class="ck"></span><span class="t">제2의 월급 스터디</span><span class="meta"><span class="b time">21:00</span></span></div>
+          <div class="row"><span class="ck"></span><span class="t"><span class="b key">YG-34</span> 오늘 탭 개선</span><span class="meta"><span class="b p2">P2</span></span></div>
+          <div class="note">+ 3개 더</div>
+        </div>
+        <div class="panel"><h3>이번 주</h3>
+          <div class="row"><span class="ck"></span><span class="t">딥러닝 스터디</span><span class="meta"><span class="b time">수 20:00</span></span></div>
+          <div class="row"><span class="ck"></span><span class="t">LLM 6주차 퀴즈</span><span class="meta"><span class="b">금 23:59</span></span></div>
+          <div class="row"><span class="ck"></span><span class="t">ML 수업 투표</span><span class="meta"><span class="b">토</span></span></div>
+        </div>
+        <div class="panel ann" data-ann="밀린 일 = 표 · 정렬·일괄 처리">
+          <h3>밀린 일 <span class="n">13</span><span class="sp"></span><button class="chipbtn">선택한 것 백로그로</button></h3>
+          <table class="age">
+            <tr><th></th><th>할 일</th><th>영역</th><th>밀린 기간</th><th></th></tr>
+            <tr><td><input type="checkbox"></td><td class="t">이력서 업데이트</td><td>커리어</td><td><span class="heat" style="--w:100%"></span> 140일</td><td><button class="chipbtn">오늘로</button></td></tr>
+            <tr><td><input type="checkbox"></td><td class="t">KIS Developers API 신청</td><td>수익화</td><td><span class="heat" style="--w:95%"></span> 134일</td><td><button class="chipbtn">오늘로</button></td></tr>
+            <tr><td><input type="checkbox"></td><td class="t">6월 이사 전 준비</td><td>부동산</td><td><span class="heat" style="--w:88%"></span> 125일</td><td><button class="chipbtn">오늘로</button></td></tr>
+            <tr><td><input type="checkbox"></td><td class="t">frontend-lab 첫 학습</td><td>커리어</td><td><span class="heat" style="--w:10%"></span> 8일</td><td><button class="chipbtn">오늘로</button></td></tr>
+          </table>
+        </div>
+        <div class="panel"><h3>기다리는 중 <span class="n">3</span></h3>
+          <div class="row"><span class="ck"></span><span class="t">ML 중간 과제</span><span class="meta"><span class="b wait">10/17 공지</span></span></div>
+          <div class="row"><span class="ck"></span><span class="t">공저자 피드백</span><span class="meta"><span class="b wait">대기</span></span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ compare ============ -->
+<section class="option" id="o-cmp">
+  <table class="cmp">
+    <tr><th>기준</th><th>A · 3단 작업대 (추천)</th><th>B · 주간 띠 + 정리 모드</th><th>C · 대시보드</th></tr>
+    <tr><td>데스크톱 폭 활용</td><td>◎ 3단</td><td>○ 2단 + 띠</td><td>◎ 2×2</td></tr>
+    <tr><td>오늘 집중</td><td>◎ 가운데 독차지</td><td>◎ 거의 오늘만</td><td>△ 칸 하나</td></tr>
+    <tr><td>밀린 일 처리</td><td>○ 나이별 묶음 + 정리 모드</td><td>◎ 한 장씩 단축키</td><td>◎ 표 + 일괄</td></tr>
+    <tr><td>시간 있는 일정</td><td>◎ 타임라인</td><td>○ 오전/오후 그룹</td><td>△ 이번 주 칸</td></tr>
+    <tr><td>마감 지남·방치 중복</td><td>해결 (밀린 일 하나로 합침)</td><td>해결</td><td>해결</td></tr>
+    <tr><td>구현 크기</td><td>중 (타임라인 새로, 나머지 재사용)</td><td>중 (정리 모드 새로)</td><td>소~중</td></tr>
+    <tr><td>모바일</td><td>탭 3개(오늘·밀린 일·예정)로 접힘</td><td>띠 + 목록, 정리 모드는 전체 화면</td><td>숫자 + 세로 쌓기</td></tr>
+  </table>
+  <div class="why" style="margin-top:14px">
+    <div><b>공통 제안 (어느 안이든)</b>① "마감 지남"과 "방치"를 <b>밀린 일 하나</b>로 합치고 나이(어제·이번 달·한 달+)로 표시 ② 카드 대신 <b>한 줄 행</b>(높이 약 36px) ③ 행 hover 바로가기(내일·완료) ④ 상세는 지금처럼 오른쪽 패널.</div>
+    <div><b>추천 조합</b>A를 기본으로 하고, A의 "정리 모드" 버튼을 누르면 B의 <b>한 장씩 결정 화면</b>을 띄우기. 매일은 A로 집중, 일주일에 한 번 정리 모드로 밀린 일 0 만들기.</div>
+  </div>
+</section>
+
+<script>
+document.querySelectorAll('nav.tabs [role=tab]').forEach(b=>b.addEventListener('click',()=>{
+  document.querySelectorAll('nav.tabs [role=tab]').forEach(x=>x.setAttribute('aria-selected',x===b));
+  document.querySelectorAll('section.option').forEach(s=>s.classList.toggle('on',s.id==='o-'+b.dataset.o));
+}));
+document.getElementById('theme').addEventListener('click',()=>{
+  const r=document.documentElement, dark=r.dataset.theme?r.dataset.theme==='dark':matchMedia('(prefers-color-scheme: dark)').matches;
+  r.dataset.theme=dark?'light':'dark';
+});
+</script>
+</body>
+</html>

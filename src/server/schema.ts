@@ -1,4 +1,4 @@
-import { boolean, foreignKey, integer, smallint, jsonb, pgTable, primaryKey, text, timestamp, unique, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import { boolean, date, foreignKey, integer, smallint, jsonb, pgTable, primaryKey, text, timestamp, unique, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 
 export const appOwners = pgTable('app_owners', {
   ownerId: uuid('owner_id').primaryKey(),
@@ -179,4 +179,12 @@ export const recurrences = pgTable('recurrences', {
   paused: boolean('paused').notNull().default(false),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull()
+});
+
+// YG-29 morning briefing. sendTime is Asia/Seoul 'HH:mm'; lastSentDate is the Seoul day of the last scheduled send.
+export const briefingSettings = pgTable('briefing_settings', {
+  ownerId: uuid('owner_id').primaryKey(),
+  enabled: boolean('enabled').notNull().default(true),
+  sendTime: text('send_time').notNull().default('07:00'),
+  lastSentDate: date('last_sent_date', { mode: 'string' })
 });

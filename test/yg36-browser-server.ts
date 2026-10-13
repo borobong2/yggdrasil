@@ -8,7 +8,7 @@ import { createTodo, seoulDate } from '../src/server/todos.js';
 import { setEpicPrefix } from '../src/server/ticket-keys.js';
 
 assert.equal(process.env.NODE_ENV, 'test');
-assert.equal(new URL(process.env.DATABASE_URL!).pathname, '/yggdrasil_yg36');
+assert.match(new URL(process.env.DATABASE_URL!).pathname, /^\/yggdrasil_yg\d+$/); // a per-ticket test DB, never the main one
 const owner = process.env.YGGDRASIL_DEV_OWNER_ID = crypto.randomUUID();
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const day = (offset: number) => seoulDate(new Date(Date.now() + offset * 86_400_000));
