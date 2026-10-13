@@ -17,6 +17,7 @@ import { registerTodoRoutes } from './routes/todos.js';
 import { registerDeliveryPlanRoutes } from './routes/delivery-plans.js';
 import { registerPlanAcceptanceRoutes } from './routes/plan-acceptance.js';
 import { registerGitHubRoutes } from './routes/github.js';
+import { registerBriefingRoutes } from './routes/briefing.js';
 import { registerReviewRoutes } from './routes/review.js';
 
 export function createApp(provider?: SuggestionProvider, deliveryPlanProvider?: DeliveryPlanProvider) {
@@ -37,6 +38,7 @@ export function createApp(provider?: SuggestionProvider, deliveryPlanProvider?: 
   registerTodoRoutes(app);
   registerActivityRoutes(app);
   registerGitHubRoutes(app);
+  registerBriefingRoutes(app);
   registerReviewRoutes(app);
   return app;
 }

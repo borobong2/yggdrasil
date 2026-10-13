@@ -11,6 +11,7 @@ import { NotFoundError } from './work.js';
 import { InvalidPrefixError } from './ticket-keys.js';
 import { TodoValidationError } from './todos.js';
 import { clip, registerTodoTools } from './mcp-todos.js';
+import { registerHistoryTools } from './mcp-history.js';
 import { registerReviewResources } from './mcp-review.js';
 
 export function createMcpServer(ownerId: string, provider: DeliveryPlanProvider = generateOpenAIDeliveryPlan) {
@@ -47,6 +48,7 @@ export function createMcpServer(ownerId: string, provider: DeliveryPlanProvider 
   }));
   registerTodoTools(server, ownerId);
   registerDocumentTools(server, ownerId);
+  registerHistoryTools(server, ownerId);
   registerReviewResources(server, ownerId);
   return server;
 }

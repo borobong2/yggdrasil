@@ -90,5 +90,5 @@ it('builds today/overdue/waiting with Asia/Seoul date boundaries and owner isola
   expect(view.week.map((t) => t.id).sort()).toEqual([later.id, tomorrow.id].sort()); // YG-25 이번 주 예정
   expect(view.today[0]!.priority).toBe('p1');
 
-  expect(await todayView(fresh(), now)).toEqual({ date: '2026-10-12', today: [], overdue: [], waiting: [], week: [] });
+  expect(await todayView(fresh(), now)).toEqual({ date: '2026-10-12', today: [], overdue: [], waiting: [], week: [], late: [], timeline: { todos: [], ghosts: [] } });
 });

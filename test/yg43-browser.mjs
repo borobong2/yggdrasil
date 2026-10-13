@@ -47,6 +47,12 @@ await page.goto(`${base}/#/review`);
 await page.getByRole('button', { name: '회고 문서 열기' }).waitFor();
 pass('회고 문서 만들기 creates the week document, then 열기');
 
+await page.getByRole('link', { name: '오늘에서 밀린 일 정리하기' }).click();
+await page.locator('dialog[open]').waitFor();
+assert.equal(await page.evaluate(() => location.hash), '#/today');
+await page.screenshot({ path: `${shots}/4-today-triage-from-review.png` });
+pass('방치 link opens 오늘 정리 모드');
+
 const phone = await browser.newPage({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
 await phone.goto(`${base}/#/review`);
 await phone.locator('section[data-section="completed"] li').first().waitFor();

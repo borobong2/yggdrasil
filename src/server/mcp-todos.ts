@@ -7,6 +7,8 @@ import { staleReasons } from '../contracts/stale.js';
 import { result } from './mcp.js';
 import { todoResourceExtras } from './mcp-documents.js';
 import { linkEdits } from './links.js';
+import { historyLines } from './mcp-history.js';
+import { withGitHub } from './work.js';
 import {
   completedAtInput, completeTodo, createTodo, createTodos, getTodo, keyPrefix as prefix, listAreas, listAreaTodos, listTodos, setArchived, staleView, todayView, todoFields, todoIdOf,
   todoName as name, updateTodo
@@ -34,9 +36,9 @@ export function registerTodoTools(server: McpServer, ownerId: string): void {
     inputSchema: z.object({ items: z.array(createItem).min(1).max(50) }).strict(), annotations: todoWrite
   }, ({ items }) => result(() => createTodos(ownerId, items, 'mcp')));
   server.registerTool('get_todo', {
-    description: 'Read one of your todos (full notes) by id or ticket key, archived ones included.',
+    description: 'Read one of your todos (full notes) by id or ticket key, archived ones included. github: latest PR (number/state/url/ci) and successful deploy, as on the board.',
     inputSchema: refOnly, annotations: readOnly
-  }, (input) => result(async () => getTodo(ownerId, await todoIdOf(ownerId, input))));
+  }, (input) => result(async () => (await withGitHub(ownerId, [await getTodo(ownerId, await todoIdOf(ownerId, input))]))[0]));
   server.registerTool('list_todos', {
     description: 'List your todos, compact (notes cut to 120 characters unless includeNotes). Default: open (backlog/todo/doing), not archived. Done-only lists are newest completion first; otherwise priority, then due date. dueAfter is inclusive, dueBefore exclusive. Pass nextCursor back as cursor for more.',
     inputSchema: z.object({
@@ -48,7 +50,7 @@ export function registerTodoTools(server: McpServer, ownerId: string): void {
     }).strict().default({}), annotations: readOnly
   }, ({ includeNotes, ...filter }) => result(async () => {
     const page = await listTodos(ownerId, filter);
-    return { todos: page.todos.map((todo) => compact(todo, includeNotes)), nextCursor: page.nextCursor };
+    return { todos: (await withGitHub(ownerId, page.todos)).map((todo) => compact(todo, includeNotes)), nextCursor: page.nextCursor };
   }));
   server.registerTool('update_todo', {
     description: 'Update fields of your todo (by id or key); set area/epic to move it. Use null to clear dueAt, hold, holdReason, scheduledAt, estimateMinutes, actualMinutes. recurrence replaces the repeat rule (null ends the series); changing dueAt only moves this occurrence. completedAt only applies to a done todo.',
@@ -72,9 +74,9 @@ export function registerTodoTools(server: McpServer, ownerId: string): void {
 
 export const clip = (notes: string) => notes.length > 120 ? `${notes.slice(0, 120)}…` : notes;
 
-/** list_todos item: no board bookkeeping, nulls dropped, recurrence as a label. */
+/** list_todos item: no board bookkeeping, nulls dropped (github only when there is a PR or deploy), recurrence as a label. */
 function compact(todo: Todo, includeNotes = false) {
-  const { epicId: _epicId, position: _position, createdAt: _createdAt, github: _github, recurrence, notes, ...rest } = todo;
+  const { epicId: _epicId, position: _position, createdAt: _createdAt, recurrence, notes, ...rest } = todo;
   return Object.fromEntries(Object.entries({ ...rest, recurrence: recurrence && recurrenceLabel(recurrence), notes: includeNotes ? notes : clip(notes) })
     .filter(([, value]) => value !== null && value !== undefined && value !== ''));
 }
@@ -103,7 +105,7 @@ function registerTodoResources(server: McpServer, ownerId: string) {
   server.registerResource('todo-issue', new ResourceTemplate('todo://issue/{id}', { list: undefined }), { title: '할 일 상세', mimeType: 'text/markdown' }, async (uri, { id }) => {
     const todo = z.uuid().safeParse(id).success ? await getTodo(ownerId, String(id)).catch(() => undefined) : undefined;
     if (!todo) throw new Error('Todo not found');
-    return markdown(uri, detail(todo) + await todoResourceExtras(ownerId, todo));
+    return markdown(uri, detail(todo) + await todoResourceExtras(ownerId, todo) + await historyLines(ownerId, todo.id));
   });
 }
 

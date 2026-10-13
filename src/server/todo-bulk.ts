@@ -6,8 +6,8 @@ import { seoulDay } from '../contracts/dates.js';
 import { getDb } from './db.js';
 import { issues } from './schema.js';
 import { spawnNext } from './recurrences.js';
-import { columns, nextPositions, parseTodoDate, todoFields, todoRows, type TodoChanges } from './todos.js';
-import { NotFoundError } from './work.js';
+import { columns, nextPositions, parseTodoDate, todoDiff, todoFields, todoRows, type TodoChanges } from './todos.js';
+import { issue, NotFoundError } from './work.js';
 
 // YG-26 bulk triage. One transaction: every id must be the caller's or nothing is written.
 const ids = z.array(z.uuid()).min(1).max(200).refine((list) => new Set(list).size === list.length, 'Duplicate ids');
@@ -40,7 +40,7 @@ export async function bulkUpdateTodos(ownerId: string, input: BulkInput, via: To
       const set = columns(Object.fromEntries(changed.map((key) => [key, wanted[key]])));
       if (set.status) set.position = (await nextPositions(tx, ownerId, [set.status], set.status === 'done'))[0];
       const [updated] = await tx.update(issues).set({ ...set, updatedAt: new Date() }).where(and(eq(issues.id, row.id), eq(issues.ownerId, ownerId))).returning();
-      await appendActivity(tx, ownerId, { kind: set.status === 'done' ? 'issue.completed' : 'issue.updated', subjectType: 'issue', subjectId: row.id, payload: { via, changes: changed, bulk: input.action } });
+      await appendActivity(tx, ownerId, { kind: set.status === 'done' ? 'issue.completed' : 'issue.updated', subjectType: 'issue', subjectId: row.id, payload: { via, changes: changed, diff: todoDiff(row, issue(updated!), changed), bulk: input.action } });
       if (set.status === 'done') await spawnNext(tx, updated!, { via, bulk: input.action }); // YG-28: next occurrence of a recurring todo
     }
     const previous = rows.filter((row) => !skipped.includes(row.id)).map(snapshot);

@@ -79,7 +79,7 @@ it('runs the complete SDK client flow with the expected tools, shared search and
   const { client, close } = await connect(pat.token);
   try {
     const tools = await client.listTools();
-    expect(tools.tools.map(tool => tool.name).sort()).toEqual(['archive_todo', 'complete_todo', 'create_capture', 'create_document', 'create_todo', 'create_todos', 'get_todo', 'link_document_todo', 'list_documents', 'list_todos', 'read_document', 'read_planning_tree', 'request_delivery_plan', 'search_workspace', 'unarchive_todo', 'unlink_document_todo', 'update_document', 'update_todo']);
+    expect(tools.tools.map(tool => tool.name).sort()).toEqual(['archive_todo', 'complete_todo', 'create_capture', 'create_document', 'create_todo', 'create_todos', 'get_history', 'get_todo', 'link_document_todo', 'list_documents', 'list_todos', 'read_document', 'read_planning_tree', 'request_delivery_plan', 'search_workspace', 'unarchive_todo', 'unlink_document_todo', 'update_document', 'update_todo']);
     const search = data(await client.callTool({ name: 'search_workspace', arguments: { q } }));
     const rest = await createApp().request(`/api/search?q=${q}`, { headers: { authorization: 'Bearer yg08-owner-token' } });
     expect(search).toEqual(await rest.json());

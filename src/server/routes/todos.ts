@@ -1,7 +1,7 @@
 import type { Context, Hono } from 'hono';
 import { z } from 'zod';
 import { type AppEnv, ownerAuth } from '../auth.js';
-import { calendarView, completeTodo, completedAtInput, keyPrefix, promoteTodo, staleView, TodoValidationError, todayView, todoChanges, todoFields, updateTodo } from '../todos.js';
+import { calendarView, completeTodo, completedAtInput, keyPrefix, promoteTodo, setArchived, staleView, TodoValidationError, todayView, todoChanges, todoFields, updateTodo } from '../todos.js';
 import { listEpicPrefixes, setEpicPrefix } from '../ticket-keys.js';
 import { bulkInput, bulkUpdateTodos } from '../todo-bulk.js';
 import { NotFoundError } from '../work.js';
@@ -41,6 +41,11 @@ export function registerTodoRoutes(app: Hono<AppEnv>): void {
     const changes = todoChanges.safeParse(await c.req.json().catch(() => undefined));
     if (!id.success || !changes.success) return c.json({ error: 'Invalid todo' }, 400);
     return run(c, () => updateTodo(c.get('user').id, id.data, changes.data, 'ui'));
+  });
+  // YG-39 보관 for the UI (YG-34 정리 모드): hides the todo; unarchive brings it back. Nothing is deleted.
+  for (const [path, archived] of [['archive', true], ['unarchive', false]] as const) app.post(`/api/todos/:id/${path}`, (c) => {
+    const id = z.uuid().safeParse(c.req.param('id'));
+    return id.success ? run(c, () => setArchived(c.get('user').id, id.data, archived, 'ui')) : c.json({ error: 'Invalid todo' }, 400);
   });
   // Optional body { completedAt (YG-37), actualMinutes (YG-43) }; no body completes now.
   app.post('/api/todos/:id/complete', async (c) => {

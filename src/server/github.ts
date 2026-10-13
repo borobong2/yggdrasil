@@ -116,7 +116,7 @@ class Context {
     const state = input.state ?? existing.state;
     if (state === existing.state && (extra.ci ?? existing.ci) === existing.ci && Object.entries(metadata).every(([key, value]) => existing.metadata[key] === value)) return existing;
     const [row] = await this.tx.update(issueEvidence).set({ state, metadata: { ...existing.metadata, ...metadata }, ...extra }).where(eq(issueEvidence.id, existing.id)).returning();
-    await appendActivity(this.tx, this.ownerId, { kind: 'issue.updated', subjectType: 'issue', subjectId: issue.id, payload: { ...this.via, changes: ['evidence'], evidenceId: row!.id, url: row!.url, state: row!.state, ci: row!.ci } });
+    await appendActivity(this.tx, this.ownerId, { kind: 'issue.updated', subjectType: 'issue', subjectId: issue.id, payload: { ...this.via, changes: ['evidence'], evidenceId: row!.id, kind: row!.kind, url: row!.url, state: row!.state, ci: row!.ci } });
     return row!;
   }
 

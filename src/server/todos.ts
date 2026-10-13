@@ -1,8 +1,9 @@
 import { and, asc, desc, eq, ilike, inArray, isNotNull, isNull, ne, or, sql, type SQL } from 'drizzle-orm';
 import { z } from 'zod';
-import type { CalendarGhost, CalendarView, Hold, IssueLink, IssueStatus, Priority, StaleView, TodayView, Todo, TodoVia } from '../contracts/items.js';
-import { STALE_OVERDUE_DAYS, STALE_UNTOUCHED_DAYS } from '../contracts/stale.js';
-import { seoulDay } from '../contracts/dates.js';
+import type { CalendarGhost, CalendarView, Hold, IssueLink, IssueStatus, LateTodo, Priority, StaleView, TodayView, Todo, TodoVia } from '../contracts/items.js';
+import { STALE_OVERDUE_DAYS, STALE_UNTOUCHED_DAYS, lateBucket } from '../contracts/stale.js';
+import { formatDay, seoulDay } from '../contracts/dates.js';
+import { recurrenceLabel } from '../contracts/recurrence.js';
 import { appendActivity, type Transaction } from './activity.js';
 import { getDb } from './db.js';
 import { epics, goals, issues, recurrences } from './schema.js';
@@ -126,15 +127,41 @@ export async function updateTodo(ownerId: string, id: string, changes: TodoChang
     if (changes.addLinks || changes.removeLinks) set.links = editLinks(set.links ?? current.links, changes.addLinks, changes.removeLinks);
     if (changes.prefix && !current.key) set.key = (await allocateKeys(tx, ownerId, changes.prefix, 1))[0];
     if (set.status && set.status !== current.status) set.position = (await nextPositions(tx, ownerId, [set.status], set.status === 'done'))[0];
+    // One clock: stamp completion with the app's now (as updatedAt and spawnNext do) instead of the trigger's DB now().
+    if (set.status === 'done' && current.status !== 'done') set.completedAt ??= new Date();
     const [row] = await tx.update(issues).set({ ...set, epicId: place.epicId, updatedAt: new Date() }).where(and(eq(issues.id, id), eq(issues.ownerId, ownerId))).returning();
     const kind = set.status === 'done' && current.status !== 'done' ? 'issue.completed' : 'issue.updated';
-    await appendActivity(tx, ownerId, { kind, subjectType: 'issue', subjectId: id, payload: { via, changes: changed } });
-    // Completing rolls the series; an active rule set on a done occurrence (resume / late attach) rolls it once too.
-    if (kind === 'issue.completed' || (changes.recurrence && !changes.recurrence.paused && row!.status === 'done')) await spawnNext(tx, row!, { via });
     const rule = changes.recurrence;
     const recurrence = rule === undefined ? current.recurrence ?? null : rule && { id: row!.recurrenceId!, ...ruleOf(rule) };
-    return { ...issue(row!), area: place.area, epic: place.epic, recurrence };
+    const updated = { ...issue(row!), area: place.area, epic: place.epic, recurrence };
+    await appendActivity(tx, ownerId, { kind, subjectType: 'issue', subjectId: id, payload: { via, changes: changed, diff: todoDiff(current, updated, changed) } });
+    // Completing rolls the series; an active rule set on a done occurrence (resume / late attach) rolls it once too.
+    if (kind === 'issue.completed' || (changes.recurrence && !changes.recurrence.paused && row!.status === 'done')) await spawnNext(tx, row!, { via });
+    return updated;
   });
+}
+
+/**
+ * YG-44 activity `diff`: { field: [old, new] } for the fields that really changed, as short display values
+ * (dates in Asia/Seoul, recurrence and links as labels, long text cut to 120 characters). Added next to the `changes` name list.
+ */
+export function todoDiff(before: Partial<Todo>, after: Partial<Todo>, keys: string[]): Record<string, [unknown, unknown]> {
+  const field = (key: string) => key === 'prefix' ? 'key' : key === 'addLinks' || key === 'removeLinks' ? 'links' : key;
+  const shown = (todo: Partial<Todo>, key: string): unknown => {
+    const value = todo[key as keyof Todo];
+    if (value === null || value === undefined) return null;
+    if (key === 'dueAt' || key === 'scheduledAt') return formatDay(value as string, Boolean(key === 'dueAt' ? todo.dueAllDay : todo.scheduledAllDay));
+    if (key === 'completedAt') return formatDay(value as string, false);
+    if (key === 'recurrence') return recurrenceLabel(value as NonNullable<Todo['recurrence']>);
+    if (key === 'links') return (value as IssueLink[]).map((link) => link.label).join(', ');
+    return typeof value === 'string' && value.length > 120 ? `${value.slice(0, 120)}…` : value;
+  };
+  const out: Record<string, [unknown, unknown]> = {};
+  for (const key of new Set(keys.map(field))) {
+    const pair: [unknown, unknown] = [shown(before, key), shown(after, key)];
+    if (JSON.stringify(pair[0]) !== JSON.stringify(pair[1])) out[key] = pair;
+  }
+  return out;
 }
 
 /** YG-36 「티켓으로 승격」: gives a keyless todo the next key from `prefix`, else its epic's default. Keys are permanent: a keyed todo is returned as is. */
@@ -230,15 +257,34 @@ export async function todayView(ownerId: string, now = new Date()): Promise<Toda
   const open = and(eq(issues.ownerId, ownerId), ne(issues.status, 'done'), active)!;
   const weekEnd = seoulDate(new Date(now.getTime() + 7 * 86_400_000));
   const upcoming = (column: typeof issues.dueAt | typeof issues.scheduledAt) => sql`(${column} AT TIME ZONE 'Asia/Seoul')::date BETWEEN (${date}::date + 1) AND ${weekEnd}::date`;
-  const [today, overdue, waiting, later] = await Promise.all([
+  const [today, overdue, waiting, later, stale, calendar] = await Promise.all([
     todoRows(and(open, or(isNull(issues.hold), and(eq(issues.hold, 'scheduled'), day(issues.scheduledAt, '<='))), or(day(issues.dueAt, '<='), eq(issues.priority, 'p1'), day(issues.scheduledAt, '<=')))!),
     todoRows(and(open, sql`CASE WHEN ${issues.dueAllDay} THEN ${day(issues.dueAt, '<')} ELSE ${issues.dueAt} < ${now} END`)!),
     todoRows(and(open, inArray(issues.hold, ['waiting', 'blocked']))!),
     // 이번 주 예정 (YG-25): due or scheduled in the next 7 days, not waiting/blocked, not already in today.
-    todoRows(and(open, or(isNull(issues.hold), eq(issues.hold, 'scheduled')), or(upcoming(issues.dueAt), upcoming(issues.scheduledAt)))!)
+    todoRows(and(open, or(isNull(issues.hold), eq(issues.hold, 'scheduled')), or(upcoming(issues.dueAt), upcoming(issues.scheduledAt)))!),
+    staleView(ownerId, now),
+    calendarView(ownerId, date, date, false, now)
   ]);
   const inToday = new Set(today.map((todo) => todo.id));
-  return { date, today, overdue, waiting, week: later.filter((todo) => !inToday.has(todo.id)) };
+  // YG-34 밀린 일 = past-due by Seoul day ∪ stale, once each. Like YG-41, backlog and held todos are already put away (a held one only
+  // comes back by going untouched). A timed todo due earlier today stays in 오늘.
+  const days = (from: number, to: number) => Math.floor((to - from) / 86_400_000);
+  const late = new Map<string, LateTodo>();
+  for (const todo of [...overdue.filter((item) => item.status !== 'backlog' && !item.hold && seoulDate(new Date(item.dueAt!)) < date), ...stale.todos]) {
+    if (late.has(todo.id)) continue;
+    const lateDays = todo.dueAt && seoulDate(new Date(todo.dueAt)) < date ? days(Date.parse(seoulDate(new Date(todo.dueAt))), Date.parse(date)) : null;
+    const untouchedDays = days(Date.parse(todo.updatedAt), now.getTime());
+    const { stale: _, ...plain } = todo as Todo & { stale?: unknown };
+    const age = lateDays ?? untouchedDays;
+    late.set(todo.id, { ...plain, lateDays, untouchedDays, age, bucket: lateBucket(age) });
+  }
+  const timed = (todo: Todo) => todo.dueAt ? !todo.dueAllDay : !todo.scheduledAllDay;
+  return {
+    date, today, overdue, waiting, week: later.filter((todo) => !inToday.has(todo.id)),
+    late: [...late.values()].sort((a, b) => b.age - a.age),
+    timeline: { todos: calendar.todos.filter(timed), ghosts: calendar.ghosts.filter((ghost) => !ghost.allDay) }
+  };
 }
 
 /**
