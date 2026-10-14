@@ -69,12 +69,13 @@ function App() {
       </div>
     </aside>
     <div className="min-w-0 pb-20 md:pb-0">
-      <header className="sticky top-0 z-20 flex h-12 items-center gap-3 border-b border-line bg-canvas/90 px-4 backdrop-blur md:px-6">
+      <header className="sticky top-0 z-20 flex h-12 items-center gap-3 border-b border-line bg-canvas/90 px-4 backdrop-blur md:px-6 xl:px-8">
         <TreeMark className="size-6 md:hidden" />
         <h1 className="min-w-0 flex-1 truncate font-semibold">{active.label}</h1>
         <SearchCommand token={token} />
       </header>
-      <main className="mx-auto w-full max-w-[1200px] px-4 py-5 md:px-6 md:py-6">
+      {/* YG-47: views use the full content width (cap 2000px for ultra-wide), left-aligned with the header; no centered column. */}
+      <main className="w-full max-w-[2000px] px-4 py-5 md:px-6 md:py-6 xl:px-8">
         {tab === 'today' && <TodayView token={token} onActivity={refreshActivity} />}
         {tab === 'calendar' && <CalendarView token={token} onActivity={refreshActivity} />}
         {tab === 'inbox' && <InboxView token={token} onActivity={refreshActivity} />}

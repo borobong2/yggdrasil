@@ -181,7 +181,7 @@ export function CalendarView({ token, onActivity }: { token: string; onActivity?
       <DndContext sensors={sensors} collisionDetection={collision} onDragEnd={onDragEnd} onDragCancel={() => setDragging(null)}
         onDragStart={({ active }) => { setDragging(active.data.current?.todo ?? null); document.querySelectorAll<HTMLElement>('[popover]').forEach((element) => element.matches(':popover-open') && element.hidePopover()); }}
         accessibility={{ announcements, screenReaderInstructions: { draggable: '스페이스를 누르면 일정을 듭니다. 방향키로 날짜·시간을 옮기고 스페이스로 놓으며, Esc로 취소합니다. Enter는 상세를 엽니다.' } }}>
-        <div className="md:grid md:grid-cols-[minmax(0,1fr)_224px] md:gap-4">
+        <div className="md:grid md:grid-cols-[minmax(0,1fr)_224px] 2xl:grid-cols-[minmax(0,1fr)_280px] md:gap-4">
           <div className="min-w-0">
             {mode === 'month' && <MonthGrid day={day} {...props} />}
             {(mode === 'week' || mode === '3day' || mode === 'day') && <TimeGrid days={Array.from({ length: mode === 'week' ? 7 : mode === '3day' ? 3 : 1 }, (_, index) => addDays(range.from, index))} {...props} />}

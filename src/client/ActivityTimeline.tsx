@@ -34,7 +34,7 @@ export function ActivityTimeline({ token, revision }: { token: string; revision:
     return () => controller.abort();
   }, [token, revision, refresh]);
 
-  return <section aria-label="Activity timeline" aria-busy={!current} className="mx-auto max-w-3xl">
+  return <section aria-label="Activity timeline" aria-busy={!current}>
     <div className="mb-4 flex items-center justify-between gap-3">
       <p className="text-sm text-muted">최근 100개 활동, 최신순</p>
       <button type="button" className="btn" onClick={() => setRefresh((value) => value + 1)}><RefreshCw />새로고침</button>

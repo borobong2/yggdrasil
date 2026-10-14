@@ -7,7 +7,8 @@ type Props = { goals: PlanningGoal[]; selectedId?: string; onSelect: (item: Plan
 const row = 'flex w-full min-w-0 items-center gap-2 rounded-md px-2 text-left hover:bg-sunken aria-[current=true]:bg-accent-soft';
 
 export function PlanningTree({ goals, selectedId, onSelect, onStatusChange }: Props) {
-  return <ul className="space-y-3">{goals.map((goal) => <li key={goal.id} id={`goal-${goal.id}`} className="card p-2">
+  // YG-47: goals flow into side-by-side cards once each can be ≥560px wide.
+  return <ul className="grid items-start gap-3 grid-cols-[repeat(auto-fit,minmax(min(100%,560px),1fr))]">{goals.map((goal) => <li key={goal.id} id={`goal-${goal.id}`} className="card p-2">
     <div className="flex items-center gap-2">
       <button type="button" aria-current={goal.id === selectedId || undefined} className={`${row} h-9 font-semibold`} onClick={() => onSelect(goal)}>
         <Flag className="size-4 shrink-0 text-accent" /><span className="truncate">{goal.title}</span>
