@@ -1,7 +1,8 @@
 // Markdown <-> flat block list for the document editor. The stored body stays plain markdown (MCP read_document).
 // Conventions: callout = GitHub alert `> [!NOTE]`, toggle = `<details><summary>`; issue mention = `[@title](#issue-<id>)`.
+// Table (YG-48) = GFM pipe table kept as its markdown text; tableCells() reads it for rendering.
 // ponytail: blocks are flat (no nesting); indented sub-lists survive as raw text inside their parent item.
-export type BlockType = 'p' | 'h1' | 'h2' | 'h3' | 'bullet' | 'numbered' | 'todo' | 'quote' | 'code' | 'divider' | 'callout' | 'toggle';
+export type BlockType = 'p' | 'h1' | 'h2' | 'h3' | 'bullet' | 'numbered' | 'todo' | 'quote' | 'code' | 'divider' | 'callout' | 'toggle' | 'table';
 export type Block = { id: string; type: BlockType; text: string; checked?: boolean; lang?: string };
 
 let seq = 0;
@@ -11,6 +12,21 @@ export const block = (type: BlockType = 'p', text = '', extra: Partial<Block> = 
 const listTypes: BlockType[] = ['bullet', 'numbered', 'todo'];
 const fenceRe = /^(`{3,}|~{3,})\s*([^`\s]*)\s*$/;
 const startsBlock = (line: string) => /^(#{1,3} |[-*+] |\d+[.)] |>|```|~~~|<details>\s*$)/.test(line) || /^(-{3,}|\*{3,}|_{3,})\s*$/.test(line);
+
+// GFM pipe tables: split on unescaped `|`; outer pipes are optional. Pipes inside code spans must be escaped (`\|`), as in GFM.
+const splitRow = (line: string) => line.trim().replace(/^\|/, '').replace(/(?<!\\)\|$/, '').split(/(?<!\\)\|/).map((cell) => cell.trim());
+const delimiterRe = /^\s*\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?\s*$/;
+const isTableAt = (lines: string[], i: number) => (lines[i] ?? '').includes('|') && (lines[i + 1] ?? '').includes('|') && delimiterRe.test(lines[i + 1]!)
+  && splitRow(lines[i]!).length === splitRow(lines[i + 1]!).length;
+export type TableAlign = 'left' | 'center' | 'right' | undefined;
+export function tableCells(text: string): { header: string[]; align: TableAlign[]; rows: string[][] } | null {
+  const lines = text.split('\n');
+  if (!isTableAt(lines, 0)) return null;
+  const header = splitRow(lines[0]!);
+  const align = splitRow(lines[1]!).map((cell): TableAlign => cell.endsWith(':') ? (cell.startsWith(':') ? 'center' : 'right') : cell.startsWith(':') ? 'left' : undefined);
+  const unescape = (cells: string[]) => header.map((_, index) => (cells[index] ?? '').replace(/\\\|/g, '|')); // GFM: pad short rows, drop extra cells
+  return { header: unescape(header), align, rows: lines.slice(2).filter((line) => line.trim()).map((line) => unescape(splitRow(line))) };
+}
 
 export function parseMarkdown(markdown: string): Block[] {
   const lines = markdown.replace(/\r\n?/g, '\n').split('\n');
@@ -26,7 +42,11 @@ export function parseMarkdown(markdown: string): Block[] {
     const line = lines[i]!;
     if (!line.trim()) continue;
     let m: RegExpMatchArray | null;
-    if ((m = line.match(fenceRe))) {
+    if (isTableAt(lines, i)) {
+      const body = [line.trim(), lines[++i]!.trim()];
+      while (i + 1 < lines.length && lines[i + 1]!.includes('|') && !startsBlock(lines[i + 1]!)) body.push(lines[++i]!.trim());
+      blocks.push(block('table', body.join('\n')));
+    } else if ((m = line.match(fenceRe))) {
       const close = new RegExp(`^${m[1]![0] === '`' ? '`' : '~'}{${m[1]!.length},}\\s*$`);
       const body: string[] = [];
       while (++i < lines.length && !close.test(lines[i]!)) body.push(lines[i]!);
@@ -51,7 +71,7 @@ export function parseMarkdown(markdown: string): Block[] {
     else if ((m = line.match(/^\d+[.)] (.*)$/))) listItem('numbered', m[1]!, 3);
     else {
       const body = [line];
-      while (i + 1 < lines.length && lines[i + 1]!.trim() && !startsBlock(lines[i + 1]!)) body.push(lines[++i]!);
+      while (i + 1 < lines.length && lines[i + 1]!.trim() && !startsBlock(lines[i + 1]!) && !isTableAt(lines, i + 1)) body.push(lines[++i]!);
       blocks.push(block('p', body.join('\n')));
     }
   }
