@@ -28,7 +28,7 @@ export function InboxView({ token, onActivity }: { token: string; onActivity: ()
     await load();
   }
 
-  return <div className="mx-auto max-w-3xl space-y-5">
+  return <div className="max-w-5xl space-y-5">
     <form onSubmit={capture} className="card p-3">
       <label htmlFor="capture" className="sr-only">생각 캡처</label>
       <textarea id="capture" className="field min-h-20 border-0 px-1 shadow-none focus:shadow-none" placeholder="떠오른 생각, 요구사항, 메모를 적어 두세요"

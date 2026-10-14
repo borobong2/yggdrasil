@@ -54,7 +54,7 @@ export function ReviewView({ token, onActivity }: { token: string; onActivity?: 
   const listed = new Set(review?.unfinished.map((todo) => todo.id));
   const newlyOverdue = review?.overdue.filter((todo) => !listed.has(todo.id)) ?? [];
 
-  return <section aria-label="주간 회고" className="mx-auto max-w-3xl space-y-5 pb-24">
+  return <section aria-label="주간 회고" className="space-y-5 pb-24">
     <div className="flex flex-wrap items-center gap-2">
       <div className="flex items-center gap-1">
         <button type="button" className="btn btn-ghost size-8 p-0" aria-label="이전 주" onClick={() => go(-7)}><ChevronLeft /></button>
@@ -75,7 +75,9 @@ export function ReviewView({ token, onActivity }: { token: string; onActivity?: 
         <Stat label="방치 (현재)" value={`${review.stale}건`} />
       </dl>
 
-      <Section title="이번 주 완료" count={review.completed.length} id="completed">
+      {/* YG-47: wide screens put 이번 주 완료 on the left and the rest stacked on the right; DOM order (and phone order) unchanged. */}
+      <div className="grid gap-5 xl:grid-cols-2 xl:grid-rows-[repeat(3,auto)_1fr] xl:items-start">
+      <Section title="이번 주 완료" className="xl:row-span-4" count={review.completed.length} id="completed">
         {review.byArea.length > 0 && <p className="flex flex-wrap gap-1.5 px-1">{review.byArea.map((row) => <span key={row.area} className="badge">{row.area} {row.count}</span>)}</p>}
         <List todos={review.completed} empty="이번 주에 완료한 일이 없습니다." onOpen={setOpenId}
           meta={(todo) => <span className="text-xs tabular-nums text-muted">{done(todo)} · 예상 {minutes(todo.estimateMinutes)} · 실제 {minutes(todo.actualMinutes)}</span>} />
@@ -116,6 +118,7 @@ export function ReviewView({ token, onActivity }: { token: string; onActivity?: 
             <span key={via} className="badge">{via === 'ui' ? '화면' : via === 'mcp' ? 'MCP' : via === 'github' ? 'GitHub' : '가져오기'} {review.activity.via[via]}</span>)}
         </p>
       </Section>
+      </div>
     </>}
     {open && <TodoDetail key={open.id} issue={open} area={open.area} headers={headers} onClose={() => setOpenId(null)} onSaved={() => { void load(); onActivity?.(); }} />}
   </section>;
@@ -125,8 +128,8 @@ function Stat({ label, value }: { label: string; value: string }) {
   return <div className="card px-3 py-2.5"><dt className="text-xs text-muted">{label}</dt><dd className="text-lg font-semibold tabular-nums">{value}</dd></div>;
 }
 
-function Section({ title, count, id, children }: { title: string; count?: number; id: string; children: React.ReactNode }) {
-  return <section aria-label={title} data-section={id} className="space-y-2">
+function Section({ title, count, id, className = '', children }: { title: string; count?: number; id: string; className?: string; children: React.ReactNode }) {
+  return <section aria-label={title} data-section={id} className={`min-w-0 space-y-2 ${className}`}>
     <h3 className="px-1 text-sm font-semibold">{title}{count !== undefined && <span className="ml-1.5 font-normal tabular-nums text-faint">{count}</span>}</h3>
     {children}
   </section>;

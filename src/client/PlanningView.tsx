@@ -62,7 +62,7 @@ export function PlanningView({ token }: { token: string }) {
         <input aria-label="키 접두어" className="field font-mono uppercase" maxLength={10} pattern="[A-Za-z][A-Za-z0-9]*" placeholder="YG" disabled={!ticket.on} required={ticket.on} value={ticket.prefix} onChange={(event) => setTicket({ ...ticket, prefix: event.target.value })} /></div>}
       <button className="btn btn-primary h-8"><Plus />만들기</button>
     </form>
-    <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
+    <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_280px] 2xl:grid-cols-[minmax(0,1fr)_360px]">
       <div className="min-w-0">{loading ? <p role="status" className="empty">기획을 불러오는 중…</p> : error ? <p role="alert" className="alert">{error}</p> : goals.length ? <PlanningTree goals={goals} selectedId={selected?.id} onSelect={setSelected} onStatusChange={updateStatus} /> : <p className="card empty">아직 기획 항목이 없습니다. 목표부터 만들어 보세요.</p>}</div>
       <aside aria-label="선택 항목" className="card p-4 lg:sticky lg:top-16">
         {!selected ? <p className="text-sm text-faint">항목을 선택하면 상세가 표시됩니다.</p> : <Detail item={selected} />}

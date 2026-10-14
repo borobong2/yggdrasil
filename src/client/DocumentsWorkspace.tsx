@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { DragEvent } from 'react';
-import { ArrowLeft, ChevronRight, Clock, FileText, Plus, RotateCcw, SmilePlus, Trash2 } from 'lucide-react';
+import { ArrowLeft, ChevronRight, Clock, FileText, MoveHorizontal, Plus, RotateCcw, SmilePlus, Trash2 } from 'lucide-react';
 import type { Document, Issue } from '../contracts/items.js';
 import { BlockEditor } from './BlockEditor.js';
 import { statusLabels } from './format.js';
@@ -13,6 +13,7 @@ const untitled = '제목 없음';
 const emojis = ['📄', '📝', '📌', '💡', '🎯', '🚀', '🧭', '🗂️', '📚', '🧪', '🛠️', '🐛', '✅', '📅', '📈', '💬', '🔒', '🌱', '🌳', '⭐', '🔥', '🧩', '🎨', '⚙️', '📦', '🧠', '🗺️', '🔍', '❤️', '🏁'];
 const statusText: Record<Status, string> = { idle: '', dirty: '저장 대기…', saving: '저장 중…', saved: '저장됨', error: '저장 실패 · 다시 시도' };
 const expandedKey = 'yggdrasil-docs-expanded';
+const wideKey = 'yggdrasil-docs-wide';
 const hashId = () => location.hash.match(/^#document-([0-9a-f-]{36})$/)?.[1] ?? null;
 
 export function DocumentsWorkspace({ token }: Props) {
@@ -22,6 +23,9 @@ export function DocumentsWorkspace({ token }: Props) {
   const [selectedId, setSelectedId] = useState<string | null>(hashId);
   const [links, setLinks] = useState<string[]>([]);
   const [expanded, setExpanded] = useState<Set<string>>(() => { try { return new Set(JSON.parse(localStorage.getItem(expandedKey) ?? '[]')); } catch { return new Set(); } });
+  // YG-47: editor keeps a ~800px reading measure; 전체 폭 lets it use the whole area (remembered per browser).
+  const [wide, setWide] = useState(() => { try { return localStorage.getItem(wideKey) === '1'; } catch { return false; } });
+  const toggleWide = () => { setWide(!wide); try { localStorage.setItem(wideKey, wide ? '0' : '1'); } catch { /* private mode */ } };
   const [status, setStatus] = useState<Status>('idle');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
@@ -173,7 +177,7 @@ export function DocumentsWorkspace({ token }: Props) {
 
   const recent = [...documents].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 4);
   const linked = issues.filter((issue) => links.includes(issue.id));
-  return <section aria-label="문서" className="grid gap-4 md:grid-cols-[248px_minmax(0,1fr)] md:gap-6">
+  return <section aria-label="문서" className="grid gap-4 md:grid-cols-[248px_minmax(0,1fr)] xl:grid-cols-[280px_minmax(0,1fr)] md:gap-6">
     <aside aria-label="페이지 목록" className={`h-fit space-y-4 md:sticky md:top-16 ${selected ? 'max-md:hidden' : ''}`}>
       {documents.length > 3 && <div>
         <h2 className="eyebrow flex items-center gap-1 px-2 pb-1"><Clock className="size-3" />최근</h2>
@@ -213,8 +217,9 @@ export function DocumentsWorkspace({ token }: Props) {
             <span role="status" aria-live="polite" data-save-status className={`ml-auto shrink-0 text-xs ${status === 'error' ? 'text-danger' : ''}`}>
               {status === 'error' ? <button type="button" className="underline" onClick={() => void flush()}>{statusText.error}</button> : statusText[status]}
             </span>
+            <button type="button" className="btn btn-ghost h-8 px-2 max-lg:hidden" aria-pressed={wide} title="편집기를 영역 전체 폭으로" onClick={toggleWide}><MoveHorizontal />전체 폭</button>
           </div>
-          <div className="mx-auto max-w-[720px] px-5 pb-10 pt-8 md:px-14 md:pt-14">
+          <div data-editor-measure className={`mx-auto px-5 pb-10 pt-8 md:px-14 md:pt-14 ${wide ? '' : 'max-w-[920px]'}`}>
             <div className="group/head">
               <button type="button" popoverTarget="icon-picker" aria-label="페이지 아이콘 선택"
                 className={selected.icon ? 'mb-2 rounded-md p-1 text-[44px] leading-none hover:bg-sunken' : 'btn btn-ghost mb-1 h-7 px-1.5 text-xs opacity-100 md:opacity-0 md:group-hover/head:opacity-100 md:focus-visible:opacity-100'}>
