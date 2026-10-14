@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { ChangeEvent, ClipboardEvent, DragEvent, KeyboardEvent, ReactNode } from 'react';
 import { ChevronRight, GripVertical, Plus } from 'lucide-react';
 import type { Issue } from '../contracts/items.js';
-import { block, mentionToken, parseMarkdown, serializeMarkdown } from './blocks.js';
+import { block, mentionToken, parseMarkdown, serializeMarkdown, tableCells } from './blocks.js';
 import type { Block, BlockType } from './blocks.js';
 import { statusLabels } from './format.js';
 
@@ -21,6 +21,7 @@ const commands: Command[] = [
   { type: 'code', label: '코드', hint: '``` 코드 블록', keys: ['code', '코드'] },
   { type: 'divider', label: '구분선', hint: '--- 가로선', keys: ['divider', 'hr', '구분'] },
   { type: 'callout', label: '콜아웃', hint: '강조 상자', keys: ['callout', 'note', '콜아웃', '강조'] },
+  { type: 'table', label: '표', hint: '3×3 마크다운 표', keys: ['table', '표', '테이블'] },
   { type: 'toggle', label: '토글', hint: '접고 펼치는 목록', keys: ['toggle', 'details', '토글', '접기'] },
   { type: 'mention', label: '할 일 언급', hint: '@ 할 일 연결', keys: ['mention', 'issue', 'todo', '할 일', '언급', '이슈'] },
 ];
@@ -29,13 +30,15 @@ const shortcuts: Record<string, [BlockType, Partial<Block>?]> = {
   '[] ': ['todo', { checked: false }], '[ ] ': ['todo', { checked: false }], '> ': ['quote'], '```': ['code'], '---': ['divider'],
 };
 const listTypes: BlockType[] = ['bullet', 'numbered', 'todo'];
+const rawTypes: BlockType[] = ['code', 'table']; // edited as raw text: Enter is a newline, no slash menu, paste stays verbatim
+const tableTemplate = '| 열 1 | 열 2 | 열 3 |\n| --- | --- | --- |\n|  |  |  |\n|  |  |  |';
 const placeholders: Partial<Record<BlockType, string>> = { h1: '제목 1', h2: '제목 2', h3: '제목 3', bullet: '목록', numbered: '목록', todo: '할 일', quote: '인용', code: '코드', callout: '내용을 입력하세요', toggle: '토글 제목 · Shift+Enter로 내용' };
 const typography: Record<BlockType, string> = {
   p: 'text-[15px] leading-7', h1: 'text-[26px] leading-9 font-bold tracking-tight', h2: 'text-[21px] leading-8 font-semibold tracking-tight', h3: 'text-[17px] leading-7 font-semibold',
   bullet: 'text-[15px] leading-7', numbered: 'text-[15px] leading-7', todo: 'text-[15px] leading-7', quote: 'text-[15px] leading-7', callout: 'text-[15px] leading-7',
-  code: 'font-mono text-[13px] leading-6', toggle: 'text-[15px] leading-7', divider: '',
+  code: 'font-mono text-[13px] leading-6', table: 'font-mono text-[13px] leading-6', toggle: 'text-[15px] leading-7', divider: '',
 };
-const spacing: Partial<Record<BlockType, string>> = { h1: 'mt-6', h2: 'mt-5', h3: 'mt-3', code: 'my-1', callout: 'my-1', quote: 'my-0.5' };
+const spacing: Partial<Record<BlockType, string>> = { h1: 'mt-6', h2: 'mt-5', h3: 'mt-3', code: 'my-1', table: 'my-1', callout: 'my-1', quote: 'my-0.5' };
 
 type Menu = { kind: 'slash' | 'mention'; blockId: string; start: number; query: string; index: number };
 type Props = { initial: string; issues: Issue[]; onChange: (markdown: string) => void; onMention: (issueId: string) => void };
@@ -93,7 +96,7 @@ export function BlockEditor({ initial, issues, onChange, onMention }: Props) {
       return focus(b.id, 0);
     }
     patch(b.id, { text });
-    const slash = b.type !== 'code' && before.match(/(?:^|\s)\/([^\s/]{0,20})$/);
+    const slash = !rawTypes.includes(b.type) && before.match(/(?:^|\s)\/([^\s/]{0,20})$/);
     const at = b.type !== 'code' && before.match(/(?:^|\s)@([^\s@]{0,30})$/);
     if (slash) setMenu((current) => ({ kind: 'slash', blockId: b.id, start: caret - slash[1]!.length - 1, query: slash[1]!, index: current?.query === slash[1] ? current.index : 0 }));
     else if (at) setMenu({ kind: 'mention', blockId: b.id, start: caret - at[1]!.length - 1, query: at[1]!, index: 0 });
@@ -118,6 +121,11 @@ export function BlockEditor({ initial, issues, onChange, onMention }: Props) {
       splice(b.id, head.trim() ? [{ ...b, text: head }, block('divider'), next] : [block('divider'), next]);
       return focus(next.id, 0);
     }
+    if (item.type === 'table') {
+      const table = block('table', tableTemplate);
+      splice(b.id, (head + tail).trim() ? [{ ...b, text: head + tail }, table] : [table]);
+      return focus(table.id, 2);
+    }
     patch(b.id, { type: item.type, text: head + tail, checked: item.type === 'todo' ? false : undefined });
     focus(b.id, head.length);
   }
@@ -140,7 +148,7 @@ export function BlockEditor({ initial, issues, onChange, onMention }: Props) {
       return;
     }
     if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) { event.preventDefault(); const next = block(); splice(b.id, [b, next]); return focus(next.id, 0); }
-    if (event.key === 'Enter' && !event.shiftKey && b.type !== 'code') {
+    if (event.key === 'Enter' && !event.shiftKey && !rawTypes.includes(b.type)) {
       event.preventDefault();
       if (listTypes.includes(b.type) && !text) return patch(b.id, { type: 'p' }); // Enter on an empty item leaves the list
       const next = block(listTypes.includes(b.type) ? b.type : 'p', text.slice(end), b.type === 'todo' ? { checked: false } : {});
@@ -163,14 +171,14 @@ export function BlockEditor({ initial, issues, onChange, onMention }: Props) {
     }
     if (event.key === 'ArrowDown' && caret === end && !text.slice(caret).includes('\n')) {
       const next = neighbor(b.id, 1);
-      if (next) { event.preventDefault(); focus(next.id, 0); } else if (b.type === 'code') { event.preventDefault(); const fresh = block(); splice(b.id, [b, fresh]); focus(fresh.id, 0); }
+      if (next) { event.preventDefault(); focus(next.id, 0); } else if (rawTypes.includes(b.type)) { event.preventDefault(); const fresh = block(); splice(b.id, [b, fresh]); focus(fresh.id, 0); }
     }
   }
 
   // Multi-line plain text becomes blocks; formatting from rich sources is dropped because only text/plain is read.
   function paste(b: Block, event: ClipboardEvent<HTMLTextAreaElement>) {
     const text = event.clipboardData.getData('text/plain');
-    if (b.type === 'code' || !text.includes('\n')) return;
+    if (rawTypes.includes(b.type) || !text.includes('\n')) return;
     const parsed = parseMarkdown(text);
     if (!parsed.length) return;
     event.preventDefault();
@@ -222,8 +230,9 @@ export function BlockEditor({ initial, issues, onChange, onMention }: Props) {
           {b.type === 'todo' && <span className="flex h-7 w-6 shrink-0 items-center"><input type="checkbox" aria-label="완료" checked={!!b.checked} onChange={() => patch(b.id, { checked: !b.checked })} className="size-4 accent-[var(--color-accent)]" /></span>}
           {b.type === 'toggle' && <button type="button" aria-label={open.has(b.id) ? '토글 접기' : '토글 펼치기'} aria-expanded={open.has(b.id)} className="grid h-7 w-6 shrink-0 place-items-center text-muted"
             onClick={() => setOpen((current) => { const next = new Set(current); if (!next.delete(b.id)) next.add(b.id); return next; })}><ChevronRight className={`size-4 transition-transform ${open.has(b.id) ? 'rotate-90' : ''}`} /></button>}
+          {b.type === 'table' && !editing && b.text && <div className="min-w-0 flex-1 cursor-text" onClick={(event) => { if (!(event.target as HTMLElement).closest('a')) focus(b.id, b.text.length); }}><Table text={b.text} /></div>}
           {b.type === 'callout' && <span aria-hidden className="w-9 shrink-0 select-none self-stretch rounded-l-md bg-sunken pt-3 pl-3 leading-7">💡</span>}
-          <div className={`min-w-0 flex-1 ${b.type === 'quote' ? 'border-l-[3px] border-ink/70 pl-3' : ''} ${b.type === 'callout' ? 'rounded-r-md bg-sunken py-3 pr-3 pl-2' : ''} ${b.type === 'code' ? 'rounded-md bg-sunken px-4 py-3' : ''} ${b.type === 'todo' && b.checked ? 'text-faint line-through' : ''}`}>
+          {(b.type !== 'table' || editing || !b.text) && <div className={`min-w-0 flex-1 ${b.type === 'table' ? 'rounded-md border border-line px-3 py-2' : ''} ${b.type === 'quote' ? 'border-l-[3px] border-ink/70 pl-3' : ''} ${b.type === 'callout' ? 'rounded-r-md bg-sunken py-3 pr-3 pl-2' : ''} ${b.type === 'code' ? 'rounded-md bg-sunken px-4 py-3' : ''} ${b.type === 'todo' && b.checked ? 'text-faint line-through' : ''}`}>
             {editing || !b.text
               ? <AutoTextarea b={b} hint={hint} refs={refs} className={typography[b.type]}
                 onFocus={() => setActive(b.id)} onBlur={() => { setActive((current) => current === b.id ? null : current); setMenu((current) => current?.blockId === b.id ? null : current); }}
@@ -232,7 +241,8 @@ export function BlockEditor({ initial, issues, onChange, onMention }: Props) {
                 {b.type === 'toggle' ? <><Inline text={b.text.split('\n')[0]!} />{open.has(b.id) && b.text.includes('\n') && <div className="text-muted"><Inline text={b.text.slice(b.text.indexOf('\n') + 1)} /></div>}</>
                   : b.type === 'code' ? b.text : <Inline text={b.text} />}
               </div>}
-          </div>
+            {b.type === 'table' && editing && <div className="mt-2 border-t border-line pt-2" aria-label="표 미리보기"><Table text={b.text} /></div>}
+          </div>}
         </>}
         {menu?.blockId === b.id && <CommandMenu menu={menu} items={menuItems(menu)} choose={(item) => choose(menu, item)} hover={(index) => setMenu({ ...menu, index })} />}
       </div>;
@@ -257,6 +267,19 @@ function CommandMenu({ menu, items, choose, hover }: { menu: Menu; items: (Comma
       <span className="min-w-0 truncate">{'status' in item ? item.title : item.label}</span>
       <span className="shrink-0 text-2xs text-faint">{'status' in item ? statusLabels[item.status] : item.hint}</span>
     </button>)}
+  </div>;
+}
+
+// GFM table preview. Text that no longer parses as a table (mid-edit) shows as-is, so nothing is hidden or lost.
+function Table({ text }: { text: string }) {
+  const table = tableCells(text);
+  if (!table) return <div className="whitespace-pre-wrap break-words font-mono text-[13px] leading-6 text-muted">{text}</div>;
+  const cell = 'h-9 min-w-24 border border-line px-3 py-1.5 align-top';
+  return <div className="overflow-x-auto" data-table>
+    <table className="border-collapse text-[14px] leading-6">
+      <thead><tr className="bg-sunken">{table.header.map((text, index) => <th key={index} className={`${cell} font-semibold`} style={{ textAlign: table.align[index] ?? 'left' }}><Inline text={text} /></th>)}</tr></thead>
+      <tbody>{table.rows.map((row, r) => <tr key={r} className="even:bg-sunken/40">{row.map((text, index) => <td key={index} className={cell} style={{ textAlign: table.align[index] }}><Inline text={text} /></td>)}</tr>)}</tbody>
+    </table>
   </div>;
 }
 

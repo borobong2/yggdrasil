@@ -9,6 +9,7 @@ import { createCapture } from '../src/server/captures.js';
 import { createDocument } from '../src/server/documents.js';
 import { issuePat } from '../src/server/pats.js';
 import { createTodo } from '../src/server/todos.js';
+import { parseMarkdown, serializeMarkdown, tableCells } from '../src/client/blocks.js';
 
 // YG-33 document tools + YG-42 todo links, over MCP and the UI routes.
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
@@ -163,6 +164,21 @@ it('stores validated todo links over MCP and the UI route, and resources show li
     const otherToken = await ownerToken(crypto.randomUUID());
     expect(await (await app.request(`/api/documents?issueId=${todo.id}`, { headers: { authorization: `Bearer ${otherToken}` } })).json()).toEqual([]);
     expect((await app.request('/api/documents?issueId=bad', { headers: { authorization: `Bearer ${token}` } })).status).toBe(400);
+  } finally { await close(); }
+});
+
+it('YG-48: a GFM table written by create_document reaches the editor as a table block', async () => {
+  const owner = crypto.randomUUID();
+  const table = '| 정답 | 계산 | 뜻 |\n|---|---|---|\n| 합격 (y = 1) | −log q | 합격에 준 확률을 봄 |\n| 불합격 (y = 0) | −log(1 − q) | 불합격에 준 확률을 봄 |';
+  const { call, close } = await connect(owner);
+  try {
+    const doc = await call('create_document', { title: '손실 함수', body: `## 교차 엔트로피\n\n${table}` });
+    const response = await app.request(`/api/documents/${doc.id}`, { headers: { authorization: `Bearer ${await ownerToken(owner)}` } });
+    const { body } = await response.json() as { body: string };
+    const blocks = parseMarkdown(body);
+    expect(blocks.map((b) => b.type)).toEqual(['h2', 'table']);
+    expect(tableCells(blocks[1]!.text)!.rows[1]).toEqual(['불합격 (y = 0)', '−log(1 − q)', '불합격에 준 확률을 봄']);
+    expect(serializeMarkdown(blocks)).toBe(body); // opening it in the editor does not rewrite the stored markdown
   } finally { await close(); }
 });
 
