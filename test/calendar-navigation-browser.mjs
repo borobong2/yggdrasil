@@ -18,6 +18,8 @@ await page.getByRole('button',{name:'다시 시도',exact:true}).click();const r
 await page.getByLabel('연·월 선택').fill('2028-02');const leap=await next();await fulfill(leap,'윤년');await page.waitForURL('**/#/calendar/month/2028-02-01');await page.getByText('윤년',{exact:true}).waitFor();
 // Older failure must not remove the newer success.
 await page.getByRole('button',{name:'다음',exact:true}).click();const march=await next();await page.getByRole('button',{name:'다음',exact:true}).click();const april=await next();await fulfill(april,'최신 성공');await page.getByText('최신 성공',{exact:true}).waitFor();await fulfill(march,'',500);await page.waitForTimeout(100);assert.equal(await page.getByRole('alert').count(),0);assert.equal(await page.getByText('최신 성공',{exact:true}).count(),1);
+await page.getByLabel('연·월 선택').fill('9999-12');assert.ok(page.url().endsWith('/2028-04-01'));
+await page.getByLabel('연·월 선택').fill('0001-01');assert.ok(page.url().endsWith('/2028-04-01'));
 // Done toggle is a new query, even at the same range.
 await page.getByLabel('완료 표시',{exact:true}).check();const done=await next();assert.equal(await page.getByText('최신 성공',{exact:true}).count(),0);await fulfill(done,'완료 포함');await page.getByText('완료 포함',{exact:true}).waitFor();
 console.log('PASS navigation: stale success/error, loading range, month picker/leap/year, done query');await browser.close();

@@ -102,6 +102,8 @@ export function CalendarView({ token, onActivity }: { token: string; onActivity?
       if (generation === request.current && latestKey.current === queryKey) setResult({ key: queryKey, data: null, error: '캘린더를 불러오지 못했습니다.' });
     }
   }
+  const reload = useRef(load);
+  reload.current = load;
   useEffect(() => { void load(); return () => { request.current++; }; }, [queryKey]);
 
   const go = (nextMode: CalendarMode, nextDay: string) => { location.hash = `#/calendar/${nextMode}/${nextDay}`; };
@@ -125,11 +127,12 @@ export function CalendarView({ token, onActivity }: { token: string; onActivity?
       if (!response.ok) throw new Error();
       const saved: Todo = await response.json();
       setData((view) => view && place(view, saved));
-      if (saved.recurrence) void load(); // ghosts follow the open occurrence's new date
+      if (saved.recurrence || latestKey.current !== queryKey) void reload.current(); // ghosts follow the open occurrence's new date
       onActivity?.();
       if (text) setToast({ text, undo: () => { setToast(null); void patch(saved, previous); } });
     } catch {
-      setData((view) => view && place(view, todo));
+      if (latestKey.current !== queryKey) void reload.current();
+      else setData((view) => view && place(view, todo));
       setToast({ text: `'${todo.title}'을(를) 옮기지 못해 원래 날짜로 되돌렸습니다.`, error: true });
     }
   }
@@ -187,7 +190,7 @@ export function CalendarView({ token, onActivity }: { token: string; onActivity?
         <button type="button" className="btn btn-ghost size-[30px] p-0" aria-label="다음" onClick={() => go(mode, shift(mode, day, 1))}><ChevronRight /></button>
       </div>
       <h2 className="min-w-0 flex-1 truncate text-lg font-semibold tabular-nums" aria-live="polite">{title}</h2>
-      <label className="flex items-center gap-1 text-sm text-muted">연·월 선택<input aria-label="연·월 선택" type="month" className="field w-36" value={day.slice(0, 7)} min="0001-01" max="9999-12" onChange={(event) => { const value = event.target.value; if (/^\d{4}-\d{2}$/.test(value) && parseCalendarHash(`#/calendar/month/${value}-01`).day) go(mode, `${value}-01`); }} /></label>
+      <label className="flex items-center gap-1 text-sm text-muted">연·월 선택<input aria-label="연·월 선택" type="month" className="field w-36" value={day.slice(0, 7)} min="1900-01" max="2100-12" onChange={(event) => { const value = event.target.value; if (value >= '1900-01' && value <= '2100-12' && /^\d{4}-\d{2}$/.test(value) && parseCalendarHash(`#/calendar/month/${value}-01`).day) go(mode, `${value}-01`); }} /></label>
       <div role="group" aria-label="보기" className="flex rounded-md bg-sunken p-0.5 max-md:order-last max-md:w-full">
         {modes.map((item) => <button key={item} type="button" aria-pressed={item === mode} onClick={() => go(item, day)}
           className="h-[26px] flex-1 whitespace-nowrap rounded-[5px] px-2.5 text-sm font-medium text-muted aria-pressed:bg-surface aria-pressed:text-ink aria-pressed:shadow-card">{modeLabels[item]}</button>)}

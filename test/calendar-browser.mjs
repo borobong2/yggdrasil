@@ -22,7 +22,8 @@ await page.locator('[data-day="2026-10-22"]').getByRole('button',{name:/할 일 
 const dialog=page.getByRole('dialog',{name:'할 일 추가'});await dialog.waitFor();
 await dialog.getByLabel('제목').fill('클릭 종일');await dialog.getByRole('button',{name:'추가',exact:true}).click();await chip('클릭 종일').waitFor();
 assert.equal((await todo('클릭 종일')).dueAllDay,true);
-await drag(chip('종일 원본'),page.locator('[data-day="2026-10-23"]'));await undo();assert.equal((await todo('종일 원본')).dueAllDay,true);
+await drag(chip('종일 원본'),page.locator('[data-day="2026-10-23"]'));
+if(stage>=52){await page.getByRole('button',{name:'일',exact:true}).click();await page.locator('[data-slot]').first().waitFor();await undo();await chip('종일 원본').waitFor();await page.getByRole('button',{name:'월',exact:true}).click();await page.locator('[data-day]').first().waitFor();}else await undo();assert.equal((await todo('종일 원본')).dueAllDay,true);
 await drag(chip('예정 종일'),page.getByRole('complementary',{name:'날짜 없음'}));assert.equal((await todo('예정 종일')).scheduledAt,null);await undo();assert.equal((await todo('예정 종일')).scheduledAllDay,true);
 await drag(chip('둘 복원'),page.getByRole('complementary',{name:'날짜 없음'}));await undo();assert.equal((await todo('둘 복원')).dueAllDay,true);assert.equal((await todo('둘 복원')).scheduledAllDay,false);
 await page.getByRole('button',{name:'일',exact:true}).click();await page.locator('[data-slot]').first().waitFor();
