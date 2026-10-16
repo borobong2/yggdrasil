@@ -1,5 +1,6 @@
+import { Checkbox } from './ui/Checkbox.js';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Check, ListChecks, Repeat, Undo2, X } from 'lucide-react';
+import { ListChecks, Repeat, Undo2, X } from 'lucide-react';
 import type { BulkResult, CalendarGhost, LateTodo, Priority, Todo, TodayView as Today } from '../contracts/items.js';
 import { lateBuckets } from '../contracts/stale.js';
 import { seoulDay, seoulTime } from '../contracts/dates.js';
@@ -166,10 +167,8 @@ function Row({ todo, date, selection, order, onOpen, onComplete, onTomorrow }: {
   return <li data-todo-id={todo.id} className={`group flex min-h-9 items-center gap-2 border-b border-line px-3 last:border-b-0 hover:bg-sunken/70 ${checked ? 'bg-accent-soft' : ''}`}>
     <SelectBox label={todo.title} checked={checked} onToggle={toggle}
       className={selection.active ? '' : 'hidden md:block md:opacity-0 md:focus:opacity-100 md:group-hover:opacity-100'} />
-    <button type="button" role="checkbox" aria-checked="false" aria-label={`${todo.title} 완료`} onClick={() => onComplete(todo)}
-      className="group/check grid size-4 shrink-0 place-items-center rounded-full border-[1.5px] border-line-strong hover:border-accent hover:bg-accent-soft">
-      <Check className="size-2.5 text-accent opacity-0 group-hover/check:opacity-100" strokeWidth={3.5} />
-    </button>
+    <Checkbox shape="circle" checked={false} aria-label={`${todo.title} 완료`} title="완료 처리"
+      onCheckedChange={(checked) => { if (checked === true) onComplete(todo); }} />
     <button type="button" className="min-w-0 flex-1 select-none truncate py-2 text-left text-sm [-webkit-touch-callout:none]" onPointerDown={start} onPointerUp={cancel} onPointerLeave={cancel} onPointerCancel={cancel}
       onClick={(event) => { if (press.current.fired) { press.current.fired = false; return; } if (selection.mode) toggle(event.shiftKey); else onOpen(todo.id); }}>
       {todo.key && <span className="badge mr-1.5 font-mono font-medium">{todo.key}</span>}{todo.title}
