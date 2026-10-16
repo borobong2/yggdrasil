@@ -11,3 +11,5 @@
 비범위: 보기 삭제, 전역 빠른 추가, ICS, 새 의존성, 배포/병합. 별도 migration 없음.
 
 검증: 전용 로컬 yggdrasil_yg52 DB로 db:migrate 및 npx vitest run --dir test, npm run typecheck, npm run build, Playwright desktop/mobile. 운영 DB 금지. red 재현을 먼저 수행하고 결과 및 PR을 dispatch에 기록.
+
+검증: 브라우저 red에서 새 월 제목 아래 이전 월 데이터 잔류 확인 후 green. node test/calendar-navigation-browser.mjs 통과: stale success/error·loading·최신 오류/재시도·윤년/연도 월 선택·완료 토글. CALENDAR_STAGE=52 node test/calendar-browser.mjs desktop/mobile 통과. typecheck/build 및 전용 yggdrasil_yg52 관련 8 tests 통과. 생성 폼 입력은 기존 field 스타일로 맞췄다.
