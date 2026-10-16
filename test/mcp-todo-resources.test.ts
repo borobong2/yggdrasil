@@ -5,7 +5,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { createApp } from '../src/server/app.js';
 import { issuePat } from '../src/server/pats.js';
-import { completeTodo, createTodo } from '../src/server/todos.js';
+import { completeTodo, createTodo, todayView } from '../src/server/todos.js';
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 afterAll(() => pool.end());
@@ -52,9 +52,16 @@ it('serves today/overdue/waiting/area/issue as read-only markdown on Asia/Seoul 
     const today = await read('todo://today');
     expect(today).toContain('2026-10-12');
     expect(today).toContain('가계부 정리');
-    expect(today).toContain('어제 마감');
     expect(today).toContain(dueToday.id);
-    for (const hidden of ['내일 마감', '추천인 답장', '끝난 일', '남의 일']) expect(today).not.toContain(hidden);
+    // YG-54: sectioned like the web 오늘 screen — the timed todo due last night is 밀린 일, not today's work.
+    const [todayPart, latePart] = today.split('## 밀린 일');
+    expect(todayPart).toContain('## 오늘 할 일');
+    expect(todayPart).toContain('가계부 정리');
+    expect(todayPart).not.toContain('어제 마감');
+    expect(latePart).toContain('어제 마감');
+    expect(latePart).toContain('## 예정');
+    for (const hidden of ['내일 마감', '추천인 답장']) { expect(todayPart).not.toContain(hidden); expect(today.split('## 예정')[1]).toContain(hidden); }
+    for (const hidden of ['끝난 일', '남의 일']) expect(today).not.toContain(hidden);
 
     const late = await read('todo://overdue');
     expect(late).toContain('어제 마감');
@@ -95,5 +102,26 @@ it('shows empty states and hides other owners’ todos and areas', async () => {
     expect((await client.listResources()).resources.map((r) => r.uri)).not.toContain(`todo://area/${encodeURIComponent('비밀')}`);
     await expect(client.readResource({ uri: `todo://issue/${foreign.id}` })).rejects.toThrow(/not found/i);
     await expect(client.readResource({ uri: 'todo://issue/not-a-uuid' })).rejects.toThrow(/not found/i);
+  } finally { await close(); }
+});
+
+it('YG-54: a past-due backlog todo is not today — on the server and in todo://today — while a past-due todo still is 밀린 일', async () => {
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(new Date('2026-10-17T01:00:00Z')); // 2026-10-17 10:00 KST
+  const owner = crypto.randomUUID();
+  const shelved = await createTodo(owner, { area: '잡일', title: '오래된 백로그', status: 'backlog', dueAt: '2026-05-01' });
+  const late = await createTodo(owner, { area: '잡일', title: '지난주 마감', status: 'todo', dueAt: '2026-10-10' });
+  const view = await todayView(owner);
+  expect(view.today.map((todo) => todo.id)).toEqual([late.id]);
+  expect(view.late.map((todo) => todo.id)).toEqual([late.id]);
+  expect(view.overdue.map((todo) => todo.id).sort()).toEqual([shelved.id, late.id].sort());
+  const { close, read } = await connect(owner);
+  try {
+    const [todayPart, latePart] = (await read('todo://today')).split('## 밀린 일');
+    expect(todayPart).not.toContain('오래된 백로그');
+    expect(todayPart).not.toContain('지난주 마감');
+    expect(latePart).toContain('지난주 마감');
+    expect(latePart).not.toContain('오래된 백로그');
+    expect(await read('todo://overdue')).toContain('오래된 백로그');
   } finally { await close(); }
 });

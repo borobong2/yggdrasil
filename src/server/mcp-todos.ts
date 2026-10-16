@@ -87,7 +87,12 @@ function registerTodoResources(server: McpServer, ownerId: string) {
   for (const [key, title] of views) {
     server.registerResource(`todo-${key}`, `todo://${key}`, { title, mimeType: 'text/markdown' }, async (uri) => {
       const [view, stale] = await Promise.all([todayView(ownerId), key === 'today' ? staleView(ownerId) : undefined]);
-      return markdown(uri, list(`${title} (${view.date})${stale ? ` · 방치 ${stale.todos.length}건` : ''}`, view[key]));
+      if (!stale) return markdown(uri, list(`${title} (${view.date})`, view[key]));
+      // YG-54: same sections as the web 오늘 screen, so 밀린 일 is never read as today's work.
+      const late = new Set(view.late.map((todo) => todo.id));
+      const show = (todos: Todo[]) => todos.filter((todo) => !late.has(todo.id));
+      return markdown(uri, `# ${title} (${view.date}) · 방치 ${stale.todos.length}건\n\n${[list('오늘 할 일', show(view.today), '##'), list('밀린 일', view.late, '##'),
+        list('예정', show([...view.waiting, ...view.week]), '##')].join('\n')}`);
     });
   }
   // YG-41: suggestions only — the reader decides what to do with them.
@@ -112,7 +117,7 @@ function registerTodoResources(server: McpServer, ownerId: string) {
 const due = (todo: Todo) => todo.dueAt && formatDay(todo.dueAt, todo.dueAllDay);
 const scheduled = (todo: Todo) => todo.scheduledAt && formatDay(todo.scheduledAt, todo.scheduledAllDay);
 function markdown(uri: URL, text: string) { return { contents: [{ uri: uri.href, mimeType: 'text/markdown', text }] }; }
-function list(title: string, todos: Todo[]) { return `# ${title}\n\n${todos.length ? todos.map(line).join('\n') : '_없음_'}\n`; }
+function list(title: string, todos: Todo[], heading = '#') { return `${heading} ${title}\n\n${todos.length ? todos.map(line).join('\n') : '_없음_'}\n`; }
 function line(todo: Todo) {
   const parts = [todo.priority.toUpperCase(), `${todo.area}/${todo.epic}`, todo.status, todo.dueAt && `마감 ${due(todo)}`, todo.scheduledAt && `예정 ${scheduled(todo)}`, todo.hold && [todo.hold, todo.holdReason].filter(Boolean).join(': '), todo.recurrence && `반복 ${recurrenceLabel(todo.recurrence)}`];
   return `- [${todo.status === 'done' ? 'x' : ' '}] ${todo.key ? `${todo.key}: ` : ''}${todo.title} — ${parts.filter(Boolean).join(' · ')} (id: ${todo.id})`;

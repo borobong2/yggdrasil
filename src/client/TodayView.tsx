@@ -48,8 +48,7 @@ export function TodayView({ token, onActivity }: { token: string; onActivity?: (
   const hide = (ids: string[], on = true) => setHidden((prev) => { const next = new Set(prev); for (const id of ids) if (on) next.add(id); else next.delete(id); return next; });
   const lateIds = new Set(view.late.map((todo) => todo.id));
   const show = (list: Todo[]) => list.filter((todo) => !hidden.has(todo.id) && !lateIds.has(todo.id));
-  // Past-due todos the server left out of 밀린 일 are in 백로그 — put away on purpose, so not in 오늘 either.
-  const todayList = show(view.today).filter((todo) => !(todo.status === 'backlog' && todo.dueAt && seoulDay(todo.dueAt) < view.date));
+  const todayList = show(view.today);
   const waiting = show(view.waiting);
   const week = show(view.week);
   const late = view.late.filter((todo) => !hidden.has(todo.id));
