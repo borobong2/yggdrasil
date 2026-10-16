@@ -1,0 +1,22 @@
+// Local acceptance only. Each ticket uses its own disposable database and fresh owner.
+import assert from 'node:assert/strict';
+import { serve } from '@hono/node-server';
+import { serveStatic } from '@hono/node-server/serve-static';
+import { createApp } from '../src/server/app.js';
+import { createTodo } from '../src/server/todos.js';
+const url=new URL(process.env.DATABASE_URL!);
+assert.ok(['localhost','127.0.0.1'].includes(url.hostname));
+assert.match(url.pathname,/^\/yggdrasil_yg5[0-3]$/);
+process.env.YGGDRASIL_DEV_OWNER_ID=crypto.randomUUID();
+const owner=process.env.YGGDRASIL_DEV_OWNER_ID;
+await createTodo(owner,{area:'개인',title:'종일 원본',dueAt:'2026-10-18'});
+await createTodo(owner,{area:'개인',title:'예정 종일',scheduledAt:'2026-10-19'});
+await createTodo(owner,{area:'개인',title:'자정 timed',dueAt:'2026-10-18T00:00:00+09:00'});
+await createTodo(owner,{area:'개인',title:'두 날짜',dueAt:'2026-11-10',scheduledAt:'2026-10-18'});
+await createTodo(owner,{area:'개인',title:'둘 복원',dueAt:'2026-10-19',scheduledAt:'2026-10-20T00:00:00+09:00'});
+await createTodo(owner,{area:'개인',title:'날짜 미정'});
+await createTodo(owner,{area:'개인',title:'자정 반복',dueAt:'2026-10-25T00:00:00+09:00',recurrence:{freq:'daily',time:'00:00'}});
+await createTodo(owner,{area:'개인',title:'종일 반복',dueAt:'2026-10-25',recurrence:{freq:'daily'}});
+const app=createApp();
+app.use('*',serveStatic({root:'./dist/client'}));
+serve({fetch:app.fetch,hostname:'127.0.0.1',port:3050},()=>console.log('calendar acceptance http://127.0.0.1:3050'));

@@ -1,14 +1,19 @@
 import type { Context, Hono } from 'hono';
 import { z } from 'zod';
 import { type AppEnv, ownerAuth } from '../auth.js';
-import { calendarView, completeTodo, completedAtInput, keyPrefix, promoteTodo, setArchived, staleView, TodoValidationError, todayView, todoChanges, todoFields, updateTodo } from '../todos.js';
+import { calendarView, createTodo, todoName, completeTodo, completedAtInput, keyPrefix, promoteTodo, setArchived, staleView, TodoValidationError, todayView, todoChanges, todoFields, updateTodo } from '../todos.js';
 import { listEpicPrefixes, setEpicPrefix } from '../ticket-keys.js';
 import { bulkInput, bulkUpdateTodos } from '../todo-bulk.js';
 import { NotFoundError } from '../work.js';
 
 // UI todo writes: same validation as the MCP tools, logged with payload.via = 'ui'.
 export function registerTodoRoutes(app: Hono<AppEnv>): void {
+  app.use('/api/todos', ownerAuth);
   app.use('/api/todos/*', ownerAuth);
+  app.post('/api/todos', async (c) => {
+    const input = createBody.safeParse(await c.req.json().catch(() => undefined));
+    return input.success ? run(c, () => createTodo(c.get('user').id, input.data, 'ui')) : c.json({ error: 'Invalid todo' }, 400);
+  });
   app.use('/api/calendar', ownerAuth);
   app.use('/api/ticket-prefixes', ownerAuth);
   app.use('/api/ticket-prefixes/*', ownerAuth);
@@ -55,6 +60,7 @@ export function registerTodoRoutes(app: Hono<AppEnv>): void {
   });
 }
 
+const createBody = z.object({ area: todoName, title: todoFields.title, epic: todoFields.epic.optional(), dueAt: todoFields.dueAt.optional(), scheduledAt: todoFields.scheduledAt.optional() }).strict();
 const completeBody = z.object({ completedAt: completedAtInput.optional(), actualMinutes: todoFields.actualMinutes.optional() }).strict();
 const promoteBody = z.object({ prefix: keyPrefix.optional() }).strict();
 const prefixBody = z.object({ prefix: keyPrefix.nullable(), start: z.number().int().min(1).max(1_000_000).optional() }).strict();

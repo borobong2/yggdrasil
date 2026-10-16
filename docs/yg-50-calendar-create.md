@@ -11,3 +11,7 @@
 비범위: 보기 삭제, 전역 빠른 추가, ICS, 새 의존성, 배포/병합. 별도 migration 없음.
 
 검증: 전용 로컬 yggdrasil_yg50 DB로 db:migrate 및 npx vitest run --dir test, npm run typecheck, npm run build, Playwright desktop/mobile. 운영 DB 금지. red 재현을 먼저 수행하고 결과 및 PR을 dispatch에 기록.
+
+실제 BE 변경: 기존 /api/issues는 epicId 필수이며 scheduledAt 및 종일 생성 계약을 지원하지 않아 POST /api/todos를 추가했다. createTodo와 공유 Zod 날짜 검증/ownerAuth/via=ui를 재사용한다.
+
+검증 2026-10-17: 신규 API red 404 확인 후 green, typecheck/build 통과, 전용 yggdrasil_yg50 전체 39 files/197 tests 통과. 기존 의도적 transaction rollback 테스트의 forced document failure stderr는 예상 출력이며 테스트 통과. test/calendar-browser-server.ts + node test/calendar-browser.mjs 통과(Chrome, desktop/mobile, 생성·종일 undo·scheduled null·두 날짜 복원·같은 instant 종일→timed 전환). test fixture의 숨은 overflow chip 선택 실패는 visible locator와 분산 seed로 수정 후 통과.

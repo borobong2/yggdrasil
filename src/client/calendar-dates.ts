@@ -48,3 +48,6 @@ export function parseCalendarHash(hash: string): { view: CalendarMode | null; da
   const valid = /^\d{4}-\d{2}-\d{2}$/.test(day ?? '') && !Number.isNaN(utc(day!)) && iso(utc(day!)) === day;
   return { view: modes.includes(view as CalendarMode) ? view as CalendarMode : null, day: valid ? day! : null };
 }
+
+/** Serialize an existing date back to the write contract, including all-day and cleared dates. */
+export const calendarDateInput = (value: string | null, allDay: boolean) => value && (allDay ? dayOf(value) : value);
