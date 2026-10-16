@@ -10,7 +10,7 @@ import { TodoDetail } from './TodoDetail.js';
 
 // YG-30 calendar. Position lives in the hash (#/calendar/<mode>/<day>); data comes from GET /api/calendar for the visible range.
 const modeLabels: Record<CalendarMode, string> = { month: '월', week: '주', '3day': '3일', day: '일', list: '목록' };
-const weekdayNames = ['월', '화', '수', '목', '금', '토', '일'];
+const weekdayNames = ['일', '월', '화', '수', '목', '금', '토'];
 const priorityDots: Record<Priority, string> = { p1: 'bg-danger', p2: 'bg-warn', p3: 'bg-info', p4: 'bg-line-strong' };
 const HOUR = 48; // px per hour in the time grid
 const phone = () => window.matchMedia('(max-width: 767px)').matches;
@@ -162,7 +162,7 @@ export function CalendarView({ token, onActivity }: { token: string; onActivity?
     onDragEnd: ({ active, over }) => over ? `${active.data.current?.todo.title}을(를) ${where(over.data.current as Drop)}에 놓았습니다.` : '놓지 않았습니다.',
     onDragCancel: ({ active }) => `이동을 취소했습니다. ${active.data.current?.todo.title}은(는) 원래 날짜에 있습니다.`
   };
-  const props = { entries, now, onOpen: setOpenId, onCreate: setCreateAt };
+  const props = { entries, now, onOpen: setOpenId, onCreate: setCreateAt, onDay: (date: string) => go('day', date) };
 
   return <section aria-label="캘린더" className="space-y-3 pb-28 md:pb-0">
     <div className="flex flex-wrap items-center gap-2">
@@ -203,25 +203,25 @@ export function CalendarView({ token, onActivity }: { token: string; onActivity?
   </section>;
 }
 
-type GridProps = { entries: Map<string, Entry[]>; now: string; onOpen: (id: string) => void; onCreate: (at: string) => void };
+type GridProps = { entries: Map<string, Entry[]>; now: string; onOpen: (id: string) => void; onCreate: (at: string) => void; onDay: (day: string) => void };
 
-function MonthGrid({ day, entries, now, onOpen, onCreate }: { day: string } & GridProps) {
+function MonthGrid({ day, entries, now, onOpen, onCreate, onDay }: { day: string } & GridProps) {
   const month = day.slice(0, 7);
   return <div className="overflow-hidden rounded-lg border border-line bg-surface">
     <div className="grid grid-cols-7 border-b border-line bg-sunken/60">{weekdayNames.map((name) => <span key={name} className="py-1 text-center text-xs font-medium text-muted">{name}</span>)}</div>
     <div className="grid grid-cols-7">
-      {monthGrid(day).map((cell) => <DayCell key={cell} day={cell} faded={cell.slice(0, 7) !== month} list={entries.get(cell) ?? []} now={now} onOpen={onOpen} onCreate={onCreate} />)}
+      {monthGrid(day).map((cell) => <DayCell key={cell} day={cell} faded={cell.slice(0, 7) !== month} list={entries.get(cell) ?? []} now={now} onOpen={onOpen} onCreate={onCreate} onDay={onDay} />)}
     </div>
   </div>;
 }
 
-function DayCell({ day, faded, list, now, onOpen, onCreate }: { day: string; faded: boolean; list: Entry[]; now: string; onOpen: (id: string) => void; onCreate: (at: string) => void }) {
+function DayCell({ day, faded, list, now, onOpen, onCreate, onDay }: { day: string; faded: boolean; list: Entry[]; now: string; onOpen: (id: string) => void; onCreate: (at: string) => void; onDay: (day: string) => void }) {
   const { setNodeRef, isOver } = useDroppable({ id: `day:${day}`, data: { day, label: dayLabel(day) } satisfies Drop });
   const shown = list.length > 3 ? list.slice(0, 2) : list;
   const popover = `more-${day}`;
   return <div ref={setNodeRef} onClick={(event) => { if (event.target === event.currentTarget) onCreate(day); }} data-day={day} aria-label={dayLabel(day)} role="group"
     className={`min-h-[76px] min-w-0 border-b border-r border-line p-0.5 transition-colors [&:nth-child(7n)]:border-r-0 md:min-h-[112px] md:p-1 ${isOver ? 'bg-accent-soft' : faded ? 'bg-sunken/40' : ''}`}>
-    <span className={`mb-0.5 grid size-5 place-items-center rounded-full text-2xs font-medium tabular-nums md:size-6 md:text-xs ${day === now ? 'bg-accent text-white' : faded ? 'text-faint' : 'text-muted'}`}>{Number(day.slice(8))}</span>
+    <button type="button" aria-label={`${dayLabel(day)} 하루 보기`} onClick={() => onDay(day)} className={`mb-0.5 grid size-5 place-items-center rounded-full text-2xs font-medium tabular-nums md:size-6 md:text-xs ${day === now ? 'bg-accent text-white' : faded ? 'text-faint' : 'text-muted'}`}>{Number(day.slice(8))}</button>
     <ul className="space-y-0.5">
       {shown.map((entry) => <li key={entry.kind === 'todo' ? entry.todo.id : entry.ghost.at + entry.ghost.recurrenceId}>
         {entry.kind === 'todo' ? <Chip todo={entry.todo} now={now} onOpen={onOpen} compact /> : <Ghost ghost={entry.ghost} compact />}</li>)}
@@ -247,7 +247,7 @@ function TimeGrid({ days, entries, now, onOpen, onCreate }: { days: string[] } &
   return <div className="overflow-hidden rounded-lg border border-line bg-surface">
     <div className="grid border-b border-line bg-sunken/60" style={columns}>
       <span />
-      {days.map((day) => { const weekday = weekdayNames[(new Date(`${day}T00:00:00Z`).getUTCDay() + 6) % 7]; return <span key={day} className="flex items-center justify-center gap-1 py-1 text-xs text-muted">
+      {days.map((day) => { const weekday = weekdayNames[new Date(`${day}T00:00:00Z`).getUTCDay()]; return <span key={day} className="flex items-center justify-center gap-1 py-1 text-xs text-muted">
         {weekday}<span className={`grid size-6 place-items-center rounded-full font-semibold tabular-nums ${day === now ? 'bg-accent text-white' : 'text-ink'}`}>{Number(day.slice(8))}</span></span>; })}
     </div>
     <div className="grid border-b border-line" style={columns}>

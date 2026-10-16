@@ -77,14 +77,14 @@ it('previews monthly ghosts on month end and skips past slots for an overdue occ
 });
 
 it('date math: grids, ranges, hash, KST minutes and moves', () => {
-  expect(weekStart('2026-10-13')).toBe('2026-10-12'); // Tue → Mon
-  expect(weekStart('2026-10-18')).toBe('2026-10-12'); // Sun belongs to the week starting Mon
+  expect(weekStart('2026-10-13')).toBe('2026-10-11'); // Tue → Sun
+  expect(weekStart('2026-10-18')).toBe('2026-10-18'); // Sunday starts its own week
   expect(addDays('2026-12-31', 1)).toBe('2027-01-01');
   expect(addDays('2028-03-01', -1)).toBe('2028-02-29');
   const grid = monthGrid('2026-02-15');
-  expect([grid[0], grid.at(-1), grid.length]).toEqual(['2026-01-26', '2026-03-01', 35]);
-  expect(monthGrid('2026-03-31').length).toBe(42); // Mar 2026 starts on Sunday → six weeks
-  expect(rangeOf('week', '2026-10-15')).toEqual({ from: '2026-10-12', to: '2026-10-18' });
+  expect([grid[0], grid.at(-1), grid.length]).toEqual(['2026-02-01', '2026-02-28', 28]);
+  expect(monthGrid('2026-03-31').length).toBe(35); // Mar starts Sunday
+  expect(rangeOf('week', '2026-10-15')).toEqual({ from: '2026-10-11', to: '2026-10-17' });
   expect(rangeOf('3day', '2026-10-15')).toEqual({ from: '2026-10-15', to: '2026-10-17' });
   expect(rangeOf('day', '2026-10-15')).toEqual({ from: '2026-10-15', to: '2026-10-15' });
   expect(rangeOf('list', '2026-10-15')).toEqual({ from: '2026-10-15', to: '2026-11-13' });

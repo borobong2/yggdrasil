@@ -33,6 +33,7 @@ await drag(chip('종일 원본'),page.locator('[data-slot="2026-10-18T0"]'));ass
 await page.locator('[data-slot="2026-10-18T8"]').click();await dialog.getByLabel('제목').fill('취소할 입력');await dialog.getByRole('button',{name:'취소',exact:true}).click();assert.equal(await todo('취소할 입력'),undefined);
 if(stage>=51){
  await page.getByRole('button',{name:'월',exact:true}).click();
+ await page.locator('[data-day="2026-10-22"]').waitFor();
  const heads=page.locator('section[aria-label="캘린더"] .grid.grid-cols-7').first();assert.deepEqual(await heads.locator('span').allTextContents(),['일','월','화','수','목','금','토']);
  await page.locator('[data-day="2026-10-22"]').getByRole('button',{name:/하루 보기/}).click();await page.waitForURL('**/#/calendar/day/2026-10-22');await chip('클릭 종일').waitFor();
 }
