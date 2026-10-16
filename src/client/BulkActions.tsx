@@ -1,3 +1,4 @@
+import { Checkbox } from './ui/Checkbox.js';
 import { useEffect, useRef, useState } from 'react';
 import { Archive, Check, CircleAlert, Clock, Undo2, X } from 'lucide-react';
 import type { BulkResult, Todo, TodoSnapshot } from '../contracts/items.js';
@@ -105,8 +106,8 @@ export function BulkActions({ selection, headers, onApplied }: { selection: Sele
   </div>;
 }
 
-/** Selection checkbox; native so Space/Tab work. `onClick` carries shiftKey for range select. */
+/** Selection only; completion is separate. Click retains Shift-range selection, including keyboard activation. */
 export function SelectBox({ label, checked, onToggle, className = '' }: { label: string; checked: boolean; onToggle: (range: boolean) => void; className?: string }) {
-  return <input type="checkbox" aria-label={`${label} 선택`} checked={checked} onChange={() => undefined}
-    onClick={(event) => onToggle(event.shiftKey)} className={`size-4 shrink-0 accent-[var(--color-accent)] ${className}`} />;
+  return <Checkbox aria-label={`${label} 선택`} title="여러 항목 선택" checked={checked}
+    onClick={(event) => onToggle(event.shiftKey)} className={className} />;
 }
