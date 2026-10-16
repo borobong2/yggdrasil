@@ -215,12 +215,12 @@ function SortableCard({ issue, onOpen, onMove, selection, order }: { issue: Issu
   const style: CSSProperties = { transform: CSS.Translate.toString(transform), transition };
   const checked = selection.selected.has(issue.id);
   return <li ref={setNodeRef} style={style} data-issue-id={issue.id} className={`card group relative select-none [-webkit-touch-callout:none] ${isDragging ? 'opacity-40 ring-2 ring-accent' : checked ? 'border-accent bg-accent-soft' : 'hover:border-line-strong'}`}>
-    <SelectBox label={issue.title} checked={checked} onToggle={(range) => selection.toggle(issue.id, range, order)} className={`absolute left-3 top-[15px] z-[1] ${selection.mode ? '' : 'hidden md:block'}`} />
+    {selection.mode && <SelectBox label={issue.title} checked={checked} onToggle={(range) => selection.toggle(issue.id, range, order)} className="absolute left-3 top-[15px] z-[1]" />}
     <button type="button" ref={setActivatorNodeRef} {...attributes} {...listeners} aria-roledescription="이동 가능한 카드" onClick={(event) => selection.mode ? selection.toggle(issue.id, event.shiftKey, order) : onOpen(issue.id)}
-      className={`block w-full cursor-grab touch-manipulation rounded-[inherit] p-3 pr-9 text-left active:cursor-grabbing ${selection.mode ? 'pl-9' : 'md:pl-9'}`}>
+      className={`block w-full cursor-grab touch-manipulation rounded-[inherit] p-3 pr-9 text-left active:cursor-grabbing ${selection.mode ? 'pl-9' : ''}`}>
       <CardBody issue={issue} />
     </button>
-    {(issue.key || issue.github?.pr || issue.github?.deploy || issue.links.length > 0) && <div className={`-mt-1.5 flex flex-wrap gap-1 px-3 pb-3 ${selection.mode ? 'pl-9' : 'md:pl-9'}`}><GitHubChips issue={issue} /><LinkChips links={issue.links} max={3} /></div>}
+    {(issue.key || issue.github?.pr || issue.github?.deploy || issue.links.length > 0) && <div className={`-mt-1.5 flex flex-wrap gap-1 px-3 pb-3 ${selection.mode ? 'pl-9' : ''}`}><GitHubChips issue={issue} /><LinkChips links={issue.links} max={3} /></div>}
     <CardMenu issue={issue} onMove={onMove} />
   </li>;
 }

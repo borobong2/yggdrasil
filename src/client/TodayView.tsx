@@ -165,16 +165,17 @@ function Row({ todo, date, selection, order, onOpen, onComplete, onTomorrow }: {
   };
   const cancel = () => clearTimeout(press.current.timer);
   return <li data-todo-id={todo.id} className={`group flex min-h-9 items-center gap-2 border-b border-line px-3 last:border-b-0 hover:bg-sunken/70 ${checked ? 'bg-accent-soft' : ''}`}>
-    <SelectBox label={todo.title} checked={checked} onToggle={toggle}
-      className={selection.active ? '' : 'hidden md:block md:opacity-0 md:focus:opacity-100 md:group-hover:opacity-100'} />
-    <Checkbox shape="circle" checked={false} aria-label={`${todo.title} 완료`} title="완료 처리"
-      onCheckedChange={(checked) => { if (checked === true) onComplete(todo); }} />
+    {selection.mode
+      ? <SelectBox label={todo.title} checked={checked} onToggle={toggle} />
+      : <Checkbox checked={false} aria-label={`${todo.title} 완료`} title="완료 처리"
+          onCheckedChange={(checked) => { if (checked === true) onComplete(todo); }} />}
+
     <button type="button" className="min-w-0 flex-1 select-none truncate py-2 text-left text-sm [-webkit-touch-callout:none]" onPointerDown={start} onPointerUp={cancel} onPointerLeave={cancel} onPointerCancel={cancel}
       onClick={(event) => { if (press.current.fired) { press.current.fired = false; return; } if (selection.mode) toggle(event.shiftKey); else onOpen(todo.id); }}>
       {todo.key && <span className="badge mr-1.5 font-mono font-medium">{todo.key}</span>}{todo.title}
     </button>
     <span className="flex shrink-0 items-center gap-1">
-      {onTomorrow && <span className="hidden gap-1 md:group-focus-within:flex md:group-hover:flex">
+      {onTomorrow && !selection.mode && <span className="hidden gap-1 md:group-focus-within:flex md:group-hover:flex">
         <button type="button" className="btn h-6 px-1.5 text-xs" onClick={onTomorrow}>내일</button>
         <button type="button" className="btn h-6 px-1.5 text-xs" onClick={() => onComplete(todo)}>완료</button>
       </span>}
