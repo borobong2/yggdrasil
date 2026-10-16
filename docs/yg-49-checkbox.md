@@ -24,3 +24,13 @@ DB/migration/API/권한/사용자 데이터 변경 없음. 문서 todo·설정�
 - npm run typecheck 및 npm run build 통과. git diff --check 통과.
 - 화면 확인 후 선택된 완료 체크의 hover 배경이 흐려지는 것을 수정하고 재검증.
 - 운영 DB 테스트·공개 배포는 하지 않음. 테스트 화면은 http://127.0.0.1:3149/test/checkbox-harness.html.
+
+## 사용자 승인 UX 수정 — 한 행에 한 체크
+
+기본 모드는 완료 체크 하나, 선택 모드는 같은 자리에 선택 체크 하나만 표시한다. 선택 모드에서는 hover 개별 완료·내일 작업도 숨긴다. 보드는 기본 모드의 선택 체크와 여백을 없애고 명시적 선택 모드에서만 체크를 표시한다. 기존 모바일 길게 누르기와 Shift 범위 선택 유지.
+
+변경: TodayView.tsx, BoardView.tsx, 실화면 브라우저 테스트 scripts/check-single-control.mjs. DB·API 변경 없음. 실제 TodayView를 샘플 API 데이터로 검증하며 운영 할 일을 변경하지 않는다.
+
+완료 체크도 네모 형태로 통일해 라디오로 오인하지 않도록 한다. 기존 기본 모드의 hover 선택 체크는 제거한다.
+
+후속 검증: scripts/check-single-control.mjs가 기존 화면에서 `2 !== 1`로 실패(RED). 수정 후 실제 TodayView/BoardView에 샘플 API를 연결해 기본·hover·선택 모드·Shift·Space·모드 종료·완료·모바일을 확인했다. 보드 기본 모드 0개/선택 모드 1개 확인. 모든 쓰기는 브라우저에서 mock하여 운영 데이터를 변경하지 않았다. 타입 검사·빌드·공백 검사 통과.
