@@ -11,3 +11,5 @@
 비범위: 보기 삭제, 전역 빠른 추가, ICS, 새 의존성, 배포/병합. 별도 migration 없음.
 
 검증: 전용 로컬 yggdrasil_yg53 DB로 db:migrate 및 npx vitest run --dir test, npm run typecheck, npm run build, Playwright desktop/mobile. 운영 DB 금지. red 재현을 먼저 수행하고 결과 및 PR을 dispatch에 기록.
+
+납품 검증: typecheck/build 및 전용 yggdrasil_yg53 전체 41 files/200 tests 통과. calendar-browser / calendar-navigation-browser / calendar-basis-browser Chrome 세 스크립트 모두 통과. 상세 범위·실패 원인·재현 명령·스크린샷은 docs/evidence/calendar-improvements/verification.md. 독립 read-only 리뷰에서 추가 actionable finding 없음. 모바일 제목은 새 컨트롤에 눌리지 않게 별도 줄로 배치했다. 표시 기준은 화면 세션 내 선택이며 저장/URL 확장은 범위 밖이다.

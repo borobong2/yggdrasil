@@ -13,7 +13,7 @@ export const addDays = (day: string, n: number) => iso(utc(day) + n * 86_400_000
 export const weekStart = (day: string) => addDays(day, -new Date(utc(day)).getUTCDay());
 export const dayOf = (instant: string | Date) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul' }).format(new Date(instant));
 export const today = () => dayOf(new Date());
-/** Minutes after Seoul midnight. ponytail: the grid treats 0 as the all-day row, so a timed 00:00 todo shows there too. */
+/** Minutes after Seoul midnight; all-day is tracked separately from this time coordinate. */
 export const seoulMinutes = (instant: string) => Math.floor(((Date.parse(instant) + 9 * 3_600_000) % 86_400_000) / 60_000);
 export const slotAt = (day: string, minutes: number) => `${day}T${pad(Math.floor(minutes / 60))}:${pad(minutes % 60)}:00+09:00`;
 /** PATCH value that moves `instant` to `day`, keeping its Seoul time; all-day stays a date-only string (YG-38 flag). */

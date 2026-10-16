@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { DndContext, DragOverlay, KeyboardCode, KeyboardSensor, MouseSensor, TouchSensor, closestCorners, pointerWithin, useDraggable, useDroppable, useSensor, useSensors,
   type Announcements, type CollisionDetection, type DragEndEvent, type KeyboardCoordinateGetter } from '@dnd-kit/core';
 import { ChevronDown, ChevronLeft, ChevronRight, Repeat, Undo2, X } from 'lucide-react';
-import type { CalendarGhost, CalendarView as Calendar, Priority, Todo } from '../contracts/items.js';
+import type { CalendarDateBasis, CalendarGhost, CalendarView as Calendar, Priority, Todo } from '../contracts/items.js';
 import { addDays, calendarDateInput, dayOf, modes, monthGrid, moveKeepingTime, parseCalendarHash, rangeOf, seoulMinutes, shift, slotAt, today, type CalendarMode } from './calendar-dates.js';
 import { HoldBadge, isOverdue, PriorityBadge } from './format.js';
 import { CalendarCreate } from './CalendarCreate.js';
@@ -16,13 +16,10 @@ const HOUR = 48; // px per hour in the time grid
 const phone = () => window.matchMedia('(max-width: 767px)').matches;
 const label = (day: string, options: Intl.DateTimeFormatOptions) => new Date(`${day}T00:00:00Z`).toLocaleDateString('ko-KR', { timeZone: 'UTC', ...options });
 const dayLabel = (day: string) => label(day, { month: 'long', day: 'numeric', weekday: 'short' });
-const dateOf = (todo: Todo) => todo.dueAt ?? todo.scheduledAt;
 const hhmm = (minutes: number) => `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
-// YG-38: the date shown is dueAt (else scheduledAt); its all-day flag decides the all-day row vs the time grid.
-const allDayOf = (todo: Todo) => todo.dueAt ? todo.dueAllDay : todo.scheduledAllDay;
 
 type Drop = { day?: string; hour?: number; allDay?: boolean; undated?: boolean; label: string };
-type Entry = { kind: 'todo'; todo: Todo; minutes: number } | { kind: 'ghost'; ghost: CalendarGhost; minutes: number };
+type Entry = { kind: 'todo'; todo: Todo; minutes: number; allDay: boolean } | { kind: 'ghost'; ghost: CalendarGhost; minutes: number; allDay: boolean };
 type Toast = { text: string; undo?: () => void; error?: boolean };
 
 function readHash() {
@@ -57,13 +54,17 @@ export function CalendarView({ token, onActivity }: { token: string; onActivity?
   const [result, setResult] = useState<{ key: string; data: Calendar | null; error: string } | null>(null);
   const request = useRef(0);
   const [toast, setToast] = useState<Toast | null>(null);
+  const [basis, setBasis] = useState<CalendarDateBasis>('effective');
+  const fieldOf = (todo: Todo) => basis === 'scheduled' ? 'scheduledAt' : basis === 'due' || todo.dueAt || !todo.scheduledAt ? 'dueAt' : 'scheduledAt';
+  const dateOf = (todo: Todo) => todo[fieldOf(todo)];
+  const allDayOf = (todo: Todo) => fieldOf(todo) === 'dueAt' ? todo.dueAllDay : todo.scheduledAllDay;
   const [showDone, setShowDone] = useState(false);
   const [createAt, setCreateAt] = useState<string | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
   const [dragging, setDragging] = useState<Todo | null>(null);
   const headers: Record<string, string> = token ? { authorization: `Bearer ${token}` } : {};
   const range = rangeOf(mode, day);
-  const queryKey = JSON.stringify([token, range.from, range.to, showDone]);
+  const queryKey = JSON.stringify([token, range.from, range.to, showDone, basis]);
   const latestKey = useRef(queryKey);
   latestKey.current = queryKey;
   const data = result?.key === queryKey ? result.data : null;
@@ -94,7 +95,7 @@ export function CalendarView({ token, onActivity }: { token: string; onActivity?
     const generation = ++request.current;
     setResult({ key: queryKey, data: null, error: '' });
     try {
-      const response = await fetch(`/api/calendar?from=${range.from}&to=${range.to}${showDone ? '&done=1' : ''}`, { headers });
+      const response = await fetch(`/api/calendar?from=${range.from}&to=${range.to}${showDone ? '&done=1' : ''}&basis=${basis}`, { headers });
       if (!response.ok) throw new Error();
       const saved: Calendar = await response.json();
       if (generation === request.current && latestKey.current === queryKey) setResult({ key: queryKey, data: saved, error: '' });
@@ -113,7 +114,7 @@ export function CalendarView({ token, onActivity }: { token: string; onActivity?
     const others = { todos: view.todos.filter((item) => item.id !== todo.id), undated: view.undated.filter((item) => item.id !== todo.id) };
     const date = dateOf(todo);
     if (todo.status === 'done' && !showDone) return { ...view, ...others };
-    if (!date) return { ...view, ...others, undated: todo.status === 'done' ? others.undated : [todo, ...others.undated] };
+    if (!date) return { ...view, ...others, undated: todo.status === 'done' || todo.dueAt || todo.scheduledAt ? others.undated : [todo, ...others.undated] };
     const inRange = dayOf(date) >= view.from && dayOf(date) <= view.to;
     return { ...view, ...others, todos: inRange ? [...others.todos, todo] : others.todos };
   };
@@ -142,7 +143,7 @@ export function CalendarView({ token, onActivity }: { token: string; onActivity?
     const todo = active.data.current?.todo as Todo | undefined;
     const target = over?.data.current as Drop | undefined;
     if (!todo || !target) return;
-    const field = todo.dueAt ? 'dueAt' : todo.scheduledAt ? 'scheduledAt' : 'dueAt';
+    const field = fieldOf(todo);
     const current = todo[field];
     if (target.undated) {
       if (!current) return;
@@ -164,9 +165,9 @@ export function CalendarView({ token, onActivity }: { token: string; onActivity?
 
   const entries = new Map<string, Entry[]>();
   const push = (key: string, entry: Entry) => entries.set(key, [...entries.get(key) ?? [], entry]);
-  for (const todo of data?.todos ?? []) push(dayOf(dateOf(todo)!), { kind: 'todo', todo, minutes: allDayOf(todo) ? 0 : seoulMinutes(dateOf(todo)!) });
-  for (const ghost of data?.ghosts ?? []) push(dayOf(ghost.at), { kind: 'ghost', ghost, minutes: ghost.allDay ? 0 : seoulMinutes(ghost.at) });
-  for (const list of entries.values()) list.sort((a, b) => a.minutes - b.minutes || (a.kind === 'todo' ? a.todo.priority : a.ghost.priority).localeCompare(b.kind === 'todo' ? b.todo.priority : b.ghost.priority));
+  for (const todo of data?.todos ?? []) push(dayOf(dateOf(todo)!), { kind: 'todo', todo, allDay: allDayOf(todo), minutes: seoulMinutes(dateOf(todo)!) });
+  for (const ghost of data?.ghosts ?? []) push(dayOf(ghost.at), { kind: 'ghost', ghost, allDay: ghost.allDay, minutes: seoulMinutes(ghost.at) });
+  for (const list of entries.values()) list.sort((a, b) => Number(b.allDay) - Number(a.allDay) || a.minutes - b.minutes || (a.kind === 'todo' ? a.todo.priority : a.ghost.priority).localeCompare(b.kind === 'todo' ? b.todo.priority : b.ghost.priority));
   const open = openId ? [...data?.todos ?? [], ...data?.undated ?? []].find((todo) => todo.id === openId) : undefined;
   const title = mode === 'month' ? label(day, { year: 'numeric', month: 'long' })
     : range.from === range.to ? label(day, { month: 'long', day: 'numeric', weekday: 'long' })
@@ -189,12 +190,13 @@ export function CalendarView({ token, onActivity }: { token: string; onActivity?
         <button type="button" className="btn btn-ghost size-[30px] p-0" aria-label="이전" onClick={() => go(mode, shift(mode, day, -1))}><ChevronLeft /></button>
         <button type="button" className="btn btn-ghost size-[30px] p-0" aria-label="다음" onClick={() => go(mode, shift(mode, day, 1))}><ChevronRight /></button>
       </div>
-      <h2 className="min-w-0 flex-1 truncate text-lg font-semibold tabular-nums" aria-live="polite">{title}</h2>
-      <label className="flex items-center gap-1 text-sm text-muted">연·월 선택<input aria-label="연·월 선택" type="month" className="field w-36" value={day.slice(0, 7)} min="1900-01" max="2100-12" onChange={(event) => { const value = event.target.value; if (value >= '1900-01' && value <= '2100-12' && /^\d{4}-\d{2}$/.test(value) && parseCalendarHash(`#/calendar/month/${value}-01`).day) go(mode, `${value}-01`); }} /></label>
+      <h2 className="min-w-0 flex-1 truncate text-lg font-semibold tabular-nums max-md:order-first max-md:w-full max-md:flex-none" aria-live="polite">{title}</h2>
+      <label className="flex shrink-0 items-center gap-1 whitespace-nowrap text-sm text-muted">연·월 선택<input aria-label="연·월 선택" type="month" className="field w-36" value={day.slice(0, 7)} min="1900-01" max="2100-12" onChange={(event) => { const value = event.target.value; if (value >= '1900-01' && value <= '2100-12' && /^\d{4}-\d{2}$/.test(value) && parseCalendarHash(`#/calendar/month/${value}-01`).day) go(mode, `${value}-01`); }} /></label>
       <div role="group" aria-label="보기" className="flex rounded-md bg-sunken p-0.5 max-md:order-last max-md:w-full">
         {modes.map((item) => <button key={item} type="button" aria-pressed={item === mode} onClick={() => go(item, day)}
           className="h-[26px] flex-1 whitespace-nowrap rounded-[5px] px-2.5 text-sm font-medium text-muted aria-pressed:bg-surface aria-pressed:text-ink aria-pressed:shadow-card">{modeLabels[item]}</button>)}
       </div>
+      <label className="flex shrink-0 items-center gap-1 whitespace-nowrap text-sm text-muted">표시 기준<select aria-label="표시 기준" className="field" value={basis} onChange={(event) => setBasis(event.target.value as CalendarDateBasis)}><option value="effective">마감 우선</option><option value="due">마감일</option><option value="scheduled">예정일</option></select></label>
       <label className="flex items-center gap-1.5 text-sm text-muted"><input type="checkbox" className="accent-[var(--color-accent)]" checked={showDone} onChange={(event) => setShowDone(event.target.checked)} />완료 표시</label>
     </div>
     {error && <p role="alert" className="alert">{error} <button type="button" className="btn" onClick={() => void load()}>다시 시도</button></p>}
@@ -217,7 +219,7 @@ export function CalendarView({ token, onActivity }: { token: string; onActivity?
       {toast.undo && <button type="button" className="btn" onClick={toast.undo}><Undo2 />되돌리기</button>}
       <button type="button" className="btn btn-ghost size-7 p-0" aria-label="알림 닫기" onClick={() => setToast(null)}><X /></button>
     </div>}
-    {createAt && <CalendarCreate at={createAt} headers={headers} onClose={() => setCreateAt(null)} onSaved={() => { setCreateAt(null); void load(); onActivity?.(); }} />}
+    {createAt && <CalendarCreate at={createAt} field={basis === 'scheduled' ? 'scheduledAt' : 'dueAt'} headers={headers} onClose={() => setCreateAt(null)} onSaved={() => { setCreateAt(null); void load(); onActivity?.(); }} />}
     {open && <TodoDetail key={open.id} issue={open} area={open.area} headers={headers} onClose={() => setOpenId(null)} onSaved={() => { void load(); onActivity?.(); }} />}
   </section>;
 }
@@ -271,12 +273,12 @@ function TimeGrid({ days, entries, now, onOpen, onCreate }: { days: string[] } &
     </div>
     <div className="grid border-b border-line" style={columns}>
       <span className="pt-1 text-center text-2xs text-faint">종일</span>
-      {days.map((day) => <AllDayCell key={day} day={day} list={(entries.get(day) ?? []).filter((entry) => entry.minutes === 0)} now={now} onOpen={onOpen} onCreate={onCreate} />)}
+      {days.map((day) => <AllDayCell key={day} day={day} list={(entries.get(day) ?? []).filter((entry) => entry.allDay)} now={now} onOpen={onOpen} onCreate={onCreate} />)}
     </div>
     <div ref={scroller} aria-label="시간표" className="max-h-[calc(100dvh-300px)] min-h-72 overflow-y-auto overscroll-contain">
       <div className="grid" style={columns}>
         <div>{Array.from({ length: 24 }, (_, hour) => <span key={hour} className="block pr-1 text-right text-2xs tabular-nums text-faint" style={{ height: HOUR }}>{hour ? `${hour}시` : ''}</span>)}</div>
-        {days.map((day) => <DayColumn key={day} day={day} list={(entries.get(day) ?? []).filter((entry) => entry.minutes > 0)} now={now} clock={day === now ? clock : null} onOpen={onOpen} onCreate={onCreate} />)}
+        {days.map((day) => <DayColumn key={day} day={day} list={(entries.get(day) ?? []).filter((entry) => !entry.allDay)} now={now} clock={day === now ? clock : null} onOpen={onOpen} onCreate={onCreate} />)}
       </div>
     </div>
   </div>;
@@ -325,7 +327,7 @@ function Agenda({ from, to, entries, now, onOpen }: { from: string; to: string }
     {days.map((day) => <section key={day} aria-label={dayLabel(day)} data-agenda-day={day}>
       <h3 className={`mb-1.5 flex items-center gap-2 text-sm font-semibold ${day === now ? 'text-accent-ink' : ''}`}>{dayLabel(day)}{day === now && <span className="badge bg-accent-soft text-accent-ink">오늘</span>}</h3>
       <ul className="space-y-1">{entries.get(day)!.map((entry) => <li key={entry.kind === 'todo' ? entry.todo.id : entry.ghost.at + entry.ghost.recurrenceId}>
-        {entry.kind === 'todo' ? <Chip todo={entry.todo} now={now} onOpen={onOpen} time={entry.minutes} row /> : <Ghost ghost={entry.ghost} time={entry.minutes} row />}</li>)}</ul>
+        {entry.kind === 'todo' ? <Chip todo={entry.todo} now={now} onOpen={onOpen} time={entry.allDay ? undefined : entry.minutes} row /> : <Ghost ghost={entry.ghost} time={entry.allDay ? undefined : entry.minutes} row />}</li>)}</ul>
     </section>)}
   </div>;
 }
@@ -362,7 +364,7 @@ function ChipFace({ todo, now, time, fill, row, lifted }: Omit<ChipProps, 'onOpe
   return <span data-late={late || undefined} className={`flex min-w-0 gap-1.5 overflow-hidden rounded-md border ${late ? 'border-danger/30 bg-danger-soft text-danger' : 'border-line bg-surface'} ${lifted ? 'shadow-pop' : ''}
     ${row ? 'items-center px-2.5 py-1.5 text-sm' : `px-1 text-2xs leading-4 md:text-xs ${fill ? 'h-full items-start py-0.5' : 'items-center py-px'}`}`}>
     <span className={`size-1.5 shrink-0 rounded-full ${priorityDots[todo.priority]} ${fill ? 'mt-[5px]' : ''}`} title={`우선순위 ${todo.priority.toUpperCase()}`} />
-    {time ? <span className={`shrink-0 tabular-nums text-muted ${row ? 'text-xs' : 'max-md:hidden'}`}>{hhmm(time)}</span> : null}
+    {time !== undefined ? <span className={`shrink-0 tabular-nums text-muted ${row ? 'text-xs' : 'max-md:hidden'}`}>{hhmm(time)}</span> : null}
     <span className={`min-w-0 flex-1 truncate ${todo.status === 'done' ? 'text-muted line-through' : ''}`}>{todo.title}</span>
     {row && <span className="shrink-0 max-sm:hidden"><PriorityBadge priority={todo.priority} /></span>}
     {todo.hold && !fill && <span className={`shrink-0 ${row ? '' : 'max-md:hidden'}`}><HoldBadge hold={todo.hold} reason={todo.holdReason} /></span>}
@@ -373,6 +375,6 @@ function ChipFace({ todo, now, time, fill, row, lifted }: Omit<ChipProps, 'onOpe
 function Ghost({ ghost, time, compact, fill, row }: { ghost: CalendarGhost; time?: number; compact?: boolean; fill?: boolean; row?: boolean }): ReactNode {
   return <span data-ghost={ghost.recurrenceId} title={`${ghost.title} · 반복 예정`} aria-label={`${ghost.title} 반복 예정`}
     className={`flex min-w-0 items-center gap-1 overflow-hidden rounded-md border border-dashed border-line-strong text-faint opacity-70 ${row ? 'px-2.5 py-1.5 text-sm' : `px-1 text-2xs leading-4 md:text-xs ${fill ? 'h-full items-start py-0.5' : compact ? 'py-px' : 'py-1'}`}`}>
-    <Repeat className="size-3 shrink-0" />{time ? <span className="shrink-0 tabular-nums max-md:hidden">{hhmm(time)}</span> : null}<span className="min-w-0 truncate">{ghost.title}</span>
+    <Repeat className="size-3 shrink-0" />{time !== undefined ? <span className="shrink-0 tabular-nums max-md:hidden">{hhmm(time)}</span> : null}<span className="min-w-0 truncate">{ghost.title}</span>
   </span>;
 }

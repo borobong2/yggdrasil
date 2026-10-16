@@ -25,6 +25,7 @@ export type Weekday = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun';
 export type Recurrence = { id: string; freq: 'daily' | 'weekly' | 'monthly'; weekdays: Weekday[] | null; monthDay: number | null; time: string | null; paused: boolean };
 export type TodoVia = 'ui' | 'mcp' | 'import';
 /** YG-30: a future occurrence of an active series, computed for display only (no row). `todoId` is the series' open occurrence. */
+export type CalendarDateBasis = 'effective' | 'due' | 'scheduled';
 export type CalendarGhost = { recurrenceId: string; todoId: string; title: string; priority: Priority; at: string; allDay: boolean };
 export type CalendarView = { from: string; to: string; todos: Todo[]; undated: Todo[]; ghosts: CalendarGhost[] };
 /**

@@ -20,7 +20,7 @@ export function registerTodoRoutes(app: Hono<AppEnv>): void {
   // YG-30: ?from=YYYY-MM-DD&to=YYYY-MM-DD (Asia/Seoul, inclusive, ≤ 62 days) &done=1 to include completed todos.
   app.get('/api/calendar', (c) => {
     const query = calendarQuery.safeParse(c.req.query());
-    return query.success ? run(c, () => calendarView(c.get('user').id, query.data.from, query.data.to, query.data.done === '1')) : c.json({ error: 'Invalid range' }, 400);
+    return query.success ? run(c, () => calendarView(c.get('user').id, query.data.from, query.data.to, query.data.done === '1', undefined, query.data.basis)) : c.json({ error: 'Invalid range' }, 400);
   });
   app.get('/api/todos/today', (c) => run(c, () => todayView(c.get('user').id)));
   app.get('/api/todos/stale', (c) => run(c, () => staleView(c.get('user').id))); // YG-41
@@ -64,7 +64,7 @@ const createBody = z.object({ area: todoName, title: todoFields.title, epic: tod
 const completeBody = z.object({ completedAt: completedAtInput.optional(), actualMinutes: todoFields.actualMinutes.optional() }).strict();
 const promoteBody = z.object({ prefix: keyPrefix.optional() }).strict();
 const prefixBody = z.object({ prefix: keyPrefix.nullable(), start: z.number().int().min(1).max(1_000_000).optional() }).strict();
-const calendarQuery = z.object({ from: z.iso.date(), to: z.iso.date(), done: z.enum(['0', '1']).optional() })
+const calendarQuery = z.object({ from: z.iso.date(), to: z.iso.date(), done: z.enum(['0', '1']).optional(), basis: z.enum(['effective', 'due', 'scheduled']).default('effective') })
   .refine((range) => { const days = (Date.parse(range.to) - Date.parse(range.from)) / 86_400_000; return days >= 0 && days <= 62; }, 'from ≤ to, at most 62 days');
 
 async function run(c: Context<AppEnv>, operation: () => Promise<unknown>) {

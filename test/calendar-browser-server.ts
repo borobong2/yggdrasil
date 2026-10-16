@@ -12,7 +12,7 @@ const owner=process.env.YGGDRASIL_DEV_OWNER_ID;
 await createTodo(owner,{area:'개인',title:'종일 원본',dueAt:'2026-10-18'});
 await createTodo(owner,{area:'개인',title:'예정 종일',scheduledAt:'2026-10-19'});
 await createTodo(owner,{area:'개인',title:'자정 timed',dueAt:'2026-10-18T00:00:00+09:00'});
-await createTodo(owner,{area:'개인',title:'두 날짜',dueAt:'2026-11-10',scheduledAt:'2026-10-18'});
+await createTodo(owner,{area:'개인',title:'두 날짜',dueAt:'2026-11-10',scheduledAt:'2026-10-18T00:00:00+09:00'});
 await createTodo(owner,{area:'개인',title:'둘 복원',dueAt:'2026-10-19',scheduledAt:'2026-10-20T00:00:00+09:00'});
 await createTodo(owner,{area:'개인',title:'날짜 미정'});
 await createTodo(owner,{area:'개인',title:'자정 반복',dueAt:'2026-10-25T00:00:00+09:00',recurrence:{freq:'daily',time:'00:00'}});
