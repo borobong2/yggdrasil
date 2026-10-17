@@ -75,7 +75,7 @@ A 공통: 이미 동의한 일요일 시작 및 재현된 버그 수정도 포�
 
 ## 검증 실행 명세
 
-현재 node_modules가 없으며 이 단계에서는 의존성 설치, DB 생성, 브라우저 fixture 실행을 하지 않았다. 아래는 실행 결과가 아닌 다음 단계 명세다.
+초안 단계의 예정 명세를 아래에 보존한다. 실제 실행 완료: YG-50~53 전용 로컬 DB, 최종 200 tests/typecheck/build/browser 3개 통과. 실제 결과는 calendar-improvements-dispatch.md 및 최종 티켓의 docs/evidence/calendar-improvements/verification.md 참조.
 
 1. 티켓 worktree에서 lockfile 기반 의존성을 준비한다. 로컬 Docker Postgres 가용성을 확인하고 티켓 전용 `yggdrasil_yg<n>` DB만 만든다. 운영 DB/기존 사용자 DB는 사용하지 않는다.
 2. 전용 DATABASE_URL을 프로세스에만 넘겨 `npm run db:migrate`; 테스트 setup의 DB 보호 검사 유지. credential 값은 로그에 출력하지 않는다.

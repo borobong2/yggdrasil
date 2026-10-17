@@ -38,6 +38,12 @@ if(stage>=51){
  const heads=page.locator('section[aria-label="캘린더"] .grid.grid-cols-7').first();assert.deepEqual(await heads.locator('span').allTextContents(),['일','월','화','수','목','금','토']);
  await page.locator('[data-day="2026-10-22"]').getByRole('button',{name:/하루 보기/}).click();await page.waitForURL('**/#/calendar/day/2026-10-22');await chip('클릭 종일').waitFor();
 }
+// A failed save preserves input; retry creates once. Card click opens detail, not creation.
+await chip('클릭 종일').click();await page.getByRole('dialog').waitFor();assert.equal(await page.getByRole('dialog',{name:'할 일 추가'}).count(),0);await page.getByRole('button',{name:'상세 닫기',exact:true}).click();
+await page.getByRole('button',{name:'월',exact:true}).click();await page.locator('[data-day="2026-10-24"]').waitFor();
+await page.locator('[data-day="2026-10-24"]').getByRole('button',{name:/할 일 추가/}).click();await dialog.getByLabel('제목').fill('오류 재시도');
+await page.route('**/api/todos',route=>route.fulfill({status:500,contentType:'application/json',body:'{"error":"fixture failure"}'}),{times:1});
+await dialog.getByRole('button',{name:'추가',exact:true}).click();await dialog.getByRole('alert').waitFor();assert.equal(await dialog.getByLabel('제목').inputValue(),'오류 재시도');await dialog.getByRole('button',{name:'추가',exact:true}).click();await chip('오류 재시도').waitFor();
 mkdirSync('tmp/calendar-acceptance',{recursive:true});await page.screenshot({path:`tmp/calendar-acceptance/yg${stage}-desktop.png`});
 const phone=await context.newPage();await phone.setViewportSize({width:390,height:844});await phone.goto(`${base}/#/calendar/month/2026-10-18`);await phone.locator('[data-day="2026-10-22"]').getByRole('button',{name:/할 일 추가/}).click();await phone.getByRole('dialog',{name:'할 일 추가'}).waitFor();await phone.screenshot({path:`tmp/calendar-acceptance/yg${stage}-mobile.png`});await phone.getByRole('button',{name:'취소',exact:true}).click();
 assert.deepEqual(errors,[]);console.log(`PASS YG-${stage} browser acceptance: create/date semantics/undo/null/desktop/mobile`);await browser.close();
