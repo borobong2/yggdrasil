@@ -11,3 +11,5 @@
 비범위: 보기 삭제, 전역 빠른 추가, ICS, 새 의존성, 배포/병합. 별도 migration 없음.
 
 검증: 전용 로컬 yggdrasil_yg51 DB로 db:migrate 및 npx vitest run --dir test, npm run typecheck, npm run build, Playwright desktop/mobile. 운영 DB 금지. red 재현을 먼저 수행하고 결과 및 PR을 dispatch에 기록.
+
+검증: 일요일 자신의 주 시작 red(기존 10/12) → green(10/18), 월말/연말/윤년·기존 API 및 생성 회귀 8 tests 통과. typecheck/build 통과. CALENDAR_STAGE=51 node test/calendar-browser.mjs desktop/mobile 통과. 보기 전환 직후 assertion 타이밍은 실제 DOM 대기로 수정했다.
