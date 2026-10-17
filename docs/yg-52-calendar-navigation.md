@@ -11,3 +11,7 @@
 비범위: 보기 삭제, 전역 빠른 추가, ICS, 새 의존성, 배포/병합. 별도 migration 없음.
 
 검증: 전용 로컬 yggdrasil_yg52 DB로 db:migrate 및 npx vitest run --dir test, npm run typecheck, npm run build, Playwright desktop/mobile. 운영 DB 금지. red 재현을 먼저 수행하고 결과 및 PR을 dispatch에 기록.
+
+검증: 브라우저 red에서 새 월 제목 아래 이전 월 데이터 잔류 확인 후 green. node test/calendar-navigation-browser.mjs 통과: stale success/error·loading·최신 오류/재시도·윤년/연도 월 선택·완료 토글. CALENDAR_STAGE=52 node test/calendar-browser.mjs desktop/mobile 통과. typecheck/build 및 전용 yggdrasil_yg52 관련 8 tests 통과. 생성 폼 입력은 기존 field 스타일로 맞췄다.
+
+독립 리뷰(calendar_review) P2 두 건 수정 및 재검증: 보기 이동 뒤 retained undo가 현재 query를 refetch해 화면/DB를 일치시키고, month picker는 지원 연도 1900~2100만 허용한다. 극단 연도 0001/9999 직접 입력 무시와 보기 변경 후 undo 회귀 포함 browser 두 스크립트 재통과, typecheck/build 재통과.

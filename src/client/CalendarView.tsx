@@ -54,8 +54,8 @@ const keyboardCoordinates: KeyboardCoordinateGetter = (event, { context: { activ
 
 export function CalendarView({ token, onActivity }: { token: string; onActivity?: () => void }) {
   const [{ mode, day }, setLocation] = useState(readHash);
-  const [data, setData] = useState<Calendar | null>(null);
-  const [error, setError] = useState('');
+  const [result, setResult] = useState<{ key: string; data: Calendar | null; error: string } | null>(null);
+  const request = useRef(0);
   const [toast, setToast] = useState<Toast | null>(null);
   const [showDone, setShowDone] = useState(false);
   const [createAt, setCreateAt] = useState<string | null>(null);
@@ -63,6 +63,15 @@ export function CalendarView({ token, onActivity }: { token: string; onActivity?
   const [dragging, setDragging] = useState<Todo | null>(null);
   const headers: Record<string, string> = token ? { authorization: `Bearer ${token}` } : {};
   const range = rangeOf(mode, day);
+  const queryKey = JSON.stringify([token, range.from, range.to, showDone]);
+  const latestKey = useRef(queryKey);
+  latestKey.current = queryKey;
+  const data = result?.key === queryKey ? result.data : null;
+  const error = result?.key === queryKey ? result.error : '';
+  function setData(update: (view: Calendar | null) => Calendar | null) {
+    if (latestKey.current !== queryKey) return;
+    setResult((previous) => previous?.key === queryKey ? { ...previous, data: update(previous.data) } : previous);
+  }
   const now = today();
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
@@ -80,13 +89,22 @@ export function CalendarView({ token, onActivity }: { token: string; onActivity?
   useEffect(() => { if (!toast) return; const timer = setTimeout(() => setToast(null), 6000); return () => clearTimeout(timer); }, [toast]);
 
   async function load() {
+    // A save may finish after navigation; its old closure must not start an obsolete reload.
+    if (latestKey.current !== queryKey) return;
+    const generation = ++request.current;
+    setResult({ key: queryKey, data: null, error: '' });
     try {
       const response = await fetch(`/api/calendar?from=${range.from}&to=${range.to}${showDone ? '&done=1' : ''}`, { headers });
       if (!response.ok) throw new Error();
-      setData(await response.json()); setError('');
-    } catch { setError('캘린더를 불러오지 못했습니다.'); }
+      const saved: Calendar = await response.json();
+      if (generation === request.current && latestKey.current === queryKey) setResult({ key: queryKey, data: saved, error: '' });
+    } catch {
+      if (generation === request.current && latestKey.current === queryKey) setResult({ key: queryKey, data: null, error: '캘린더를 불러오지 못했습니다.' });
+    }
   }
-  useEffect(() => { void load(); }, [token, range.from, range.to, showDone]);
+  const reload = useRef(load);
+  reload.current = load;
+  useEffect(() => { void load(); return () => { request.current++; }; }, [queryKey]);
 
   const go = (nextMode: CalendarMode, nextDay: string) => { location.hash = `#/calendar/${nextMode}/${nextDay}`; };
 
@@ -109,11 +127,12 @@ export function CalendarView({ token, onActivity }: { token: string; onActivity?
       if (!response.ok) throw new Error();
       const saved: Todo = await response.json();
       setData((view) => view && place(view, saved));
-      if (saved.recurrence) void load(); // ghosts follow the open occurrence's new date
+      if (saved.recurrence || latestKey.current !== queryKey) void reload.current(); // ghosts follow the open occurrence's new date
       onActivity?.();
       if (text) setToast({ text, undo: () => { setToast(null); void patch(saved, previous); } });
     } catch {
-      setData((view) => view && place(view, todo));
+      if (latestKey.current !== queryKey) void reload.current();
+      else setData((view) => view && place(view, todo));
       setToast({ text: `'${todo.title}'을(를) 옮기지 못해 원래 날짜로 되돌렸습니다.`, error: true });
     }
   }
@@ -142,7 +161,6 @@ export function CalendarView({ token, onActivity }: { token: string; onActivity?
     void patch(todo, { [field]: value }, `'${todo.title}'을(를) ${target.label}(으)로 옮겼습니다.`);
   }
 
-  if (error && !data) return <p role="alert" className="alert">{error}</p>;
 
   const entries = new Map<string, Entry[]>();
   const push = (key: string, entry: Entry) => entries.set(key, [...entries.get(key) ?? [], entry]);
@@ -172,14 +190,15 @@ export function CalendarView({ token, onActivity }: { token: string; onActivity?
         <button type="button" className="btn btn-ghost size-[30px] p-0" aria-label="다음" onClick={() => go(mode, shift(mode, day, 1))}><ChevronRight /></button>
       </div>
       <h2 className="min-w-0 flex-1 truncate text-lg font-semibold tabular-nums" aria-live="polite">{title}</h2>
+      <label className="flex items-center gap-1 text-sm text-muted">연·월 선택<input aria-label="연·월 선택" type="month" className="field w-36" value={day.slice(0, 7)} min="1900-01" max="2100-12" onChange={(event) => { const value = event.target.value; if (value >= '1900-01' && value <= '2100-12' && /^\d{4}-\d{2}$/.test(value) && parseCalendarHash(`#/calendar/month/${value}-01`).day) go(mode, `${value}-01`); }} /></label>
       <div role="group" aria-label="보기" className="flex rounded-md bg-sunken p-0.5 max-md:order-last max-md:w-full">
         {modes.map((item) => <button key={item} type="button" aria-pressed={item === mode} onClick={() => go(item, day)}
           className="h-[26px] flex-1 whitespace-nowrap rounded-[5px] px-2.5 text-sm font-medium text-muted aria-pressed:bg-surface aria-pressed:text-ink aria-pressed:shadow-card">{modeLabels[item]}</button>)}
       </div>
       <label className="flex items-center gap-1.5 text-sm text-muted"><input type="checkbox" className="accent-[var(--color-accent)]" checked={showDone} onChange={(event) => setShowDone(event.target.checked)} />완료 표시</label>
     </div>
-    {error && <p role="alert" className="alert">{error}</p>}
-    {!data ? <p role="status" className="empty">캘린더를 불러오는 중…</p> :
+    {error && <p role="alert" className="alert">{error} <button type="button" className="btn" onClick={() => void load()}>다시 시도</button></p>}
+    {!data ? (!error && <p role="status" className="empty">캘린더를 불러오는 중…</p>) :
       <DndContext sensors={sensors} collisionDetection={collision} onDragEnd={onDragEnd} onDragCancel={() => setDragging(null)}
         onDragStart={({ active }) => { setDragging(active.data.current?.todo ?? null); document.querySelectorAll<HTMLElement>('[popover]').forEach((element) => element.matches(':popover-open') && element.hidePopover()); }}
         accessibility={{ announcements, screenReaderInstructions: { draggable: '스페이스를 누르면 일정을 듭니다. 방향키로 날짜·시간을 옮기고 스페이스로 놓으며, Esc로 취소합니다. Enter는 상세를 엽니다.' } }}>
