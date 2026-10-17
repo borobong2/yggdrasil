@@ -3,8 +3,9 @@ import { DndContext, DragOverlay, KeyboardCode, KeyboardSensor, MouseSensor, Tou
   type Announcements, type CollisionDetection, type DragEndEvent, type KeyboardCoordinateGetter } from '@dnd-kit/core';
 import { ChevronDown, ChevronLeft, ChevronRight, Repeat, Undo2, X } from 'lucide-react';
 import type { CalendarGhost, CalendarView as Calendar, Priority, Todo } from '../contracts/items.js';
-import { addDays, dayOf, modes, monthGrid, moveKeepingTime, parseCalendarHash, rangeOf, seoulMinutes, shift, slotAt, today, type CalendarMode } from './calendar-dates.js';
+import { addDays, calendarDateInput, dayOf, modes, monthGrid, moveKeepingTime, parseCalendarHash, rangeOf, seoulMinutes, shift, slotAt, today, type CalendarMode } from './calendar-dates.js';
 import { HoldBadge, isOverdue, PriorityBadge } from './format.js';
+import { CalendarCreate } from './CalendarCreate.js';
 import { TodoDetail } from './TodoDetail.js';
 
 // YG-30 calendar. Position lives in the hash (#/calendar/<mode>/<day>); data comes from GET /api/calendar for the visible range.
@@ -57,6 +58,7 @@ export function CalendarView({ token, onActivity }: { token: string; onActivity?
   const [error, setError] = useState('');
   const [toast, setToast] = useState<Toast | null>(null);
   const [showDone, setShowDone] = useState(false);
+  const [createAt, setCreateAt] = useState<string | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
   const [dragging, setDragging] = useState<Todo | null>(null);
   const headers: Record<string, string> = token ? { authorization: `Bearer ${token}` } : {};
@@ -100,8 +102,8 @@ export function CalendarView({ token, onActivity }: { token: string; onActivity?
 
   async function patch(todo: Todo, changes: Partial<Record<'dueAt' | 'scheduledAt', string | null>>, text?: string) {
     const iso = (value: string | null) => value && new Date(/T/.test(value) ? value : `${value}T00:00:00+09:00`).toISOString();
-    const previous = Object.fromEntries(Object.keys(changes).map((key) => [key, todo[key as keyof typeof changes]]));
-    setData((view) => view && place(view, { ...todo, ...Object.fromEntries(Object.entries(changes).map(([key, value]) => [key, iso(value ?? null)])) }));
+    const previous = Object.fromEntries(Object.keys(changes).map((key) => [key, calendarDateInput(todo[key as keyof typeof changes], key === 'dueAt' ? todo.dueAllDay : todo.scheduledAllDay)]));
+    setData((view) => view && place(view, { ...todo, ...Object.fromEntries(Object.entries(changes).flatMap(([key, value]) => [[key, iso(value ?? null)], [key === 'dueAt' ? 'dueAllDay' : 'scheduledAllDay', !!value && !value.includes('T')]])) }));
     try {
       const response = await fetch(`/api/todos/${todo.id}`, { method: 'PATCH', headers: { ...headers, 'content-type': 'application/json' }, body: JSON.stringify(changes) });
       if (!response.ok) throw new Error();
@@ -136,7 +138,7 @@ export function CalendarView({ token, onActivity }: { token: string; onActivity?
       const raw = card && column ? (card.top - column.top) / HOUR * 60 : target.hour * 60;
       value = slotAt(target.day!, Math.min(Math.max(Math.round(raw / 15) * 15, 0), 24 * 60 - 15));
     } else value = target.allDay || !current ? target.day! : moveKeepingTime(current, target.day!, allDayOf(todo));
-    if (current && new Date(/T/.test(value) ? value : `${value}T00:00:00+09:00`).getTime() === Date.parse(current)) return;
+    if (current && new Date(/T/.test(value) ? value : `${value}T00:00:00+09:00`).getTime() === Date.parse(current) && allDayOf(todo) === !value.includes('T')) return;
     void patch(todo, { [field]: value }, `'${todo.title}'을(를) ${target.label}(으)로 옮겼습니다.`);
   }
 
@@ -160,7 +162,7 @@ export function CalendarView({ token, onActivity }: { token: string; onActivity?
     onDragEnd: ({ active, over }) => over ? `${active.data.current?.todo.title}을(를) ${where(over.data.current as Drop)}에 놓았습니다.` : '놓지 않았습니다.',
     onDragCancel: ({ active }) => `이동을 취소했습니다. ${active.data.current?.todo.title}은(는) 원래 날짜에 있습니다.`
   };
-  const props = { entries, now, onOpen: setOpenId };
+  const props = { entries, now, onOpen: setOpenId, onCreate: setCreateAt };
 
   return <section aria-label="캘린더" className="space-y-3 pb-28 md:pb-0">
     <div className="flex flex-wrap items-center gap-2">
@@ -196,33 +198,35 @@ export function CalendarView({ token, onActivity }: { token: string; onActivity?
       {toast.undo && <button type="button" className="btn" onClick={toast.undo}><Undo2 />되돌리기</button>}
       <button type="button" className="btn btn-ghost size-7 p-0" aria-label="알림 닫기" onClick={() => setToast(null)}><X /></button>
     </div>}
+    {createAt && <CalendarCreate at={createAt} headers={headers} onClose={() => setCreateAt(null)} onSaved={() => { setCreateAt(null); void load(); onActivity?.(); }} />}
     {open && <TodoDetail key={open.id} issue={open} area={open.area} headers={headers} onClose={() => setOpenId(null)} onSaved={() => { void load(); onActivity?.(); }} />}
   </section>;
 }
 
-type GridProps = { entries: Map<string, Entry[]>; now: string; onOpen: (id: string) => void };
+type GridProps = { entries: Map<string, Entry[]>; now: string; onOpen: (id: string) => void; onCreate: (at: string) => void };
 
-function MonthGrid({ day, entries, now, onOpen }: { day: string } & GridProps) {
+function MonthGrid({ day, entries, now, onOpen, onCreate }: { day: string } & GridProps) {
   const month = day.slice(0, 7);
   return <div className="overflow-hidden rounded-lg border border-line bg-surface">
     <div className="grid grid-cols-7 border-b border-line bg-sunken/60">{weekdayNames.map((name) => <span key={name} className="py-1 text-center text-xs font-medium text-muted">{name}</span>)}</div>
     <div className="grid grid-cols-7">
-      {monthGrid(day).map((cell) => <DayCell key={cell} day={cell} faded={cell.slice(0, 7) !== month} list={entries.get(cell) ?? []} now={now} onOpen={onOpen} />)}
+      {monthGrid(day).map((cell) => <DayCell key={cell} day={cell} faded={cell.slice(0, 7) !== month} list={entries.get(cell) ?? []} now={now} onOpen={onOpen} onCreate={onCreate} />)}
     </div>
   </div>;
 }
 
-function DayCell({ day, faded, list, now, onOpen }: { day: string; faded: boolean; list: Entry[]; now: string; onOpen: (id: string) => void }) {
+function DayCell({ day, faded, list, now, onOpen, onCreate }: { day: string; faded: boolean; list: Entry[]; now: string; onOpen: (id: string) => void; onCreate: (at: string) => void }) {
   const { setNodeRef, isOver } = useDroppable({ id: `day:${day}`, data: { day, label: dayLabel(day) } satisfies Drop });
   const shown = list.length > 3 ? list.slice(0, 2) : list;
   const popover = `more-${day}`;
-  return <div ref={setNodeRef} data-day={day} aria-label={dayLabel(day)} role="group"
+  return <div ref={setNodeRef} onClick={(event) => { if (event.target === event.currentTarget) onCreate(day); }} data-day={day} aria-label={dayLabel(day)} role="group"
     className={`min-h-[76px] min-w-0 border-b border-r border-line p-0.5 transition-colors [&:nth-child(7n)]:border-r-0 md:min-h-[112px] md:p-1 ${isOver ? 'bg-accent-soft' : faded ? 'bg-sunken/40' : ''}`}>
     <span className={`mb-0.5 grid size-5 place-items-center rounded-full text-2xs font-medium tabular-nums md:size-6 md:text-xs ${day === now ? 'bg-accent text-white' : faded ? 'text-faint' : 'text-muted'}`}>{Number(day.slice(8))}</span>
     <ul className="space-y-0.5">
       {shown.map((entry) => <li key={entry.kind === 'todo' ? entry.todo.id : entry.ghost.at + entry.ghost.recurrenceId}>
         {entry.kind === 'todo' ? <Chip todo={entry.todo} now={now} onOpen={onOpen} compact /> : <Ghost ghost={entry.ghost} compact />}</li>)}
     </ul>
+    <button type="button" aria-label={`${dayLabel(day)} 할 일 추가`} className="mt-1 w-full rounded px-1 text-left text-xs text-faint hover:bg-sunken" onClick={() => onCreate(day)}>+ 추가</button>
     {list.length > 3 && <>
       <button type="button" popoverTarget={popover} className="mt-0.5 w-full truncate rounded-sm px-1 text-left text-2xs font-medium text-muted hover:bg-sunken">+{list.length - 2}개 더</button>
       <div id={popover} popover="auto" aria-label={`${dayLabel(day)} 전체`} className="card m-auto w-72 max-w-[calc(100vw-2rem)] p-2 shadow-pop">
@@ -234,7 +238,7 @@ function DayCell({ day, faded, list, now, onOpen }: { day: string; faded: boolea
   </div>;
 }
 
-function TimeGrid({ days, entries, now, onOpen }: { days: string[] } & GridProps) {
+function TimeGrid({ days, entries, now, onOpen, onCreate }: { days: string[] } & GridProps) {
   const scroller = useRef<HTMLDivElement>(null);
   const [clock, setClock] = useState(() => seoulMinutes(new Date().toISOString()));
   useEffect(() => { if (scroller.current) scroller.current.scrollTop = 6 * HOUR; }, [days.length]);
@@ -248,26 +252,27 @@ function TimeGrid({ days, entries, now, onOpen }: { days: string[] } & GridProps
     </div>
     <div className="grid border-b border-line" style={columns}>
       <span className="pt-1 text-center text-2xs text-faint">종일</span>
-      {days.map((day) => <AllDayCell key={day} day={day} list={(entries.get(day) ?? []).filter((entry) => entry.minutes === 0)} now={now} onOpen={onOpen} />)}
+      {days.map((day) => <AllDayCell key={day} day={day} list={(entries.get(day) ?? []).filter((entry) => entry.minutes === 0)} now={now} onOpen={onOpen} onCreate={onCreate} />)}
     </div>
     <div ref={scroller} aria-label="시간표" className="max-h-[calc(100dvh-300px)] min-h-72 overflow-y-auto overscroll-contain">
       <div className="grid" style={columns}>
         <div>{Array.from({ length: 24 }, (_, hour) => <span key={hour} className="block pr-1 text-right text-2xs tabular-nums text-faint" style={{ height: HOUR }}>{hour ? `${hour}시` : ''}</span>)}</div>
-        {days.map((day) => <DayColumn key={day} day={day} list={(entries.get(day) ?? []).filter((entry) => entry.minutes > 0)} now={now} clock={day === now ? clock : null} onOpen={onOpen} />)}
+        {days.map((day) => <DayColumn key={day} day={day} list={(entries.get(day) ?? []).filter((entry) => entry.minutes > 0)} now={now} clock={day === now ? clock : null} onOpen={onOpen} onCreate={onCreate} />)}
       </div>
     </div>
   </div>;
 }
 
-function AllDayCell({ day, list, now, onOpen }: { day: string; list: Entry[]; now: string; onOpen: (id: string) => void }) {
+function AllDayCell({ day, list, now, onOpen, onCreate }: { day: string; list: Entry[]; now: string; onOpen: (id: string) => void; onCreate: (at: string) => void }) {
   const { setNodeRef, isOver } = useDroppable({ id: `allday:${day}`, data: { day, allDay: true, label: `${dayLabel(day)} 종일` } satisfies Drop });
-  return <ul ref={setNodeRef} aria-label={`${dayLabel(day)} 종일`} className={`max-h-28 min-h-8 min-w-0 space-y-0.5 overflow-y-auto border-l border-line p-0.5 ${isOver ? 'bg-accent-soft' : ''}`}>
+  return <ul ref={setNodeRef} onClick={(event) => { if (event.target === event.currentTarget) onCreate(day); }} aria-label={`${dayLabel(day)} 종일`} className={`max-h-28 min-h-8 min-w-0 space-y-0.5 overflow-y-auto border-l border-line p-0.5 ${isOver ? 'bg-accent-soft' : ''}`}>
+    <li><button type="button" className="text-xs text-faint" aria-label={`${dayLabel(day)} 종일 할 일 추가`} onClick={() => onCreate(day)}>+ 추가</button></li>
     {list.map((entry) => <li key={entry.kind === 'todo' ? entry.todo.id : entry.ghost.at + entry.ghost.recurrenceId}>
       {entry.kind === 'todo' ? <Chip todo={entry.todo} now={now} onOpen={onOpen} compact /> : <Ghost ghost={entry.ghost} compact />}</li>)}
   </ul>;
 }
 
-function DayColumn({ day, list, now, clock, onOpen }: { day: string; list: Entry[]; now: string; clock: number | null; onOpen: (id: string) => void }) {
+function DayColumn({ day, list, now, clock, onOpen, onCreate }: { day: string; list: Entry[]; now: string; clock: number | null; onOpen: (id: string) => void; onCreate: (at: string) => void }) {
   // ponytail: greedy lanes per day (overlaps share width evenly); per-cluster widths if days get crowded.
   const laneEnds: number[] = [];
   const placed = list.map((entry) => {
@@ -279,7 +284,7 @@ function DayColumn({ day, list, now, clock, onOpen }: { day: string; list: Entry
   });
   const width = 100 / Math.max(laneEnds.length, 1);
   return <div data-day-column={day} className="relative min-w-0 border-l border-line">
-    {Array.from({ length: 24 }, (_, hour) => <HourSlot key={hour} day={day} hour={hour} />)}
+    {Array.from({ length: 24 }, (_, hour) => <HourSlot key={hour} day={day} hour={hour} onCreate={onCreate} />)}
     {placed.map(({ entry, lane, length }) => <div key={entry.kind === 'todo' ? entry.todo.id : entry.ghost.at + entry.ghost.recurrenceId} className="absolute px-px"
       style={{ top: entry.minutes / 60 * HOUR, height: length / 60 * HOUR, left: `${lane * width}%`, width: `${width}%` }}>
       {entry.kind === 'todo' ? <Chip todo={entry.todo} now={now} onOpen={onOpen} time={entry.minutes} fill /> : <Ghost ghost={entry.ghost} time={entry.minutes} fill />}
@@ -288,9 +293,9 @@ function DayColumn({ day, list, now, clock, onOpen }: { day: string; list: Entry
   </div>;
 }
 
-function HourSlot({ day, hour }: { day: string; hour: number }) {
+function HourSlot({ day, hour, onCreate }: { day: string; hour: number; onCreate: (at: string) => void }) {
   const { setNodeRef, isOver } = useDroppable({ id: `slot:${day}:${hour}`, data: { day, hour, label: `${dayLabel(day)} ${hour}시` } satisfies Drop });
-  return <div ref={setNodeRef} data-slot={`${day}T${hour}`} className={`border-b border-line/70 ${isOver ? 'bg-accent-soft' : ''}`} style={{ height: HOUR }} />;
+  return <button type="button" aria-label={`${dayLabel(day)} ${hour}시 할 일 추가`} onClick={() => onCreate(slotAt(day, hour * 60))} ref={setNodeRef} data-slot={`${day}T${hour}`} className={`block w-full border-b border-line/70 ${isOver ? 'bg-accent-soft' : ''}`} style={{ height: HOUR }} />;
 }
 
 function Agenda({ from, to, entries, now, onOpen }: { from: string; to: string } & GridProps) {
