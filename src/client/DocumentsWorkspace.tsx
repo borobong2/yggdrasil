@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import type { DragEvent } from 'react';
 import { ArrowLeft, ChevronRight, Clock, FileText, MoveHorizontal, Plus, RotateCcw, SmilePlus, Trash2 } from 'lucide-react';
 import type { Document, DocumentFormat, Issue } from '../contracts/items.js';
@@ -10,6 +10,8 @@ type Props = { token: string };
 type Status = 'idle' | 'dirty' | 'saving' | 'saved' | 'error';
 type SaveJob = { id: string; changes: Record<string, unknown> };
 type Zone = 'before' | 'after' | 'inside';
+const visualRoute = () => location.hash === '#/documents/visuals' || location.hash.startsWith('#/documents/visuals/');
+const StudyVisuals = lazy(() => import('./StudyVisuals.js').catch(() => ({ default: () => <div role="alert" className="alert">시각화를 불러오지 못했습니다. <button type="button" className="underline" onClick={() => location.reload()}>다시 불러오기</button></div> })));
 const json = { 'content-type': 'application/json' };
 const untitled = '제목 없음';
 const emojis = ['📄', '📝', '📌', '💡', '🎯', '🚀', '🧭', '🗂️', '📚', '🧪', '🛠️', '🐛', '✅', '📅', '📈', '💬', '🔒', '🌱', '🌳', '⭐', '🔥', '🧩', '🎨', '⚙️', '📦', '🧠', '🗺️', '🔍', '❤️', '🏁'];
@@ -19,6 +21,7 @@ const wideKey = 'yggdrasil-docs-wide';
 const hashId = () => location.hash.match(/^#document-([0-9a-f-]{36})$/)?.[1] ?? null;
 
 export function DocumentsWorkspace({ token }: Props) {
+  const [showVisuals, setShowVisuals] = useState(visualRoute);
   const [documents, setDocuments] = useState<Document[]>([]);
   const [trash, setTrash] = useState<Document[] | null>(null);
   const [issues, setIssues] = useState<Issue[]>([]);
@@ -54,10 +57,17 @@ export function DocumentsWorkspace({ token }: Props) {
   }
   async function loadTrash() { const response = await fetch('/api/documents?archived=true', { headers }); if (response.ok) setTrash(await response.json()); }
 
-  useEffect(() => { void load(); }, [token]);
+  useEffect(() => { if (!showVisuals) void load(); }, [token, showVisuals]);
   useEffect(() => { try { localStorage.setItem(expandedKey, JSON.stringify([...expanded])); } catch { /* per-viewer convenience only */ } }, [expanded]);
   useEffect(() => {
-    const onHash = () => { const id = hashId(); if (id || location.hash === '#/documents') void open(id); };
+    const onHash = async () => {
+      const target = location.hash;
+      if (!visualRoute() && !hashId() && target !== '#/documents') return;
+      // Do not reload server documents over unsaved local edits when crossing the visual view.
+      if (!await flush() || location.hash !== target) return;
+      setShowVisuals(visualRoute());
+      const id = hashId(); if (id || target === '#/documents') await open(id);
+    };
     const onLeave = () => { for (const job of pending.current.values()) void fetch(`/api/documents/${job.id}`, { method: 'PATCH', headers: { ...headers, ...json }, body: JSON.stringify(job.changes), keepalive: true }).catch(() => {}); };
     window.addEventListener('hashchange', onHash); window.addEventListener('pagehide', onLeave);
     return () => { window.removeEventListener('hashchange', onHash); window.removeEventListener('pagehide', onLeave); onLeave(); };
@@ -196,6 +206,10 @@ export function DocumentsWorkspace({ token }: Props) {
 
   const recent = [...documents].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 4);
   const linked = issues.filter((issue) => links.includes(issue.id));
+  if (showVisuals) return <Suspense fallback={<p role="status" className="py-12 text-center text-muted">시각화를 불러오는 중…</p>}><StudyVisuals /></Suspense>;
+
+  async function openVisuals() { if (await flush()) { location.hash = '#/documents/visuals'; setShowVisuals(true); } }
+
   return <section aria-label="문서" className={`grid gap-4 ${htmlSelected ? 'xl:grid-cols-[280px_minmax(0,1fr)]' : 'md:grid-cols-[248px_minmax(0,1fr)] xl:grid-cols-[280px_minmax(0,1fr)]'} md:gap-6`}>
     <aside aria-label="페이지 목록" className={`h-fit space-y-4 md:sticky md:top-16 ${selected ? htmlSelected ? 'max-xl:hidden' : 'max-md:hidden' : ''}`}>
       {documents.length > 3 && <div>
@@ -203,6 +217,7 @@ export function DocumentsWorkspace({ token }: Props) {
         <ul>{recent.map((doc) => <li key={doc.id}><button type="button" onClick={() => void open(doc.id)} className="flex h-7 w-full items-center gap-1.5 rounded-md px-2 text-left text-sm text-muted hover:bg-line/50 hover:text-ink">
           <span className="w-4 shrink-0 text-center text-[13px]">{doc.icon ?? '·'}</span><span className="truncate">{doc.title}</span></button></li>)}</ul>
       </div>}
+      <button type="button" className="btn min-h-11 w-full justify-start" onClick={() => void openVisuals()}>시각화 모음</button>
       <div>
         <div className="flex items-center justify-between px-2 pb-1" onDragOver={(event) => { if (drag) { event.preventDefault(); if (drag.over !== null) setDrag({ ...drag, over: null }); } }} onDrop={(event) => { event.preventDefault(); void drop(null, 'after'); }}>
           <h2 className="eyebrow">페이지 {documents.length}</h2>
@@ -234,6 +249,7 @@ export function DocumentsWorkspace({ token }: Props) {
               {ancestors(selected).map((doc) => <span key={doc.id} className="flex min-w-0 items-center gap-1"><button type="button" className="truncate hover:text-ink" onClick={() => void open(doc.id)}>{doc.icon} {doc.title}</button><span>/</span></span>)}
               <span className="truncate text-muted">{selected.title || untitled}</span>
             </nav>
+            <button type="button" className="btn btn-ghost h-8 px-2 text-xs" onClick={() => void openVisuals()}>시각화 모음</button>
             <span role="status" aria-live="polite" data-save-status className={`ml-auto shrink-0 text-xs ${status === 'error' ? 'text-danger' : ''}`}>
               {status === 'error' ? <button type="button" className="underline" onClick={() => void flush()}>{statusText.error}</button> : statusText[status]}
             </span>
