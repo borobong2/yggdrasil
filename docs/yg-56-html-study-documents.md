@@ -1,6 +1,6 @@
 # YG-56 — HTML 문서와 모바일 시험 공부
 
-- 상태: 구현 및 로컬 검증 완료, PR 준비 중. 운영 배포·자료 게시 미실행.
+- 상태: 구현 및 로컬 검증 완료, PR 검토 단계. 운영 배포·자료 게시 미실행.
 - 사용자 결과: 이그드라실 문서 안에서 HTML 학습 자료를 읽고 편집한다. 새로 만든 시험 문서 7개를 모두 모바일용 HTML로 제공한다.
 - 설계: `docs/superpowers/specs/2026-10-19-html-study-documents.md`
 - 실행 계획: `docs/superpowers/plans/2026-10-19-html-study-documents.md`

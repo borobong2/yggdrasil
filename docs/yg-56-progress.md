@@ -22,3 +22,7 @@
 
 - Fresh reviewer rechecked both fixes: no remaining Important/Critical issues.
 - Mobile browser acceptance passed with 360/390/768 widths, minimum readable iframe width, in-flight edits, failed navigation/save retry and all seven study editions. Real study preview inspected locally; no private content committed.
+
+- Rebased on latest origin/main 15c2767 (calendar YG-50–53); no conflicts. Final complete suite: 42 files / 204 tests passed against yggdrasil_yg56.
+- Remaining after PR: merge/release migration, deploy, then explicit prepared-content publication. No production deployment or study document writes were performed.
+- Ruling: sanitizer/DOM behavior is exercised in actual Chrome rather than a synthetic DOM unit environment, so CSP, sandbox and native fragment navigation are tested together without adding a DOM emulation dependency.
