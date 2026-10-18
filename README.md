@@ -63,3 +63,9 @@ node scripts/publish-study-html.mjs /path/to/private/study --publish
 ```
 
 Preparation reads current Markdown pages without remote writes. Publication checks source/output hashes, preserves original pages, refuses to overwrite user-edited editions, persists returned IDs for reruns, and reads each HTML document back. Private study screenshots go to the OS temporary directory (or `STUDY_EVIDENCE_DIR`), not the Git repository. The committed browser evidence uses synthetic examples.
+
+## Small study visuals (YG-57)
+
+Open **문서 → 시각화 모음**, or `#/documents/visuals`, for three short visual lessons: RAG, Word2Vec, and cosine similarity. Each supports previous/next steps, full playback/pause, a short explanation, and a self-check question. A direct link such as `#/documents/visuals/rag` opens that lesson.
+
+The gallery lazy-loads Remotion Player and uses bundled React/SVG scenes. Existing documents and the HTML sandbox are unchanged. No rendering server or external media hosting is required. Run `CHECK_BASE_URL=http://127.0.0.1:3157 node scripts/verify-study-visuals.mjs` against the dev server for the browser acceptance check (API calls are mocked).

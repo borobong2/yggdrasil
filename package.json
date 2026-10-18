@@ -22,12 +22,14 @@
     "@hono/node-server": "^1.14.1",
     "@modelcontextprotocol/sdk": "^1.30.0",
     "@radix-ui/react-checkbox": "^1.4.1",
+    "@remotion/player": "4.0.536",
     "drizzle-orm": "^0.40.0",
     "hono": "^4.7.5",
     "lucide-react": "^1.55.0",
     "pg": "^8.14.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "remotion": "4.0.536",
     "zod": "^4.6.5"
   },
   "devDependencies": {
