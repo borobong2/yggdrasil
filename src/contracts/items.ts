@@ -57,7 +57,8 @@ export type IssueEvidence = { id: string; issueId: string; url: string; kind: Ev
 export type GitHubSummary = { pr: { number: number; url: string; state: string; ci: string | null } | null; deploy: { url: string; state: string } | null };
 export type GitHubRepo = { id: string; fullName: string; prefix: string; createdAt: string; lastEventAt: string | null; lastStatus: string | null };
 
-export type Document = WorkRecord & { body: string; parentId: string | null; position: number; archivedAt: string | null; icon: string | null };
+export type DocumentFormat = 'markdown' | 'html';
+export type Document = WorkRecord & { format: DocumentFormat; body: string; parentId: string | null; position: number; archivedAt: string | null; icon: string | null };
 export type DocumentIssueLink = { documentId: string; issueId: string; createdAt: string };
 
 export type Progress = { done: number; total: number; ratio: number };

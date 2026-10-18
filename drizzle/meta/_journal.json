@@ -21,6 +21,7 @@
     { "idx": 16, "version": "7", "when": 1792170000000, "tag": "0016_issue_links", "breakpoints": true },
     { "idx": 17, "version": "7", "when": 1792260000000, "tag": "0017_epic_key_prefix", "breakpoints": true },
     { "idx": 18, "version": "7", "when": 1792350000000, "tag": "0018_briefing_settings", "breakpoints": true },
-    { "idx": 19, "version": "7", "when": 1792440000000, "tag": "0019_issue_actual_minutes", "breakpoints": true }
+    { "idx": 19, "version": "7", "when": 1792440000000, "tag": "0019_issue_actual_minutes", "breakpoints": true },
+    { "idx": 20, "version": "7", "when": 1792526400000, "tag": "0020_document_format", "breakpoints": true }
   ]
 }

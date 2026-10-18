@@ -136,6 +136,7 @@ export const documents = pgTable('documents', {
   parentId: uuid('parent_id').references((): any => documents.id),
   title: text('title').notNull(),
   body: text('body').notNull().default(''),
+  format: text('format').$type<'markdown' | 'html'>().notNull().default('markdown'),
   position: integer('position').notNull().default(0),
   archivedAt: timestamp('archived_at', { withTimezone: true }),
   icon: text('icon'),

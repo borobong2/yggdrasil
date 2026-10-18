@@ -183,3 +183,22 @@ it('YG-48: a GFM table written by create_document reaches the editor as a table 
 });
 
 async function ownerToken(owner: string) { const token = `yg33-${owner}`; installTestOwner(token, { id: owner }); return token; }
+
+it('supports HTML through MCP while preserving Markdown defaults and rejecting HTML append', async () => {
+  const { call, fails, close } = await connect(crypto.randomUUID());
+  try {
+    const html = '<style>p { color: green }</style><p>모바일 시험 공부</p>\n';
+    const legacy = await call('create_document', { title: 'Old client', body: '# markdown' });
+    expect(legacy.format).toBe('markdown');
+    const doc = await call('create_document', { title: 'Study HTML', body: html, format: 'html' });
+    expect(doc).toMatchObject({ format: 'html', body: html });
+    expect(await call('read_document', { id: doc.id })).toMatchObject({ format: 'html', body: html });
+    expect(await call('update_document', { id: doc.id, title: 'HTML renamed' })).toMatchObject({ format: 'html', body: html });
+    expect(await call('list_documents', {})).toContainEqual(expect.objectContaining({ id: doc.id, format: 'html' }));
+    await fails('create_document', { title: 'Invalid', format: 'xml' });
+    await fails('update_document', { id: doc.id, format: 'xml' });
+    await fails('update_document', { id: doc.id, append: '<p>not a whole document</p>' });
+    await fails('update_document', { id: legacy.id, format: 'html', append: '<p>not a whole document</p>' });
+    expect(await call('update_document', { id: doc.id, body: html + '<p>updated</p>' })).toMatchObject({ format: 'html', body: html + '<p>updated</p>' });
+  } finally { await close(); }
+});

@@ -1,5 +1,5 @@
 import { and, asc, eq, isNotNull, isNull, sql } from 'drizzle-orm';
-import type { Document, DocumentIssueLink } from '../contracts/items.js';
+import type { Document, DocumentFormat, DocumentIssueLink } from '../contracts/items.js';
 import { getDb } from './db.js';
 import { appOwners, documentIssueLinks, documents, issues } from './schema.js';
 import { NotFoundError } from './work.js';
@@ -8,11 +8,12 @@ const db = getDb();
 
 export class DocumentValidationError extends Error {}
 
-export async function createDocument(ownerId: string, title: string, body: string, parentId: string | null, icon: string | null = null): Promise<Document> {
+export async function createDocument(ownerId: string, title: string, body: string, parentId: string | null, icon: string | null = null, format: DocumentFormat = 'markdown'): Promise<Document> {
+  validFormat(format);
   if (parentId) await liveParent(ownerId, parentId);
   await db.insert(appOwners).values({ ownerId }).onConflictDoNothing();
   const [{ next }] = await db.select({ next: sql<number>`coalesce(max(${documents.position}), -1)::int + 1` }).from(documents).where(and(eq(documents.ownerId, ownerId), siblingsOf(parentId)));
-  return document((await db.insert(documents).values({ id: crypto.randomUUID(), ownerId, title, body, parentId, icon, position: next }).returning())[0]!);
+  return document((await db.insert(documents).values({ id: crypto.randomUUID(), ownerId, title, body, parentId, icon, format, position: next }).returning())[0]!);
 }
 
 /** Live pages in tree order; `archived` lists the trash instead. */
@@ -70,8 +71,9 @@ export async function restoreDocument(ownerId: string, id: string): Promise<Docu
 
 export async function getDocument(ownerId: string, id: string): Promise<Document> { return document(await documentRow(ownerId, id)); }
 
-export async function updateDocument(ownerId: string, id: string, changes: Partial<{ title: string; body: string; parentId: string | null; icon: string | null }>): Promise<Document> {
+export async function updateDocument(ownerId: string, id: string, changes: Partial<{ title: string; body: string; format: DocumentFormat; parentId: string | null; icon: string | null }>): Promise<Document> {
   const current = await documentRow(ownerId, id);
+  if (changes.format !== undefined) validFormat(changes.format);
   if (changes.parentId !== undefined) await validParent(ownerId, id, changes.parentId);
   const row = (await db.update(documents).set({ ...changes, updatedAt: new Date() }).where(and(eq(documents.id, current.id), eq(documents.ownerId, ownerId))).returning())[0]!;
   return document(row);
@@ -129,6 +131,10 @@ async function documentRow(ownerId: string, id: string) {
 }
 
 function document(row: typeof documents.$inferSelect): Document {
-  return { id: row.id, title: row.title, body: row.body, parentId: row.parentId, position: row.position, archivedAt: row.archivedAt?.toISOString() ?? null, icon: row.icon, createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString() };
+  return { id: row.id, title: row.title, body: row.body, format: row.format, parentId: row.parentId, position: row.position, archivedAt: row.archivedAt?.toISOString() ?? null, icon: row.icon, createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString() };
 }
 function linkFor(row: typeof documentIssueLinks.$inferSelect): DocumentIssueLink { return { documentId: row.documentId, issueId: row.issueId, createdAt: row.createdAt.toISOString() }; }
+
+function validFormat(format: unknown): asserts format is DocumentFormat {
+  if (format !== 'markdown' && format !== 'html') throw new DocumentValidationError('Invalid document format');
+}
