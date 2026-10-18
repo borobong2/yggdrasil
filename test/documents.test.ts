@@ -137,3 +137,20 @@ describe('YG-23 page tree', () => {
     expect((await (await app.request(`/api/documents/${page.id}`, { headers })).json()).body).toBe(body);
   });
 });
+
+it('round trips HTML source, defaults legacy input to markdown, and validates format', async () => {
+  const html = '<!doctype html><html lang="ko"><body><details><summary>질문</summary>답</details></body></html>\n';
+  const legacy = await create('/api/documents', { title: 'Legacy format', body: '# Keep me' });
+  expect(legacy.format).toBe('markdown');
+  const doc = await create('/api/documents', { title: 'HTML study', body: html, format: 'html' });
+  expect(doc).toMatchObject({ format: 'html', body: html });
+  const renamed = await app.request(`/api/documents/${doc.id}`, { method: 'PATCH', headers, body: JSON.stringify({ title: 'Renamed HTML' }) });
+  expect(await renamed.json()).toMatchObject({ format: 'html', body: html });
+  expect(await (await app.request(`/api/documents/${doc.id}`, { headers })).json()).toMatchObject({ format: 'html', body: html });
+  expect(await (await app.request('/api/documents', { headers })).json()).toContainEqual(expect.objectContaining({ id: doc.id, format: 'html' }));
+  for (const format of ['xml', '', null, 1]) {
+    expect((await app.request('/api/documents', { method: 'POST', headers, body: JSON.stringify({ title: 'Invalid', format }) })).status).toBe(400);
+    expect((await app.request(`/api/documents/${doc.id}`, { method: 'PATCH', headers, body: JSON.stringify({ format }) })).status).toBe(400);
+  }
+  expect((await app.request(`/api/documents/${doc.id}`, { method: 'PATCH', headers: other, body: JSON.stringify({ body: 'stolen', format: 'markdown' }) })).status).toBe(404);
+});

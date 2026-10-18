@@ -46,3 +46,20 @@ Per-ticket worktrees use their own DB (`yggdrasil_yg<n>`) the same way. Vitest i
 - [MVP 0.1 implementation plan](docs/superpowers/plans/2026-09-05-yggdrasil-mvp-0.1.md)
 
 Existing research remains under [docs/research](docs/research/).
+
+## HTML documents (YG-56)
+
+In 문서, choose **HTML** next to **새 페이지** to create a static HTML page. It opens in reading mode; **소스 편집** edits the original HTML/CSS with autosave. Existing documents remain Markdown. HTML preview runs in an isolated iframe: native section links and answer disclosure work, while scripts, external assets, forms and external navigation are disabled.
+
+Private study editions can be prepared without checking their contents into this repository:
+
+```sh
+# Supply YGGDRASIL_PAT through the environment. The directory contains published.json (source document IDs).
+node scripts/publish-study-html.mjs /path/to/private/study --prepare
+npx tsx scripts/generate-study-html.ts /path/to/private/study
+CHECK_BASE_URL=http://127.0.0.1:3156 STUDY_HTML_DIR=/path/to/private/study node scripts/verify-html-documents.mjs
+# Only after the HTML document API is deployed:
+node scripts/publish-study-html.mjs /path/to/private/study --publish
+```
+
+Preparation reads current Markdown pages without remote writes. Publication checks source/output hashes, preserves original pages, refuses to overwrite user-edited editions, persists returned IDs for reruns, and reads each HTML document back. Private study screenshots go to the OS temporary directory (or `STUDY_EVIDENCE_DIR`), not the Git repository. The committed browser evidence uses synthetic examples.

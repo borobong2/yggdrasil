@@ -7,33 +7,36 @@ import { createDocument, DocumentValidationError, getDocument, linkIssue, listDo
 import { result } from './mcp.js';
 import { getTodo, todoIdOf } from './todos.js';
 
-// YG-33: document writes over MCP. Same service functions and limits as the 문서 tab (YG-23); bodies are markdown,
+// YG-33: document writes over MCP. Same service functions and limits as the 문서 tab (YG-23); bodies use an explicit markdown/html format,
 // mentions are `[@title](#issue-<id>)`. Every write logs an activity with payload.via = 'mcp'. No delete tool by design.
 const write = { readOnlyHint: false, destructiveHint: false, openWorldHint: false };
 const title = z.string().trim().min(1).max(200);
-const body = z.string().max(100_000).describe("Markdown. Mention a todo with '[@title](#issue-<id>)'.");
+const body = z.string().max(100_000).describe("Markdown or complete HTML source according to format. In Markdown, mention a todo with '[@title](#issue-<id>)'.");
+const format = z.enum(['markdown', 'html']);
 const icon = z.string().regex(/^[^\s<>]{1,16}$/u).describe('Emoji icon');
 const todoRef = z.string().trim().min(1).max(64).describe("Todo id (uuid) or ticket key like 'YG-24'");
 
 export function registerDocumentTools(server: McpServer, ownerId: string): void {
   server.registerTool('create_document', {
-    description: 'Create a markdown document page in your 문서 tab, optionally under a parent page and linked to todos.',
-    inputSchema: z.object({ title, body: body.default(''), parentId: z.uuid().optional(), icon: icon.optional(), linkTodos: z.array(todoRef).max(20).optional() }).strict(), annotations: write
+    description: 'Create a markdown or HTML document page in your 문서 tab, optionally under a parent page and linked to todos.',
+    inputSchema: z.object({ title, body: body.default(''), format: format.default('markdown'), parentId: z.uuid().optional(), icon: icon.optional(), linkTodos: z.array(todoRef).max(20).optional() }).strict(), annotations: write
   }, (input) => result(async () => {
     const todoIds = await Promise.all((input.linkTodos ?? []).map((ref) => resolveTodo(ownerId, ref)));
-    const doc = await createDocument(ownerId, input.title, input.body, input.parentId ?? null, input.icon ?? null);
+    const doc = await createDocument(ownerId, input.title, input.body, input.parentId ?? null, input.icon ?? null, input.format);
     for (const issueId of new Set(todoIds)) await linkIssue(ownerId, doc.id, issueId);
-    await log(ownerId, 'document.created', doc.id, { title: doc.title, linkedIssueIds: [...new Set(todoIds)] });
+    await log(ownerId, 'document.created', doc.id, { title: doc.title, format: doc.format, linkedIssueIds: [...new Set(todoIds)] });
     return doc;
   }));
   server.registerTool('update_document', {
-    description: 'Update your document. `body` replaces the whole markdown; `append` adds text at the end instead. parentId null moves it to the top level; icon null clears it.',
-    inputSchema: z.object({ id: z.uuid(), title: title.optional(), body: body.optional(), append: z.string().min(1).max(100_000).optional(), parentId: z.uuid().nullable().optional(), icon: icon.nullable().optional() }).strict()
+    description: 'Update your document. `body` replaces the source; `append` is supported only for Markdown. HTML requires a complete body. parentId null moves it to the top level; icon null clears it.',
+    inputSchema: z.object({ id: z.uuid(), title: title.optional(), body: body.optional(), format: format.optional(), append: z.string().min(1).max(100_000).optional(), parentId: z.uuid().nullable().optional(), icon: icon.nullable().optional() }).strict()
       .refine((input) => !(input.body !== undefined && input.append !== undefined), 'Use body or append, not both')
       .refine((input) => Object.keys(input).length > 1, 'No changes'), annotations: write
   }, ({ id, append, ...changes }) => result(async () => {
     if (append !== undefined) {
-      const current = (await getDocument(ownerId, id)).body;
+      const doc = await getDocument(ownerId, id);
+      if (doc.format === 'html' || changes.format === 'html') throw new DocumentValidationError('HTML documents require a complete body; append is only supported for Markdown');
+      const current = doc.body;
       changes.body = current ? `${current.replace(/\n*$/, '')}\n\n${append}` : append;
       if (changes.body.length > 100_000) throw new DocumentValidationError('Body would exceed 100000 characters');
     }
@@ -50,7 +53,7 @@ export function registerDocumentTools(server: McpServer, ownerId: string): void 
     const needle = q?.toLocaleLowerCase();
     // ponytail: filters in memory over one owner's pages; push into SQL if a workspace grows past a few thousand docs.
     return docs.filter((doc) => (parentId === undefined || doc.parentId === parentId) && (!needle || `${doc.title}\n${doc.body}`.toLocaleLowerCase().includes(needle)))
-      .slice(0, limit).map(({ id, title, icon, parentId, position, archivedAt, updatedAt }) => ({ id, title, icon, parentId, position, archivedAt, updatedAt }));
+      .slice(0, limit).map(({ id, title, icon, format, parentId, position, archivedAt, updatedAt }) => ({ id, title, icon, format, parentId, position, archivedAt, updatedAt }));
   }));
   const linkInput = z.object({ documentId: z.uuid(), todo: todoRef }).strict();
   server.registerTool('link_document_todo', {

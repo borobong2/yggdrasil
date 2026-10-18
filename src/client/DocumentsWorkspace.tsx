@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import type { DragEvent } from 'react';
 import { ArrowLeft, ChevronRight, Clock, FileText, MoveHorizontal, Plus, RotateCcw, SmilePlus, Trash2 } from 'lucide-react';
-import type { Document, Issue } from '../contracts/items.js';
+import type { Document, DocumentFormat, Issue } from '../contracts/items.js';
 import { BlockEditor } from './BlockEditor.js';
+import { HtmlDocument } from './HtmlDocument.js';
 import { statusLabels } from './format.js';
 
 type Props = { token: string };
 type Status = 'idle' | 'dirty' | 'saving' | 'saved' | 'error';
+type SaveJob = { id: string; changes: Record<string, unknown> };
 type Zone = 'before' | 'after' | 'inside';
 const json = { 'content-type': 'application/json' };
 const untitled = '제목 없음';
@@ -26,17 +28,20 @@ export function DocumentsWorkspace({ token }: Props) {
   // YG-47: editor keeps a ~800px reading measure; 전체 폭 lets it use the whole area (remembered per browser).
   const [wide, setWide] = useState(() => { try { return localStorage.getItem(wideKey) === '1'; } catch { return false; } });
   const toggleWide = () => { setWide(!wide); try { localStorage.setItem(wideKey, wide ? '0' : '1'); } catch { /* private mode */ } };
+  const [newFormat, setNewFormat] = useState<DocumentFormat>('markdown');
   const [status, setStatus] = useState<Status>('idle');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [drag, setDrag] = useState<{ id: string; over?: string | null; zone?: Zone } | null>(null);
-  const pending = useRef<{ id: string; changes: Record<string, unknown> } | null>(null);
+  const pending = useRef(new Map<string, SaveJob>());
+  const saving = useRef<Promise<boolean> | null>(null);
   const timer = useRef<number | undefined>(undefined);
   const titleInput = useRef<HTMLInputElement>(null);
   const iconPicker = useRef<HTMLDivElement>(null);
   const headers: Record<string, string> = token ? { authorization: `Bearer ${token}` } : {};
 
   const selected = documents.find((d) => d.id === selectedId) ?? null;
+  const htmlSelected = selected?.format === 'html';
   const children = (parentId: string | null) => documents.filter((d) => d.parentId === parentId);
   const ancestors = (doc: Document | null): Document[] => { const chain: Document[] = []; for (let d = doc; d?.parentId;) { d = documents.find((x) => x.id === d!.parentId) ?? null; if (d) chain.unshift(d); } return chain; };
   const isInside = (id: string, ancestorId: string) => ancestors(documents.find((d) => d.id === id) ?? null).some((d) => d.id === ancestorId);
@@ -53,7 +58,7 @@ export function DocumentsWorkspace({ token }: Props) {
   useEffect(() => { try { localStorage.setItem(expandedKey, JSON.stringify([...expanded])); } catch { /* per-viewer convenience only */ } }, [expanded]);
   useEffect(() => {
     const onHash = () => { const id = hashId(); if (id || location.hash === '#/documents') void open(id); };
-    const onLeave = () => { const job = pending.current; if (job) void fetch(`/api/documents/${job.id}`, { method: 'PATCH', headers: { ...headers, ...json }, body: JSON.stringify(job.changes), keepalive: true }); };
+    const onLeave = () => { for (const job of pending.current.values()) void fetch(`/api/documents/${job.id}`, { method: 'PATCH', headers: { ...headers, ...json }, body: JSON.stringify(job.changes), keepalive: true }).catch(() => {}); };
     window.addEventListener('hashchange', onHash); window.addEventListener('pagehide', onLeave);
     return () => { window.removeEventListener('hashchange', onHash); window.removeEventListener('pagehide', onLeave); onLeave(); };
   }, [token]);
@@ -64,37 +69,51 @@ export function DocumentsWorkspace({ token }: Props) {
     return () => { current = false; };
   }, [selectedId, token]);
 
-  async function flush() {
+  async function flush(): Promise<boolean> {
     window.clearTimeout(timer.current);
-    const job = pending.current;
-    if (!job) return;
-    pending.current = null; setStatus('saving');
-    const response = await fetch(`/api/documents/${job.id}`, { method: 'PATCH', headers: { ...headers, ...json }, body: JSON.stringify(job.changes) }).catch(() => null);
-    if (!response?.ok) { pending.current ??= job; return setStatus('error'); }
-    const saved: Document = await response.json();
-    setDocuments((all) => all.map((d) => d.id === saved.id ? { ...d, updatedAt: saved.updatedAt } : d));
-    if (!pending.current) setStatus('saved');
+    if (saving.current) {
+      if (!await saving.current) return false;
+      return flush();
+    }
+    const job = pending.current.values().next().value;
+    if (!job) return true;
+    pending.current.delete(job.id); setStatus('saving');
+    const save = async () => {
+      const response = await fetch(`/api/documents/${job.id}`, { method: 'PATCH', headers: { ...headers, ...json }, body: JSON.stringify(job.changes) }).catch(() => null);
+      if (!response?.ok) {
+        const newer = pending.current.get(job.id);
+        pending.current.set(job.id, { id: job.id, changes: { ...job.changes, ...newer?.changes } });
+        setStatus('error'); return false;
+      }
+      const saved: Document = await response.json();
+      setDocuments((all) => all.map((d) => d.id === saved.id ? { ...d, updatedAt: saved.updatedAt } : d));
+      if (!pending.current.size) setStatus('saved');
+      return true;
+    };
+    const task = save(); saving.current = task;
+    let ok: boolean;
+    try { ok = await task; } finally { if (saving.current === task) saving.current = null; }
+    return ok ? flush() : false;
   }
   function edit(id: string, changes: Partial<Pick<Document, 'title' | 'body' | 'icon'>>) {
     setDocuments((all) => all.map((d) => d.id === id ? { ...d, ...changes } : d));
     const saveable = changes.title !== undefined && !changes.title.trim() ? { ...changes, title: undefined } : changes; // a blank title stays local until typed
     if (Object.values(saveable).every((value) => value === undefined)) return;
-    if (pending.current && pending.current.id !== id) void flush();
-    pending.current = { id, changes: { ...(pending.current?.id === id ? pending.current.changes : {}), ...saveable } };
+    pending.current.set(id, { id, changes: { ...pending.current.get(id)?.changes, ...saveable } });
     setStatus('dirty');
     window.clearTimeout(timer.current);
     timer.current = window.setTimeout(() => void flush(), 700);
   }
 
   async function open(id: string | null) {
-    await flush();
+    if (!await flush()) return;
     setSelectedId(id); setStatus('idle');
     history.replaceState(null, '', id ? `#document-${id}` : '#/documents');
     if (id) setExpanded((current) => new Set([...current, ...ancestors(documents.find((d) => d.id === id) ?? null).map((d) => d.id)]));
   }
 
   async function create(parentId: string | null) {
-    const response = await fetch('/api/documents', { method: 'POST', headers: { ...headers, ...json }, body: JSON.stringify({ title: untitled, parentId }) });
+    const response = await fetch('/api/documents', { method: 'POST', headers: { ...headers, ...json }, body: JSON.stringify({ title: untitled, parentId, format: newFormat }) });
     if (!response.ok) return setError('페이지를 만들지 못했습니다.');
     const doc: Document = await response.json();
     setDocuments((all) => [...all, doc]);
@@ -177,8 +196,8 @@ export function DocumentsWorkspace({ token }: Props) {
 
   const recent = [...documents].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 4);
   const linked = issues.filter((issue) => links.includes(issue.id));
-  return <section aria-label="문서" className="grid gap-4 md:grid-cols-[248px_minmax(0,1fr)] xl:grid-cols-[280px_minmax(0,1fr)] md:gap-6">
-    <aside aria-label="페이지 목록" className={`h-fit space-y-4 md:sticky md:top-16 ${selected ? 'max-md:hidden' : ''}`}>
+  return <section aria-label="문서" className={`grid gap-4 ${htmlSelected ? 'xl:grid-cols-[280px_minmax(0,1fr)]' : 'md:grid-cols-[248px_minmax(0,1fr)] xl:grid-cols-[280px_minmax(0,1fr)]'} md:gap-6`}>
+    <aside aria-label="페이지 목록" className={`h-fit space-y-4 md:sticky md:top-16 ${selected ? htmlSelected ? 'max-xl:hidden' : 'max-md:hidden' : ''}`}>
       {documents.length > 3 && <div>
         <h2 className="eyebrow flex items-center gap-1 px-2 pb-1"><Clock className="size-3" />최근</h2>
         <ul>{recent.map((doc) => <li key={doc.id}><button type="button" onClick={() => void open(doc.id)} className="flex h-7 w-full items-center gap-1.5 rounded-md px-2 text-left text-sm text-muted hover:bg-line/50 hover:text-ink">
@@ -187,6 +206,7 @@ export function DocumentsWorkspace({ token }: Props) {
       <div>
         <div className="flex items-center justify-between px-2 pb-1" onDragOver={(event) => { if (drag) { event.preventDefault(); if (drag.over !== null) setDrag({ ...drag, over: null }); } }} onDrop={(event) => { event.preventDefault(); void drop(null, 'after'); }}>
           <h2 className="eyebrow">페이지 {documents.length}</h2>
+          <label className="ml-auto mr-1"><span className="sr-only">새 페이지 형식</span><select aria-label="새 페이지 형식" value={newFormat} onChange={event => setNewFormat(event.target.value as DocumentFormat)} className="h-8 rounded border border-line bg-surface px-1 text-xs"><option value="markdown">Markdown</option><option value="html">HTML</option></select></label>
           <button type="button" className="btn btn-ghost h-7 px-2" onClick={() => void create(null)}><Plus />새 페이지</button>
         </div>
         {loading && <p role="status" className="px-2 py-1 text-xs text-faint">불러오는 중…</p>}
@@ -209,7 +229,7 @@ export function DocumentsWorkspace({ token }: Props) {
       {!selected ? <div className="card empty py-20">{selectedId && !loading ? '페이지를 찾을 수 없습니다. 휴지통에 있는지 확인하세요.' : '왼쪽에서 페이지를 고르거나 새 페이지를 만드세요.'}</div>
         : <article className="card min-h-[70dvh]" aria-label={selected.title}>
           <div className="flex h-11 items-center gap-1 border-b border-line px-2 text-sm text-faint md:px-4">
-            <button type="button" className="btn btn-ghost h-8 px-2 md:hidden" onClick={() => void open(null)}><ArrowLeft />페이지</button>
+            <button type="button" className={`btn btn-ghost h-8 px-2 ${htmlSelected ? 'xl:hidden' : 'md:hidden'}`} onClick={() => void open(null)}><ArrowLeft />페이지</button>
             <nav aria-label="경로" className="flex min-w-0 flex-1 items-center gap-1 max-md:hidden">
               {ancestors(selected).map((doc) => <span key={doc.id} className="flex min-w-0 items-center gap-1"><button type="button" className="truncate hover:text-ink" onClick={() => void open(doc.id)}>{doc.icon} {doc.title}</button><span>/</span></span>)}
               <span className="truncate text-muted">{selected.title || untitled}</span>
@@ -219,7 +239,7 @@ export function DocumentsWorkspace({ token }: Props) {
             </span>
             <button type="button" className="btn btn-ghost h-8 px-2 max-lg:hidden" aria-pressed={wide} title="편집기를 영역 전체 폭으로" onClick={toggleWide}><MoveHorizontal />전체 폭</button>
           </div>
-          <div data-editor-measure className={`mx-auto px-5 pb-10 pt-8 md:px-14 md:pt-14 ${wide ? '' : 'max-w-[920px]'}`}>
+          <div data-editor-measure className={`mx-auto ${htmlSelected ? 'px-3 pb-6 pt-6 md:px-6 md:pt-8' : 'px-5 pb-10 pt-8 md:px-14 md:pt-14'} ${wide ? '' : 'max-w-[920px]'}`}>
             <div className="group/head">
               <button type="button" popoverTarget="icon-picker" aria-label="페이지 아이콘 선택"
                 className={selected.icon ? 'mb-2 rounded-md p-1 text-[44px] leading-none hover:bg-sunken' : 'btn btn-ghost mb-1 h-7 px-1.5 text-xs opacity-100 md:opacity-0 md:group-hover/head:opacity-100 md:focus-visible:opacity-100'}>
@@ -242,7 +262,9 @@ export function DocumentsWorkspace({ token }: Props) {
                 }} />
             </div>
             <div className="mt-4 md:ml-0">
-              <BlockEditor key={selected.id} initial={selected.body} issues={issues} onChange={(body) => edit(selected.id, { body })} onMention={(issueId) => void mention(issueId)} />
+              {selected.format === 'html'
+                ? <HtmlDocument key={selected.id} body={selected.body} onChange={body => edit(selected.id, { body })} />
+                : <BlockEditor key={selected.id} initial={selected.body} issues={issues} onChange={(body) => edit(selected.id, { body })} onMention={(issueId) => void mention(issueId)} />}
             </div>
             {children(selected.id).length > 0 && <ul aria-label="하위 페이지" className="mb-6 space-y-0.5">{children(selected.id).map((doc) => <li key={doc.id}>
               <button type="button" className="flex items-center gap-2 rounded-md px-1 py-1 text-[15px] underline decoration-line-strong underline-offset-4 hover:bg-sunken" onClick={() => void open(doc.id)}>

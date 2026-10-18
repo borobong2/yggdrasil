@@ -7,7 +7,7 @@ type AppContext = Context<AppEnv>;
 
 export function registerDocumentRoutes(app: Hono<AppEnv>): void {
   app.use('/api/documents/*', ownerAuth);
-  app.post('/api/documents', async (c) => { const body = await bodyOf(c); const title = text(body.title); const content = body.body === undefined ? '' : bodyText(body.body); const parentId = body.parentId === undefined ? null : optionalUuid(body.parentId); const iconValue = body.icon === undefined ? null : icon(body.icon); return !title || content === null || parentId === undefined || iconValue === undefined ? c.json({ error: 'Invalid document' }, 400) : execute(c, () => createDocument(c.get('user').id, title, content, parentId, iconValue), 201); });
+  app.post('/api/documents', async (c) => { const body = await bodyOf(c); const title = text(body.title); const content = body.body === undefined ? '' : bodyText(body.body); const parentId = body.parentId === undefined ? null : optionalUuid(body.parentId); const iconValue = body.icon === undefined ? null : icon(body.icon); const format = body.format === undefined ? 'markdown' : documentFormat(body.format); return !title || content === null || parentId === undefined || iconValue === undefined || format === undefined ? c.json({ error: 'Invalid document' }, 400) : execute(c, () => createDocument(c.get('user').id, title, content, parentId, iconValue, format), 201); });
   // ?issueId=<uuid> lists the live documents linked to that todo (YG-33 TodoDetail chips).
   app.get('/api/documents', (c) => {
     const issueId = c.req.query('issueId');
@@ -17,9 +17,9 @@ export function registerDocumentRoutes(app: Hono<AppEnv>): void {
   });
   app.get('/api/documents/:id', (c) => byId(c, (id) => getDocument(c.get('user').id, id)));
   app.patch('/api/documents/:id', async (c) => {
-    const body = await bodyOf(c); const id = uuid(c.req.param('id')); const title = body.title === undefined ? undefined : text(body.title); const bodyValue = body.body === undefined ? undefined : bodyText(body.body); const parentId = body.parentId === undefined ? undefined : optionalUuid(body.parentId); const iconValue = body.icon === undefined ? undefined : icon(body.icon);
-    if (!id || body.title !== undefined && !title || body.body !== undefined && bodyValue === null || body.parentId !== undefined && parentId === undefined || body.icon !== undefined && iconValue === undefined || body.title === undefined && body.body === undefined && body.parentId === undefined && body.icon === undefined) return c.json({ error: 'Invalid document' }, 400);
-    return execute(c, () => updateDocument(c.get('user').id, id, { ...(title ? { title } : {}), ...(bodyValue !== undefined ? { body: bodyValue! } : {}), ...(parentId !== undefined ? { parentId } : {}), ...(iconValue !== undefined ? { icon: iconValue } : {}) }), 200);
+    const body = await bodyOf(c); const id = uuid(c.req.param('id')); const title = body.title === undefined ? undefined : text(body.title); const bodyValue = body.body === undefined ? undefined : bodyText(body.body); const parentId = body.parentId === undefined ? undefined : optionalUuid(body.parentId); const iconValue = body.icon === undefined ? undefined : icon(body.icon); const format = body.format === undefined ? undefined : documentFormat(body.format);
+    if (!id || body.title !== undefined && !title || body.body !== undefined && bodyValue === null || body.parentId !== undefined && parentId === undefined || body.icon !== undefined && iconValue === undefined || body.format !== undefined && format === undefined || body.title === undefined && body.body === undefined && body.parentId === undefined && body.icon === undefined && body.format === undefined) return c.json({ error: 'Invalid document' }, 400);
+    return execute(c, () => updateDocument(c.get('user').id, id, { ...(title ? { title } : {}), ...(bodyValue !== undefined ? { body: bodyValue! } : {}), ...(parentId !== undefined ? { parentId } : {}), ...(iconValue !== undefined ? { icon: iconValue } : {}), ...(format !== undefined ? { format } : {}) }), 200);
   });
   app.post('/api/documents/:id/move', async (c) => {
     const id = uuid(c.req.param('id')); const body = await bodyOf(c); const parentId = optionalUuid(body.parentId); const index = body.index;
@@ -40,3 +40,5 @@ function uuid(value: unknown): string | null { return typeof value === 'string' 
 // Emoji icon: short, no whitespace or markup; `null` clears it.
 function icon(value: unknown): string | null | undefined { return value === null ? null : typeof value === 'string' && /^[^\s<>]{1,16}$/u.test(value) ? value : undefined; }
 function optionalUuid(value: unknown): string | null | undefined { return value === null ? null : uuid(value); }
+
+function documentFormat(value: unknown): 'markdown' | 'html' | undefined { return value === 'markdown' || value === 'html' ? value : undefined; }
