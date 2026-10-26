@@ -81,10 +81,11 @@ export function BulkActions({ selection, headers, onApplied }: { selection: Sele
   const today = seoulToday();
   return <div role="toolbar" aria-label="일괄 작업" className={`${dock} card p-2 shadow-pop`}>
     {menu === 'snooze' && <div role="group" aria-label="미루기" className="mb-2 flex flex-wrap items-center gap-1.5 border-b border-line pb-2">
-      <button type="button" className="btn" disabled={busy} onClick={() => void run({ action: 'snooze', until: plusDays(today, 1) }, '내일로 미뤘습니다')}>내일</button>
-      <button type="button" className="btn" disabled={busy} onClick={() => void run({ action: 'snooze', until: nextMonday(today) }, '다음 주 월요일로 미뤘습니다')}>다음 주 월요일</button>
+      <p className="w-full text-xs text-muted">작업 예정만 옮깁니다. 실제 마감과 내부 목표는 유지합니다.</p>
+      <button type="button" className="btn" disabled={busy} onClick={() => void run({ action: 'snooze', until: plusDays(today, 1) }, '작업 예정을 내일로 옮겼습니다')}>내일</button>
+      <button type="button" className="btn" disabled={busy} onClick={() => void run({ action: 'snooze', until: nextMonday(today) }, '작업 예정을 다음 주 월요일로 옮겼습니다')}>다음 주 월요일</button>
       <input type="date" aria-label="미룰 날짜" className="field h-[30px] w-auto flex-1" min={today} value={date} onChange={(event) => setDate(event.target.value)} />
-      <button type="button" className="btn btn-primary" disabled={busy || !date} onClick={() => void run({ action: 'snooze', until: date }, `${date}로 미뤘습니다`)}>적용</button>
+      <button type="button" className="btn btn-primary" disabled={busy || !date} onClick={() => void run({ action: 'snooze', until: date }, `작업 예정을 ${date}로 옮겼습니다`)}>적용</button>
     </div>}
     {menu === 'hold' && <form role="group" aria-label="보류 지정" className="mb-2 flex flex-wrap items-center gap-1.5 border-b border-line pb-2"
       onSubmit={(event) => { event.preventDefault(); void run({ action: 'hold', hold, holdReason: reason.trim() || null }, `${hold === 'waiting' ? '대기' : '막힘'}로 지정했습니다`); }}>

@@ -129,7 +129,7 @@ export function TodayView({ token, onActivity }: { token: string; onActivity?: (
         extra={counts.length > 0 && <span className="text-xs font-normal tabular-nums text-muted">{counts.map(([priority, count]) => `${priority.toUpperCase()} ${count}`).join(' · ')}</span>}>
         {todayList.length === 0 ? <p className="empty">오늘 챙길 일이 없습니다. 여유로운 하루예요.</p> :
           <ul>{todayList.map((todo) => <Row key={todo.id} todo={todo} {...rowProps}
-            onTomorrow={() => void apply([todo.id], { action: 'snooze', until: plusDays(view.date, 1) }, '내일로 미뤘습니다')} />)}</ul>}
+            onTomorrow={() => void apply([todo.id], { action: 'snooze', until: plusDays(view.date, 1) }, '작업 예정을 내일로 옮겼습니다')} />)}</ul>}
       </Panel>
       <div className="grid min-w-0 gap-3">
         <LatePanel late={late} className={hiddenOn('late')} onOpen={setOpenId}

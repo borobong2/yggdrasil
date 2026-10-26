@@ -27,6 +27,7 @@ export type TodoVia = 'ui' | 'mcp' | 'import';
 /** YG-30: a future occurrence of an active series, computed for display only (no row). `todoId` is the series' open occurrence. */
 export type CalendarDateBasis = 'effective' | 'due' | 'scheduled';
 export type CalendarGhost = { recurrenceId: string; todoId: string; title: string; priority: Priority; at: string; allDay: boolean };
+/** undated is the unscheduled list; real deadlines/targets may still exist (YG-64). */
 export type CalendarView = { from: string; to: string; todos: Todo[]; undated: Todo[]; ghosts: CalendarGhost[] };
 /**
  * YG-34 밀린 일: one list replacing 마감 지남 + 방치 (no duplicates). Unheld todo/doing todos due before today (Asia/Seoul day), or stale (YG-41).
