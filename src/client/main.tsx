@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { Activity, CalendarCheck, CalendarDays, FileText, Inbox, ListTree, NotebookPen, Settings, SquareKanban } from 'lucide-react';
+import { Activity, CalendarCheck, CalendarDays, FileText, Inbox, ListTree, NotebookPen, MoreHorizontal, Settings, SquareKanban } from 'lucide-react';
 import './styles.css';
 import { LoginScreen, SessionPanel, TreeMark, useAuth } from './LoginView.js';
 import { PatSettings } from './PatSettings.js';
@@ -87,13 +87,49 @@ function App() {
         {tab === 'settings' && <div className="max-w-2xl space-y-4"><SessionPanel auth={auth} /><PatSettings token={token} /><GitHubSettings token={token} /><TicketPrefixSettings token={token} /><BriefingSettings token={token} /></div>}
       </main>
     </div>
-    <nav aria-label="주 메뉴 (모바일)" className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-9 border-t border-line bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">
-      {tabs.map((item) => <a key={item.id} href={`#/${item.id}`} aria-current={item.id === tab ? 'page' : undefined}
-        className="flex h-14 flex-col items-center justify-center gap-0.5 text-2xs font-medium text-faint aria-[current=page]:text-accent-ink">
-        <item.icon className="size-5" strokeWidth={1.75} />{item.label}
-      </a>)}
-    </nav>
+    <MobileNav tab={tab} />
   </div>;
+}
+
+const mobileTabs = ['today', 'board', 'calendar'] as const;
+
+function MobileNav({ tab }: { tab: Tab }) {
+  const more = useRef<HTMLDivElement>(null);
+  const secondary = tabs.filter((item) => !mobileTabs.some((id) => id === item.id));
+  const active = secondary.find((item) => item.id === tab);
+  useEffect(() => {
+    const close = () => more.current?.hidePopover();
+    window.addEventListener('hashchange', close);
+    const desktop = window.matchMedia('(min-width: 768px)');
+    const resize = () => { if (desktop.matches) close(); };
+    desktop.addEventListener('change', resize);
+    return () => {
+      window.removeEventListener('hashchange', close);
+      desktop.removeEventListener('change', resize);
+    };
+  }, []);
+
+  return <nav aria-label="주 메뉴 (모바일)" className="mobile-nav fixed inset-x-0 bottom-0 z-30 grid grid-cols-4 border-t border-line bg-surface pb-[env(safe-area-inset-bottom)] md:hidden">
+    {mobileTabs.map((id) => {
+      const item = tabs.find((item) => item.id === id)!;
+      return <a key={id} href={`#/${id}`} aria-current={id === tab ? 'page' : undefined} className="mobile-nav-tab">
+        <item.icon aria-hidden="true" className="size-5" strokeWidth={1.75} />{item.label}
+      </a>;
+    })}
+    <button type="button" popoverTarget="mobile-more" className="mobile-nav-tab" data-active={active ? true : undefined}
+      aria-label={active ? `더보기, 현재 ${active.label}` : '더보기'}>
+      <MoreHorizontal aria-hidden="true" className="size-5" strokeWidth={1.75} />더보기
+    </button>
+    <div ref={more} id="mobile-more" popover="auto" className="mobile-nav-more" aria-label="더보기 메뉴">
+      <p className="px-3 py-2 text-sm font-semibold">더보기</p>
+      <div className="grid grid-cols-2 gap-1">
+        {secondary.map((item) => <a key={item.id} href={`#/${item.id}`} aria-current={item.id === tab ? 'page' : undefined}
+          onClick={() => more.current?.hidePopover()} className="mobile-nav-more-link">
+          <item.icon aria-hidden="true" className="size-5 shrink-0" strokeWidth={1.75} />{item.label}
+        </a>)}
+      </div>
+    </div>
+  </nav>;
 }
 
 function Nav({ tab }: { tab: Tab }) {
