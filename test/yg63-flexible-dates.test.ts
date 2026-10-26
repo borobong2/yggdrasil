@@ -1,8 +1,9 @@
 import { afterAll, expect, it } from 'vitest';
 import { Pool } from 'pg';
 import { app } from '../src/server/app.js';
+import { bulkUpdateTodos } from '../src/server/todo-bulk.js';
 import { installTestOwner } from '../src/server/auth.js';
-import { calendarView, createTodo, getTodo, todayView, updateTodo } from '../src/server/todos.js';
+import { calendarView, completeTodo, createTodo, getTodo, listTodos, todayView, updateTodo } from '../src/server/todos.js';
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 afterAll(() => pool.end());
@@ -80,4 +81,43 @@ it('includes start/target arrivals once in today and future dates in upcoming wi
   const calendar = await calendarView(me.id, '2026-10-26', '2026-10-26');
   expect(calendar.undated.map(t => t.id)).toContain(target.id);
   expect(calendar.todos.map(t => t.id)).not.toContain(start.id); // default calendar is still due-first
+});
+
+it('preserves internal target through existing snooze/restore and calendar/legacy writes', async () => {
+  const me = owner();
+  const todo = await (await post({ title: '일정 호환', dueAt: '2026-10-31', scheduledAt: '2026-10-26', targetAt: '2026-10-27T09:30:00+09:00' }, me.headers)).json();
+  const snoozed = await bulkUpdateTodos(me.id, { action: 'snooze', ids: [todo.id], until: '2026-11-02' });
+  expect(snoozed.todos[0]).toMatchObject({ targetAt: todo.targetAt, targetAllDay: false });
+  await bulkUpdateTodos(me.id, { action: 'restore', items: snoozed.previous });
+  expect(await getTodo(me.id, todo.id)).toMatchObject({ targetAt: todo.targetAt, dueAt: todo.dueAt, scheduledAt: todo.scheduledAt });
+  // Existing calendar drag/drop uses these PATCHes; YG-64 will change their deadline semantics.
+  for (const changes of [{ dueAt: '2026-11-03' }, { dueAt: null, scheduledAt: null }]) {
+    const response = await patch(todo.id, changes, me.headers);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ targetAt: todo.targetAt, targetAllDay: false });
+  }
+  const legacy = await app.request(`/api/issues/${todo.id}`, { method: 'PATCH', headers: me.headers, body: JSON.stringify({ title: '레거시 변경' }) });
+  expect(await legacy.json()).toMatchObject({ targetAt: todo.targetAt, targetAllDay: false });
+});
+
+it('does not copy the completed occurrence target to the next recurrence', async () => {
+  const me = owner();
+  const todo = await createTodo(me.id, { area: '반복', title: '회차 목표', recurrence: { freq: 'daily' }, targetAt: '2026-10-27' });
+  await completeTodo(me.id, todo.id);
+  expect(await getTodo(me.id, todo.id)).toMatchObject({ status: 'done', targetAt: '2026-10-26T15:00:00.000Z', targetAllDay: true });
+  const next = (await listTodos(me.id, {})).todos.find(t => t.recurrence?.id === todo.recurrence!.id);
+  expect(next).toMatchObject({ targetAt: null, targetAllDay: false, status: 'todo' });
+});
+
+it('keeps target lateness independent of all-day and timed real deadline boundaries in KST', async () => {
+  const me = owner();
+  const target = await (await post({ title: '지난 목표', targetAt: '2026-10-25' }, me.headers)).json();
+  const allDay = await createTodo(me.id, { area: '경계', title: '종일 마감', dueAt: '2026-10-26' });
+  const timed = await createTodo(me.id, { area: '경계', title: '시각 마감', dueAt: '2026-10-26T23:59:00+09:00' });
+  const before = await todayView(me.id, new Date('2026-10-26T23:59:30+09:00'));
+  expect(before.overdue.map(t => t.id)).toEqual([timed.id]);
+  expect(before.today.map(t => t.id)).toContain(target.id);
+  const after = await todayView(me.id, new Date('2026-10-27T00:00:00+09:00'));
+  expect(new Set(after.overdue.map(t => t.id))).toEqual(new Set([allDay.id, timed.id]));
+  expect(after.late.map(t => t.id)).not.toContain(target.id);
 });

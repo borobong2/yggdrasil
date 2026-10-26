@@ -10,7 +10,7 @@ const read = async (page, id) => (await (await page.request.get(`${base}/api/iss
 const create = async (page, body) => (await (await page.request.post(`${base}/api/todos`, { data: body })).json());
 const check = (label) => console.log(`PASS ${label}`);
 try {
- for (const width of [390, 768, 1280]) {
+ for (const width of (process.env.YG63_DRAG_ONLY ? [] : [390, 768, 1280])) {
   const page = await browser.newPage({ viewport: { width, height: 900 } });
   page.setDefaultTimeout(5000);
   page.on('pageerror', e => errors.push(e.message));
@@ -72,5 +72,26 @@ try {
   check(`${width}: three date roles visible with no horizontal overflow`);
   await page.close();
  }
+ const page = await browser.newPage({viewport:{width:1280,height:1000}});
+ page.setDefaultTimeout(5000);
+ const today = new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Seoul'}).format(new Date());
+ const next = new Date(`${today}T00:00:00Z`); next.setUTCDate(next.getUTCDate()+1);
+ const tomorrow = next.toISOString().slice(0,10);
+ const dragTodo = await create(page,{title:`드래그 호환 ${Date.now()}`,dueAt:today,targetAt:'2026-12-01T09:30:00+09:00'});
+ await page.goto(`${base}/#/calendar/month/${today}`);
+ const chip = page.locator(`button[data-todo-id="${dragTodo.id}"]`).first();
+ const cell = page.locator(`[data-day="${tomorrow}"]`).first();
+ await chip.waitFor(); await cell.scrollIntoViewIfNeeded();
+ const a=await chip.boundingBox(), b=await cell.boundingBox(); assert(a && b);
+ const moved = page.waitForResponse(r=>r.url().endsWith(`/api/todos/${dragTodo.id}`)&&r.request().method()==='PATCH');
+ await page.mouse.move(a.x+a.width/2,a.y+a.height/2); await page.mouse.down();
+ await page.mouse.move(b.x+b.width/2,b.y+20,{steps:20}); await page.mouse.up(); await moved;
+ await page.screenshot({path:`${screens}/drag-before-undo.png`});
+ assert.equal((await read(page,dragTodo.id)).targetAt,dragTodo.targetAt);
+ const undo = page.waitForResponse(r=>r.url().endsWith(`/api/todos/${dragTodo.id}`)&&r.request().method()==='PATCH');
+ await page.getByRole('status').getByRole('button',{name:'되돌리기',exact:true}).click(); await undo;
+ const restored=await read(page,dragTodo.id); assert.equal(restored.targetAt,dragTodo.targetAt); assert.equal(restored.dueAt,dragTodo.dueAt);
+ check('calendar pointer drag and undo preserve the independent timed target');
+ await page.close();
  assert.deepEqual(errors,[]);
 } finally { await browser.close(); }
