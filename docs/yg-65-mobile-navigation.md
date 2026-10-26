@@ -34,3 +34,5 @@
 ## PR 병합 전 추가 검증 (2026-10-26)
 
 사용자의 PR 생성·충돌 없을 때 병합 요청에 따라 전용 로컬 DB `yggdrasil_yg65`를 새로 만들고 마이그레이션했다. `DATABASE_URL=postgres://yggdrasil:yggdrasil@127.0.0.1:54330/yggdrasil_yg65 npm test` 결과 45개 파일, 219개 테스트가 모두 통과했다. 운영 DB 접속 없음. 위 초기 검증의 서버 통합 테스트 미실행 제한은 이 추가 검증으로 해소했다. 브라우저 테스트, typecheck, build, diff 검사도 재실행해 통과했다. 실기기·다른 브라우저·음성 스크린리더 검증 제한은 그대로다.
+
+PR #74 생성 중 YG-55 PR #73이 main에 병합되어 `styles.css` 끝부분 추가끼리 충돌했다. `origin/main` (`a97640b`)을 작업 브랜치에 병합하고 두 선택자 블록을 모두 보존해 해결했다. 캘린더 CSS 블록은 main과 바이트 단위 동일함을 assert로 확인했다. 통합 상태에서 전체 테스트 **46개 파일 / 221개 통과**, YG-65 브라우저 테스트, typecheck, build, staged diff 검사를 재실행해 모두 통과했다. GitHub Actions 검사 구성은 없다.

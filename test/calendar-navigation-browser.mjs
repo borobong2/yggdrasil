@@ -3,11 +3,11 @@ import {chromium} from 'playwright-core';
 const browser=await chromium.launch({executablePath:process.env.CHROME_PATH||'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'});
 const page=await browser.newPage({viewport:{width:1440,height:1000}});
 page.setDefaultTimeout(5000);
-const base='http://127.0.0.1:3050';
+const base=process.env.CALENDAR_BASE || 'http://127.0.0.1:3050';
 const pending=[];
 await page.route('**/api/calendar?*',async route=>{const url=new URL(route.request().url());pending.push({route,from:url.searchParams.get('from'),to:url.searchParams.get('to')});});
 async function next(){await page.waitForFunction(()=>true);for(let i=0;i<100&&!pending.length;i++)await new Promise(r=>setTimeout(r,10));assert.ok(pending.length,'calendar request issued');return pending.shift();}
-async function fulfill(req,title,status=200){await req.route.fulfill({status,contentType:'application/json',body:JSON.stringify(status===200?{from:req.from,to:req.to,todos:[],undated:[{id:crypto.randomUUID(),title,priority:'p3',status:'todo',area:'개인',epic:'일반',dueAt:null,scheduledAt:null,recurrence:null,links:[]}],ghosts:[]}:{error:'failed'})});}
+async function fulfill(req,title,status=200){await req.route.fulfill({status,contentType:'application/json',body:JSON.stringify(status===200?{from:req.from,to:req.to,todos:[],undated:[{id:crypto.randomUUID(),title,priority:'p3',status:'todo',area:'개인',epic:'일반',dueAt:null,scheduledAt:null,recurrence:null,links:[]}],ghosts:[]}:{error:'failed'})});if(status===200){const toggle=page.getByRole('button',{name:/작업 예정 없음/});await page.waitForTimeout(80);if(await toggle.count() && await toggle.getAttribute('aria-expanded')==='false')await toggle.click();}}
 await page.goto(`${base}/#/calendar/month/2026-10-18`);const initial=await next();await fulfill(initial,'기존 10월');await page.getByText('기존 10월',{exact:true}).waitFor();
 await page.getByRole('button',{name:'다음',exact:true}).click();const november=await next();
 assert.equal(await page.getByText('기존 10월',{exact:true}).count(),0,'new month must not show old content while loading');
