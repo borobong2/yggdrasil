@@ -1,0 +1,46 @@
+{
+  "command": "git hook run pre-push -- origin unused-local-verification",
+  "productFiles": 93,
+  "testFiles": 62,
+  "tests": 402,
+  "total": {
+    "lines": {
+      "total": 5951,
+      "covered": 5760,
+      "skipped": 0,
+      "pct": 96.79
+    },
+    "statements": {
+      "total": 5951,
+      "covered": 5760,
+      "skipped": 0,
+      "pct": 96.79
+    },
+    "functions": {
+      "total": 799,
+      "covered": 742,
+      "skipped": 0,
+      "pct": 92.86
+    },
+    "branches": {
+      "total": 4341,
+      "covered": 3976,
+      "skipped": 0,
+      "pct": 91.59
+    },
+    "branchesTrue": {
+      "total": 0,
+      "covered": 0,
+      "skipped": 0,
+      "pct": 100
+    }
+  },
+  "hookExitCodes": {
+    "missing-db": 1,
+    "unavailable-db": 1,
+    "test-failure": 1,
+    "threshold-failure": 1,
+    "success": 0
+  },
+  "gitHookExitCode": 0
+}
