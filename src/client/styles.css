@@ -92,3 +92,35 @@
 }
 
 dialog::backdrop { background: oklch(0.2 0.01 150 / 0.28); }
+
+/* Calendar owns its scrolling surface; app navigation and other views stay unchanged. */
+.calendar-view .calendar-content { min-width: 0; }
+.calendar-view .calendar-content > aside { margin-top: 12px; }
+.calendar-view .calendar-time-scroll { max-height: calc(100dvh - 258px); min-height: 288px; overflow: auto; overscroll-behavior: contain; scroll-padding-top: 130px; }
+.calendar-view .calendar-time-head { box-shadow: 0 1px 0 var(--color-line); }
+.calendar-view .calendar-allday { min-height: 40px; }
+.calendar-view .calendar-hours { position: sticky; left: 0; z-index: 2; }
+.calendar-view .calendar-mobile-hint { display: none; }
+.calendar-view .calendar-add { opacity: 0; }
+.calendar-view .calendar-allday-cell:hover .calendar-add,
+.calendar-view .calendar-add:focus-visible { opacity: 1; }
+.calendar-view .calendar-time-chip { flex-wrap: nowrap; align-content: flex-start; column-gap: 4px; row-gap: 0; }
+.calendar-view .calendar-block-tall .calendar-time-chip > span:has(> span.block) { flex-basis: 100%; }
+.calendar-view .calendar-time-chip[data-planned] { background: var(--color-accent-soft); border-color: var(--color-accent); }
+.calendar-view [data-calendar-block="point"] .calendar-time-chip { border-style: dashed; }
+.calendar-view [data-calendar-block] { overflow: hidden; }
+@media (min-width: 1200px) {
+  .calendar-view .calendar-time-grid { min-width: 0 !important; }
+}
+@media (max-width: 767px) {
+  .calendar-view .calendar-toolbar { gap: 6px; }
+  .calendar-view .calendar-toolbar h2 { font-size: 16px; }
+  .calendar-view .calendar-month { margin-left: auto; }
+  .calendar-view .calendar-time-scroll { max-height: calc(100dvh - 346px); }
+  .calendar-view .calendar-mobile-hint { display: block; margin-bottom: 6px; }
+  .calendar-view .calendar-add { opacity: 1; }
+}
+
+.calendar-view .calendar-block-tall .calendar-time-chip { flex-wrap: wrap; }
+.calendar-view .calendar-time-head > .grid > span:first-child { position: sticky; left: 0; z-index: 2; background: var(--color-surface); }
+.calendar-view .calendar-time-chip[data-planned][data-late] { border-color: var(--color-danger); }
