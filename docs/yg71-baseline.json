@@ -1,0 +1,41 @@
+{
+  "command": "DATABASE_URL=<dedicated-local-db> npm test -- --coverage",
+  "vitest": "3.2.7",
+  "provider": "@vitest/coverage-v8 3.2.7",
+  "scope": "src/**/*.ts, src/**/*.tsx; declaration files only excluded",
+  "productFiles": 93,
+  "testFiles": 46,
+  "tests": 221,
+  "total": {
+    "lines": {
+      "total": 5951,
+      "covered": 2655,
+      "skipped": 0,
+      "pct": 44.61
+    },
+    "statements": {
+      "total": 5951,
+      "covered": 2655,
+      "skipped": 0,
+      "pct": 44.61
+    },
+    "functions": {
+      "total": 357,
+      "covered": 316,
+      "skipped": 0,
+      "pct": 88.51
+    },
+    "branches": {
+      "total": 2106,
+      "covered": 1911,
+      "skipped": 0,
+      "pct": 90.74
+    },
+    "branchesTrue": {
+      "total": 0,
+      "covered": 0,
+      "skipped": 0,
+      "pct": 100
+    }
+  }
+}
