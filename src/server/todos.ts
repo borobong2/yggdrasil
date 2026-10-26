@@ -14,6 +14,7 @@ import { editLinks, issueLinks } from './links.js';
 
 const db = getDb();
 export const DEFAULT_EPIC = '일반';
+export const DEFAULT_TODO_AREA = '개인';
 export class TodoValidationError extends Error {}
 
 // Shared input validation for every todo write surface (MCP tools, HTTP routes).
@@ -32,6 +33,7 @@ export const todoFields = {
   hold: z.enum(['waiting', 'blocked', 'scheduled']).nullable(),
   holdReason: z.string().trim().max(500).nullable(),
   scheduledAt: day.nullable(),
+  targetAt: day.nullable(),
   notes: z.string().max(20_000),
   estimateMinutes: z.number().int().positive().max(100_000).nullable(),
   actualMinutes: z.number().int().positive().max(100_000).nullable().describe('YG-43: minutes it really took'),
@@ -45,7 +47,7 @@ export const todoChanges = z.object({ area: todoName, ...todoFields, completedAt
 export type DateInput = Date | string | null;
 export type TodoInput = {
   area: string; epic?: string; title: string; status?: IssueStatus; priority?: Priority; dueAt?: DateInput;
-  hold?: Hold | null; holdReason?: string | null; scheduledAt?: DateInput; notes?: string; estimateMinutes?: number | null; actualMinutes?: number | null; source?: string | null;
+  hold?: Hold | null; holdReason?: string | null; scheduledAt?: DateInput; targetAt?: DateInput; notes?: string; estimateMinutes?: number | null; actualMinutes?: number | null; source?: string | null;
   /**
    * Ticket key prefix (e.g. 'YG'): assigns the next key on create, or on update when the todo has none.
    * YG-36: on create, omitted means the epic's default prefix (if any); null opts out of a key.
@@ -150,7 +152,7 @@ export function todoDiff(before: Partial<Todo>, after: Partial<Todo>, keys: stri
   const shown = (todo: Partial<Todo>, key: string): unknown => {
     const value = todo[key as keyof Todo];
     if (value === null || value === undefined) return null;
-    if (key === 'dueAt' || key === 'scheduledAt') return formatDay(value as string, Boolean(key === 'dueAt' ? todo.dueAllDay : todo.scheduledAllDay));
+    if (key === 'dueAt' || key === 'scheduledAt' || key === 'targetAt') return formatDay(value as string, Boolean(key === 'dueAt' ? todo.dueAllDay : key === 'targetAt' ? todo.targetAllDay : todo.scheduledAllDay));
     if (key === 'completedAt') return formatDay(value as string, false);
     if (key === 'recurrence') return recurrenceLabel(value as NonNullable<Todo['recurrence']>);
     if (key === 'links') return (value as IssueLink[]).map((link) => link.label).join(', ');
@@ -254,18 +256,18 @@ export async function listAreas(ownerId: string): Promise<string[]> {
  */
 export async function todayView(ownerId: string, now = new Date()): Promise<TodayView> {
   const date = seoulDate(now);
-  const day = (column: typeof issues.dueAt | typeof issues.scheduledAt, op: '<' | '<=' | '>=') => sql`(${column} AT TIME ZONE 'Asia/Seoul')::date ${sql.raw(op)} ${date}::date`;
+  const day = (column: typeof issues.dueAt | typeof issues.scheduledAt | typeof issues.targetAt, op: '<' | '<=' | '>=') => sql`(${column} AT TIME ZONE 'Asia/Seoul')::date ${sql.raw(op)} ${date}::date`;
   const open = and(eq(issues.ownerId, ownerId), ne(issues.status, 'done'), active)!;
   const weekEnd = seoulDate(new Date(now.getTime() + 7 * 86_400_000));
-  const upcoming = (column: typeof issues.dueAt | typeof issues.scheduledAt) => sql`(${column} AT TIME ZONE 'Asia/Seoul')::date BETWEEN (${date}::date + 1) AND ${weekEnd}::date`;
+  const upcoming = (column: typeof issues.dueAt | typeof issues.scheduledAt | typeof issues.targetAt) => sql`(${column} AT TIME ZONE 'Asia/Seoul')::date BETWEEN (${date}::date + 1) AND ${weekEnd}::date`;
   const [today, overdue, waiting, later, stale, calendar] = await Promise.all([
     // YG-54: a backlog todo due before today was put away on purpose — not 오늘 (web and MCP both read this list).
-    todoRows(and(open, or(isNull(issues.hold), and(eq(issues.hold, 'scheduled'), day(issues.scheduledAt, '<='))), or(day(issues.dueAt, '<='), eq(issues.priority, 'p1'), day(issues.scheduledAt, '<=')),
+    todoRows(and(open, or(isNull(issues.hold), and(eq(issues.hold, 'scheduled'), day(issues.scheduledAt, '<='))), or(day(issues.dueAt, '<='), eq(issues.priority, 'p1'), day(issues.scheduledAt, '<='), day(issues.targetAt, '<=')),
       or(ne(issues.status, 'backlog'), isNull(issues.dueAt), day(issues.dueAt, '>=')))!),
     todoRows(and(open, sql`CASE WHEN ${issues.dueAllDay} THEN ${day(issues.dueAt, '<')} ELSE ${issues.dueAt} < ${now} END`)!),
     todoRows(and(open, inArray(issues.hold, ['waiting', 'blocked']))!),
     // 이번 주 예정 (YG-25): due or scheduled in the next 7 days, not waiting/blocked, not already in today.
-    todoRows(and(open, or(isNull(issues.hold), eq(issues.hold, 'scheduled')), or(upcoming(issues.dueAt), upcoming(issues.scheduledAt)))!),
+    todoRows(and(open, or(isNull(issues.hold), eq(issues.hold, 'scheduled')), or(upcoming(issues.dueAt), upcoming(issues.scheduledAt), upcoming(issues.targetAt)))!),
     staleView(ownerId, now),
     calendarView(ownerId, date, date, false, now)
   ]);
@@ -382,7 +384,7 @@ export function columns(input: TodoChanges): Partial<typeof issues.$inferInsert>
     if (value !== undefined) out[key] = key === 'title' ? (value as string).trim() : value;
   }
   // YG-38: a date-only value is all-day; an instant (or a Date from server code) is timed; null clears both.
-  for (const [key, flag] of [['dueAt', 'dueAllDay'], ['scheduledAt', 'scheduledAllDay']] as const) {
+  for (const [key, flag] of [['dueAt', 'dueAllDay'], ['scheduledAt', 'scheduledAllDay'], ['targetAt', 'targetAllDay']] as const) {
     const value = input[key];
     if (value !== undefined) Object.assign(out, { [key]: parseTodoDate(value), [flag]: typeof value === 'string' && dateOnly.test(value) });
   }

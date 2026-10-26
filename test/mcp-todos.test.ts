@@ -75,12 +75,34 @@ it('isolates owners and rejects invalid input without writes', async () => {
 
     const mine = await ownerRows(intruder);
     for (const [name, args] of [
-      ['create_todo', { title: 'no area' }], ['create_todo', { area: ' ', title: 'x' }], ['create_todo', { area: 'a', title: '' }],
+      ['create_todo', {}], ['create_todo', { area: ' ', title: 'x' }], ['create_todo', { area: 'a', title: '' }],
       ['create_todo', { area: 'a', title: 'x', priority: 'high' }], ['create_todo', { area: 'a', title: 'x', hold: 'later' }],
       ['create_todo', { area: 'a', title: 'x', dueAt: 'tomorrow' }], ['create_todo', { area: 'a', title: 'x', estimateMinutes: -5 }],
       ['create_todo', { area: 'a', title: 'x', source: 'forged' }], ['update_todo', { id: 'bad', title: 'x' }],
       ['update_todo', { id: todo.id }], ['complete_todo', { id: 'bad' }], ['delete_todo', { id: todo.id }]
     ] as const) expect((await client.callTool({ name, arguments: args })).isError).toBe(true);
     expect(await ownerRows(intruder)).toEqual(mine);
+  } finally { await close(); }
+});
+
+it('YG-63 creates title-only todos and round trips optional targets via MCP', async () => {
+  const owner = crypto.randomUUID();
+  const { client, close } = await connect((await issuePat(owner, 'yg63')).token);
+  try {
+    const created = data(await client.callTool({ name: 'create_todo', arguments: { title: '날짜 선택' } }));
+    expect(created).toMatchObject({ area: '개인', epic: '일반', targetAt: null, targetAllDay: false, dueAt: null, scheduledAt: null });
+    const batch = data(await client.callTool({ name: 'create_todos', arguments: { items: [{ title: '배치 기본' }, { title: '배치 목표', area: '잡일', targetAt: '2026-10-27' }] } }));
+    expect(batch[0]).toMatchObject({ area: '개인', targetAt: null });
+    expect(batch[1]).toMatchObject({ area: '잡일', targetAllDay: true });
+    const updated = data(await client.callTool({ name: 'update_todo', arguments: { id: created.id, targetAt: '2026-10-27', scheduledAt: '2026-10-27', dueAt: '2026-10-27' } }));
+    expect(updated).toMatchObject({ targetAt: '2026-10-26T15:00:00.000Z', targetAllDay: true });
+    const list = data(await client.callTool({ name: 'list_todos', arguments: { q: '날짜 선택' } }));
+    expect(list.todos[0]).toMatchObject({ targetAt: updated.targetAt, targetAllDay: true });
+    const resource = await client.readResource({ uri: `todo://issue/${created.id}` });
+    expect((resource.contents[0] as { text: string }).text).toContain('내부 완료 목표');
+    const cleared = data(await client.callTool({ name: 'update_todo', arguments: { id: created.id, targetAt: null } }));
+    expect(cleared).toMatchObject({ targetAt: null, targetAllDay: false, dueAt: updated.dueAt, scheduledAt: updated.scheduledAt });
+    const invalid = await client.callTool({ name: 'update_todo', arguments: { id: created.id, targetAt: 'bad' } });
+    expect(invalid.isError).toBe(true);
   } finally { await close(); }
 });

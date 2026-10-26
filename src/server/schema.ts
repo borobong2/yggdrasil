@@ -80,6 +80,8 @@ export const issues = pgTable('issues', {
   holdReason: text('hold_reason'),
   scheduledAt: timestamp('scheduled_at', { withTimezone: true }),
   scheduledAllDay: boolean('scheduled_all_day').notNull().default(false),
+  targetAt: timestamp('target_at', { withTimezone: true }),
+  targetAllDay: boolean('target_all_day').notNull().default(false),
   notes: text('notes').notNull().default(''),
   estimateMinutes: integer('estimate_minutes'),
   /** YG-43: minutes it really took. */
