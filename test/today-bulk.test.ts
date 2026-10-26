@@ -56,8 +56,8 @@ it('applies each bulk action in one call and logs via=ui per issue', async () =>
   expect(snooze.status).toBe(200);
   const result = await snooze.json();
   expect(result.todos).toHaveLength(2);
-  expect(result.previous).toEqual(expect.arrayContaining([expect.objectContaining({ id: b.id, scheduledAt: '2026-10-14', hold: 'scheduled' })]));
-  expect(await row(a.id)).toMatchObject({ due_at: new Date('2026-10-19T15:00:00Z'), scheduled_at: null });
+  expect(result.previous).toEqual(expect.arrayContaining([expect.objectContaining({ id: b.id, scheduledAt: '2026-10-14' })]));
+  expect(await row(a.id)).toMatchObject({ due_at: null, scheduled_at: new Date('2026-10-19T15:00:00Z') });
   expect(await row(b.id)).toMatchObject({ due_at: null, scheduled_at: new Date('2026-10-19T15:00:00Z') });
 
   expect((await bulk({ action: 'hold', ids: [a.id], hold: 'blocked', holdReason: '리뷰 대기' })).status).toBe(200);
@@ -109,7 +109,7 @@ it('accepts 200 ids in one transaction', async () => {
   const todos = await Promise.all(Array.from({ length: 200 }, (_, index) => createTodo(owner, { area: where, title: `대량 ${index}` })));
   const response = await bulk({ action: 'snooze', ids: todos.map((todo) => todo.id), until: '2026-10-21' });
   expect(response.status).toBe(200);
-  expect((await pool.query('SELECT count(*)::int AS n FROM issues WHERE id = ANY($1) AND due_at = $2', [todos.map((todo) => todo.id), new Date('2026-10-20T15:00:00Z')])).rows[0].n).toBe(200);
+  expect((await pool.query('SELECT count(*)::int AS n FROM issues WHERE id = ANY($1) AND scheduled_at = $2', [todos.map((todo) => todo.id), new Date('2026-10-20T15:00:00Z')])).rows[0].n).toBe(200);
 });
 
 // YG-28 interplay: bulk 완료 rolls a recurring series exactly once; undo leaves it done (skipped) so the series keeps one open occurrence.

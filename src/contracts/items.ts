@@ -43,7 +43,7 @@ export type StaleView = { date: string; todos: StaleTodo[] };
 /** YG-36 settings row: every epic, its default prefix and that prefix's next number. */
 export type EpicPrefix = { epicId: string; area: string; epic: string; keyPrefix: string | null; nextNumber: number | null };
 /** Fields a bulk action can change (YG-26); sending them back with action 'restore' undoes it. All-day dates come back as 'YYYY-MM-DD'. */
-export type TodoSnapshot = Pick<Issue, 'id' | 'status' | 'dueAt' | 'scheduledAt' | 'hold' | 'holdReason'>;
+export type TodoSnapshot = Pick<Issue, 'id'> & Partial<Pick<Issue, 'status' | 'dueAt' | 'scheduledAt' | 'hold' | 'holdReason'>>;
 /** `skipped`: restore left these done because their recurring series already has a newer open occurrence (YG-28). */
 export type BulkResult = { todos: Todo[]; previous: TodoSnapshot[]; skipped: string[] };
 export type DeliveryPlanStatus = 'pending' | 'accepted' | 'dismissed';

@@ -235,7 +235,7 @@ function Timeline({ date, todos, ghosts, onOpen, className }: { date: string; to
   const [now, setNow] = useState(() => new Date());
   useEffect(() => { const timer = setInterval(() => setNow(new Date()), 60_000); return () => clearInterval(timer); }, []);
   const entries = [
-    ...todos.map((todo) => ({ id: todo.id, at: todo.dueAt && !todo.dueAllDay ? todo.dueAt : todo.scheduledAt!, title: todo.title, todo })),
+    ...todos.map((todo) => ({ id: todo.id, at: todo.scheduledAt ?? todo.dueAt!, title: todo.title, todo })),
     ...ghosts.map((ghost) => ({ id: `${ghost.recurrenceId}-${ghost.at}`, at: ghost.at, title: ghost.title, todo: null }))
   ].sort((a, b) => a.at.localeCompare(b.at));
   const isToday = seoulDay(now) === date;

@@ -1,3 +1,4 @@
+import { moveToSeoulDay } from '../contracts/dates.js';
 // YG-30 calendar date math. Days are 'YYYY-MM-DD' Asia/Seoul calendar days; arithmetic runs on UTC midnight so the
 // browser's own timezone never leaks in. ponytail: Asia/Seoul only, same as recurrences.ts.
 export type CalendarMode = 'month' | 'week' | '3day' | 'day' | 'list';
@@ -17,7 +18,7 @@ export const today = () => dayOf(new Date());
 export const seoulMinutes = (instant: string) => Math.floor(((Date.parse(instant) + 9 * 3_600_000) % 86_400_000) / 60_000);
 export const slotAt = (day: string, minutes: number) => `${day}T${pad(Math.floor(minutes / 60))}:${pad(minutes % 60)}:00+09:00`;
 /** PATCH value that moves `instant` to `day`, keeping its Seoul time; all-day stays a date-only string (YG-38 flag). */
-export const moveKeepingTime = (instant: string, day: string, allDay: boolean) => allDay ? day : slotAt(day, seoulMinutes(instant));
+export const moveKeepingTime = (instant: string, day: string, allDay: boolean) => moveToSeoulDay(instant, day, allDay);
 
 /** Whole weeks (Sun–Sat) covering the month of `day`: 35 or 42 days (28 for a Feb starting on Sunday). */
 export function monthGrid(day: string): string[] {
