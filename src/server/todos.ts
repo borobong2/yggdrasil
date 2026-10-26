@@ -14,6 +14,7 @@ import { editLinks, issueLinks } from './links.js';
 
 const db = getDb();
 export const DEFAULT_EPIC = '일반';
+export const DEFAULT_TODO_AREA = '개인';
 export class TodoValidationError extends Error {}
 
 // Shared input validation for every todo write surface (MCP tools, HTTP routes).
@@ -32,6 +33,7 @@ export const todoFields = {
   hold: z.enum(['waiting', 'blocked', 'scheduled']).nullable(),
   holdReason: z.string().trim().max(500).nullable(),
   scheduledAt: day.nullable(),
+  targetAt: day.nullable(),
   notes: z.string().max(20_000),
   estimateMinutes: z.number().int().positive().max(100_000).nullable(),
   actualMinutes: z.number().int().positive().max(100_000).nullable().describe('YG-43: minutes it really took'),
@@ -45,7 +47,7 @@ export const todoChanges = z.object({ area: todoName, ...todoFields, completedAt
 export type DateInput = Date | string | null;
 export type TodoInput = {
   area: string; epic?: string; title: string; status?: IssueStatus; priority?: Priority; dueAt?: DateInput;
-  hold?: Hold | null; holdReason?: string | null; scheduledAt?: DateInput; notes?: string; estimateMinutes?: number | null; actualMinutes?: number | null; source?: string | null;
+  hold?: Hold | null; holdReason?: string | null; scheduledAt?: DateInput; targetAt?: DateInput; notes?: string; estimateMinutes?: number | null; actualMinutes?: number | null; source?: string | null;
   /**
    * Ticket key prefix (e.g. 'YG'): assigns the next key on create, or on update when the todo has none.
    * YG-36: on create, omitted means the epic's default prefix (if any); null opts out of a key.
@@ -150,7 +152,7 @@ export function todoDiff(before: Partial<Todo>, after: Partial<Todo>, keys: stri
   const shown = (todo: Partial<Todo>, key: string): unknown => {
     const value = todo[key as keyof Todo];
     if (value === null || value === undefined) return null;
-    if (key === 'dueAt' || key === 'scheduledAt') return formatDay(value as string, Boolean(key === 'dueAt' ? todo.dueAllDay : todo.scheduledAllDay));
+    if (key === 'dueAt' || key === 'scheduledAt' || key === 'targetAt') return formatDay(value as string, Boolean(key === 'dueAt' ? todo.dueAllDay : key === 'targetAt' ? todo.targetAllDay : todo.scheduledAllDay));
     if (key === 'completedAt') return formatDay(value as string, false);
     if (key === 'recurrence') return recurrenceLabel(value as NonNullable<Todo['recurrence']>);
     if (key === 'links') return (value as IssueLink[]).map((link) => link.label).join(', ');
@@ -382,7 +384,7 @@ export function columns(input: TodoChanges): Partial<typeof issues.$inferInsert>
     if (value !== undefined) out[key] = key === 'title' ? (value as string).trim() : value;
   }
   // YG-38: a date-only value is all-day; an instant (or a Date from server code) is timed; null clears both.
-  for (const [key, flag] of [['dueAt', 'dueAllDay'], ['scheduledAt', 'scheduledAllDay']] as const) {
+  for (const [key, flag] of [['dueAt', 'dueAllDay'], ['scheduledAt', 'scheduledAllDay'], ['targetAt', 'targetAllDay']] as const) {
     const value = input[key];
     if (value !== undefined) Object.assign(out, { [key]: parseTodoDate(value), [flag]: typeof value === 'string' && dateOnly.test(value) });
   }

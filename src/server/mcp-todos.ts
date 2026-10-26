@@ -10,7 +10,7 @@ import { linkEdits } from './links.js';
 import { historyLines } from './mcp-history.js';
 import { withGitHub } from './work.js';
 import {
-  completedAtInput, completeTodo, createTodo, createTodos, getTodo, keyPrefix as prefix, listAreas, listAreaTodos, listTodos, setArchived, staleView, todayView, todoFields, todoIdOf,
+  completedAtInput, completeTodo, createTodo, createTodos, DEFAULT_TODO_AREA, getTodo, keyPrefix as prefix, listAreas, listAreaTodos, listTodos, setArchived, staleView, todayView, todoFields, todoIdOf,
   todoName as name, updateTodo
 } from './todos.js';
 
@@ -24,11 +24,11 @@ const ref = {
 };
 const oneRef = (input: { id?: string; key?: string }) => (input.id === undefined) !== (input.key === undefined);
 const refOnly = z.object(ref).partial().strict().refine(oneRef, 'Pass exactly one of id or key');
-const createItem = z.object({ area: name, ...todoFields, prefix: prefix.nullable().describe("Ticket key prefix, e.g. 'YG' → next key YG-<n>. Omit to use the epic's default prefix (if it has one); null for no key.") }).partial().required({ area: true, title: true }).strict();
+const createItem = z.object({ area: name, ...todoFields, prefix: prefix.nullable().describe("Ticket key prefix, e.g. 'YG' → next key YG-<n>. Omit to use the epic's default prefix (if it has one); null for no key.") }).partial().required({ title: true }).extend({ area: name.default(DEFAULT_TODO_AREA) }).strict();
 
 export function registerTodoTools(server: McpServer, ownerId: string): void {
   server.registerTool('create_todo', {
-    description: 'Create a todo in an area (커리어, 개인, 루틴, 잡일, 수익화, 부동산, 결혼, …). Missing area/epic are created. Defaults: status todo, priority p3. dueAt/scheduledAt as a date is all-day, as a timestamp is timed. Optional recurrence makes it a repeating series (dueAt defaults to the first slot). An epic with a default ticket prefix (e.g. 프로젝트/yggdrasil → YG) gives the todo its next key unless prefix is null. For several todos use create_todos.',
+    description: 'Create a todo in an area (커리어, 개인, 루틴, 잡일, 수익화, 부동산, 결혼, …). Defaults: area 개인, epic 일반, status todo, priority p3. Missing areas/epics are created. scheduledAt (start/planned), targetAt (internal completion target), dueAt (real deadline) are optional and independent; equal or reversed dates are valid. Dates are all-day, offset timestamps are timed. Optional recurrence makes it a repeating series (dueAt defaults to the first slot). An epic with a default ticket prefix (e.g. 프로젝트/yggdrasil → YG) gives the todo its next key unless prefix is null. For several todos use create_todos.',
     inputSchema: createItem, annotations: todoWrite
   }, (input) => result(() => createTodo(ownerId, input, 'mcp')));
   server.registerTool('create_todos', {
@@ -53,7 +53,7 @@ export function registerTodoTools(server: McpServer, ownerId: string): void {
     return { todos: (await withGitHub(ownerId, page.todos)).map((todo) => compact(todo, includeNotes)), nextCursor: page.nextCursor };
   }));
   server.registerTool('update_todo', {
-    description: 'Update fields of your todo (by id or key); set area/epic to move it. Use null to clear dueAt, hold, holdReason, scheduledAt, estimateMinutes, actualMinutes. recurrence replaces the repeat rule (null ends the series); changing dueAt only moves this occurrence. completedAt only applies to a done todo.',
+    description: 'Update fields of your todo (by id or key); set area/epic to move it. Use null to clear dueAt, targetAt, hold, holdReason, scheduledAt, estimateMinutes, actualMinutes. recurrence replaces the repeat rule (null ends the series); changing dueAt only moves this occurrence. completedAt only applies to a done todo.',
     inputSchema: z.object({ ...ref, area: name, ...todoFields, completedAt: completedAtInput, prefix, ...linkEdits }).partial().strict()
       .refine(oneRef, 'Pass exactly one of id or key').refine((input) => Object.keys(input).length > 1, 'No changes'), annotations: todoWrite
   }, ({ id, key, ...changes }) => result(async () => updateTodo(ownerId, await todoIdOf(ownerId, { id, key }), changes, 'mcp')));
@@ -115,15 +115,16 @@ function registerTodoResources(server: McpServer, ownerId: string) {
 }
 
 const due = (todo: Todo) => todo.dueAt && formatDay(todo.dueAt, todo.dueAllDay);
+const target = (todo: Todo) => todo.targetAt && formatDay(todo.targetAt, todo.targetAllDay);
 const scheduled = (todo: Todo) => todo.scheduledAt && formatDay(todo.scheduledAt, todo.scheduledAllDay);
 function markdown(uri: URL, text: string) { return { contents: [{ uri: uri.href, mimeType: 'text/markdown', text }] }; }
 function list(title: string, todos: Todo[], heading = '#') { return `${heading} ${title}\n\n${todos.length ? todos.map(line).join('\n') : '_없음_'}\n`; }
 function line(todo: Todo) {
-  const parts = [todo.priority.toUpperCase(), `${todo.area}/${todo.epic}`, todo.status, todo.dueAt && `마감 ${due(todo)}`, todo.scheduledAt && `예정 ${scheduled(todo)}`, todo.hold && [todo.hold, todo.holdReason].filter(Boolean).join(': '), todo.recurrence && `반복 ${recurrenceLabel(todo.recurrence)}`];
+  const parts = [todo.priority.toUpperCase(), `${todo.area}/${todo.epic}`, todo.status, todo.dueAt && `마감 ${due(todo)}`, todo.scheduledAt && `시작/예정 ${scheduled(todo)}`, todo.targetAt && `내부 완료 목표 ${target(todo)}`, todo.hold && [todo.hold, todo.holdReason].filter(Boolean).join(': '), todo.recurrence && `반복 ${recurrenceLabel(todo.recurrence)}`];
   return `- [${todo.status === 'done' ? 'x' : ' '}] ${todo.key ? `${todo.key}: ` : ''}${todo.title} — ${parts.filter(Boolean).join(' · ')} (id: ${todo.id})`;
 }
 function detail(todo: Todo) {
-  const rows = [['키', todo.key], ['id', todo.id], ['영역', `${todo.area}/${todo.epic}`], ['상태', todo.status], ['우선순위', todo.priority.toUpperCase()], ['마감', due(todo)], ['예정', scheduled(todo)],
+  const rows = [['키', todo.key], ['id', todo.id], ['영역', `${todo.area}/${todo.epic}`], ['상태', todo.status], ['우선순위', todo.priority.toUpperCase()], ['마감', due(todo)], ['시작/예정', scheduled(todo)], ['내부 완료 목표', target(todo)],
     ['완료', todo.completedAt && formatDay(todo.completedAt, false)], ['보관', todo.archivedAt && formatDay(todo.archivedAt, false)],
     ['보류', todo.hold && [todo.hold, todo.holdReason].filter(Boolean).join(': ')], ['예상', todo.estimateMinutes && `${todo.estimateMinutes}분`], ['실제', todo.actualMinutes && `${todo.actualMinutes}분`], ['반복', todo.recurrence && recurrenceLabel(todo.recurrence)], ['출처', todo.source]];
   return `# ${todo.title}\n\n${rows.filter(([, value]) => value).map(([label, value]) => `- ${label}: ${value}`).join('\n')}\n${todo.notes ? `\n## 메모\n\n${todo.notes}\n` : ''}`;

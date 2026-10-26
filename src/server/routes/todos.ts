@@ -1,7 +1,7 @@
 import type { Context, Hono } from 'hono';
 import { z } from 'zod';
 import { type AppEnv, ownerAuth } from '../auth.js';
-import { calendarView, createTodo, todoName, completeTodo, completedAtInput, keyPrefix, promoteTodo, setArchived, staleView, TodoValidationError, todayView, todoChanges, todoFields, updateTodo } from '../todos.js';
+import { calendarView, createTodo, DEFAULT_TODO_AREA, todoName, completeTodo, completedAtInput, keyPrefix, promoteTodo, setArchived, staleView, TodoValidationError, todayView, todoChanges, todoFields, updateTodo } from '../todos.js';
 import { listEpicPrefixes, setEpicPrefix } from '../ticket-keys.js';
 import { bulkInput, bulkUpdateTodos } from '../todo-bulk.js';
 import { NotFoundError } from '../work.js';
@@ -60,7 +60,7 @@ export function registerTodoRoutes(app: Hono<AppEnv>): void {
   });
 }
 
-const createBody = z.object({ area: todoName, title: todoFields.title, epic: todoFields.epic.optional(), dueAt: todoFields.dueAt.optional(), scheduledAt: todoFields.scheduledAt.optional() }).strict();
+const createBody = z.object({ ...todoFields, area: todoName, prefix: keyPrefix.nullable() }).partial().required({ title: true }).extend({ area: todoName.default(DEFAULT_TODO_AREA) }).strict();
 const completeBody = z.object({ completedAt: completedAtInput.optional(), actualMinutes: todoFields.actualMinutes.optional() }).strict();
 const promoteBody = z.object({ prefix: keyPrefix.optional() }).strict();
 const prefixBody = z.object({ prefix: keyPrefix.nullable(), start: z.number().int().min(1).max(1_000_000).optional() }).strict();
