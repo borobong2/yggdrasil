@@ -2,7 +2,7 @@ import { afterAll, expect, it } from 'vitest';
 import { Pool } from 'pg';
 import { app } from '../src/server/app.js';
 import { installTestOwner } from '../src/server/auth.js';
-import { createTodo, getTodo, updateTodo } from '../src/server/todos.js';
+import { calendarView, createTodo, getTodo, todayView, updateTodo } from '../src/server/todos.js';
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 afterAll(() => pool.end());
@@ -56,4 +56,28 @@ it('rejects invalid target dates and logs target changes with all-day/time meani
   expect(updated).toMatchObject({ targetAt: '2026-10-27T00:30:00.000Z', targetAllDay: false, completedAt: null });
   const rows = await pool.query('SELECT payload FROM activities WHERE subject_id=$1 ORDER BY created_at DESC', [todo.id]);
   expect(rows.rows[0].payload).toMatchObject({ via: 'ui', diff: { targetAt: [null, '2026-10-27 09:30'] } });
+});
+
+it('includes start/target arrivals once in today and future dates in upcoming without external overdue', async () => {
+  const me = owner();
+  const create = (title: string, extra: Omit<Parameters<typeof createTodo>[1], 'area' | 'title'>) => createTodo(me.id, { area: '일정', title, ...extra });
+  const start = await create('오늘 시작', { scheduledAt: '2026-10-26', dueAt: '2026-10-31' });
+  const target = await create('오늘 목표', { targetAt: '2026-10-26' });
+  const past = await create('지난 목표', { targetAt: '2026-10-25' });
+  const all = await create('세 날짜 오늘', { scheduledAt: '2026-10-26', targetAt: '2026-10-26', dueAt: '2026-10-26' });
+  const future = await create('내일 목표', { targetAt: '2026-10-27' });
+  const backlog = await create('목표 백로그', { status: 'backlog', targetAt: '2026-10-26' });
+  const p1 = await create('날짜 없는 P1', { priority: 'p1' });
+  for (const hold of ['waiting', 'blocked', 'scheduled'] as const) await create(`보류 ${hold}`, { hold, targetAt: '2026-10-26', scheduledAt: '2026-10-30' });
+  await create('완료', { status: 'done', targetAt: '2026-10-26' });
+  await create('날짜 없음', {});
+  const view = await todayView(me.id, new Date('2026-10-26T09:00:00+09:00'));
+  expect(new Set(view.today.map(t => t.id))).toEqual(new Set([start.id, target.id, past.id, all.id, backlog.id, p1.id]));
+  expect(view.today).toHaveLength(6);
+  expect(view.week.map(t => t.id)).toContain(future.id);
+  expect(view.week.map(t => t.id)).not.toContain(start.id);
+  expect(view.overdue).toHaveLength(0);
+  const calendar = await calendarView(me.id, '2026-10-26', '2026-10-26');
+  expect(calendar.undated.map(t => t.id)).toContain(target.id);
+  expect(calendar.todos.map(t => t.id)).not.toContain(start.id); // default calendar is still due-first
 });

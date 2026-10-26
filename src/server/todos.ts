@@ -256,18 +256,18 @@ export async function listAreas(ownerId: string): Promise<string[]> {
  */
 export async function todayView(ownerId: string, now = new Date()): Promise<TodayView> {
   const date = seoulDate(now);
-  const day = (column: typeof issues.dueAt | typeof issues.scheduledAt, op: '<' | '<=' | '>=') => sql`(${column} AT TIME ZONE 'Asia/Seoul')::date ${sql.raw(op)} ${date}::date`;
+  const day = (column: typeof issues.dueAt | typeof issues.scheduledAt | typeof issues.targetAt, op: '<' | '<=' | '>=') => sql`(${column} AT TIME ZONE 'Asia/Seoul')::date ${sql.raw(op)} ${date}::date`;
   const open = and(eq(issues.ownerId, ownerId), ne(issues.status, 'done'), active)!;
   const weekEnd = seoulDate(new Date(now.getTime() + 7 * 86_400_000));
-  const upcoming = (column: typeof issues.dueAt | typeof issues.scheduledAt) => sql`(${column} AT TIME ZONE 'Asia/Seoul')::date BETWEEN (${date}::date + 1) AND ${weekEnd}::date`;
+  const upcoming = (column: typeof issues.dueAt | typeof issues.scheduledAt | typeof issues.targetAt) => sql`(${column} AT TIME ZONE 'Asia/Seoul')::date BETWEEN (${date}::date + 1) AND ${weekEnd}::date`;
   const [today, overdue, waiting, later, stale, calendar] = await Promise.all([
     // YG-54: a backlog todo due before today was put away on purpose — not 오늘 (web and MCP both read this list).
-    todoRows(and(open, or(isNull(issues.hold), and(eq(issues.hold, 'scheduled'), day(issues.scheduledAt, '<='))), or(day(issues.dueAt, '<='), eq(issues.priority, 'p1'), day(issues.scheduledAt, '<=')),
+    todoRows(and(open, or(isNull(issues.hold), and(eq(issues.hold, 'scheduled'), day(issues.scheduledAt, '<='))), or(day(issues.dueAt, '<='), eq(issues.priority, 'p1'), day(issues.scheduledAt, '<='), day(issues.targetAt, '<=')),
       or(ne(issues.status, 'backlog'), isNull(issues.dueAt), day(issues.dueAt, '>=')))!),
     todoRows(and(open, sql`CASE WHEN ${issues.dueAllDay} THEN ${day(issues.dueAt, '<')} ELSE ${issues.dueAt} < ${now} END`)!),
     todoRows(and(open, inArray(issues.hold, ['waiting', 'blocked']))!),
     // 이번 주 예정 (YG-25): due or scheduled in the next 7 days, not waiting/blocked, not already in today.
-    todoRows(and(open, or(isNull(issues.hold), eq(issues.hold, 'scheduled')), or(upcoming(issues.dueAt), upcoming(issues.scheduledAt)))!),
+    todoRows(and(open, or(isNull(issues.hold), eq(issues.hold, 'scheduled')), or(upcoming(issues.dueAt), upcoming(issues.scheduledAt), upcoming(issues.targetAt)))!),
     staleView(ownerId, now),
     calendarView(ownerId, date, date, false, now)
   ]);
