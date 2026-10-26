@@ -10,4 +10,4 @@ assert.equal(url.pathname, '/yggdrasil_yg64');
 process.env.YGGDRASIL_DEV_OWNER_ID = crypto.randomUUID();
 const app = createApp();
 app.use('*', serveStatic({ root: './dist/client' }));
-serve({ fetch: app.fetch, hostname: '127.0.0.1', port: 3064 });
+serve({ fetch: app.fetch, hostname: '127.0.0.1', port: Number(process.env.YG64_PORT ?? 3064) });
