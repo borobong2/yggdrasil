@@ -125,6 +125,7 @@ export function CalendarView({ token, onActivity }: { token: string; onActivity?
   async function patch(todo: Todo, changes: { scheduledAt: string | null }, text?: string, undoing = false) {
     if (savingRef.current) return;
     savingRef.current = true; setSaving(true); setToast(null);
+    request.current++; // Reads started before this mutation must not overwrite its result.
     const iso = (value: string | null) => value && new Date(/T/.test(value) ? value : `${value}T00:00:00+09:00`).toISOString();
     const previous = { scheduledAt: calendarDateInput(todo.scheduledAt, todo.scheduledAllDay) };
     // Undo waits for authoritative data, since another explicit date edit may have happened since the move.
@@ -135,7 +136,7 @@ export function CalendarView({ token, onActivity }: { token: string; onActivity?
       const saved: Todo = await response.json();
       setData((view) => view && place(view, saved));
       if (basis === 'due' && !undoing && latestKey.current === queryKey) setBasis('effective');
-      else if (saved.recurrence || latestKey.current !== queryKey) void reload.current();
+      else void reload.current(); // Also refill a view cleared by an earlier failure-recovery load.
       onActivity?.();
       if (text) setToast({ text, undo: () => { void patch(saved, previous, undefined, true); } });
     } catch {

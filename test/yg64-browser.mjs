@@ -65,11 +65,18 @@ try {
  pass('keyboard Escape cancels without any write');
  // Move then fail undo: error retains retry instead of losing the snapshot.
  await drag(chip(todo.id,day(2)),cell(day(3)),todo.id);
+ let releaseRecovery, recoveryReached, heldRecovery=false;
+ const recoveryGate=new Promise(resolve=>releaseRecovery=resolve), recoveryCaptured=new Promise(resolve=>recoveryReached=resolve);
+ await page.route('**/api/calendar**',async route=>{
+  if(heldRecovery)return route.continue();heldRecovery=true;
+  const response=await route.fetch();recoveryReached();await recoveryGate;await route.fulfill({response});
+ });
  await page.route(`**/api/todos/${todo.id}`,route=>route.request().method()==='PATCH'?route.fulfill({status:500,body:'{}'}):route.continue());
- await undo(todo.id);
+ await undo(todo.id);await recoveryCaptured;
  await page.getByRole('status').filter({hasText:'되돌리지 못했습니다'}).waitFor();
- await page.unroute(`**/api/todos/${todo.id}`);await undo(todo.id);await chip(todo.id,day(2)).waitFor();
- pass('failed undo keeps a working retry and restores only work schedule');
+ await page.unroute(`**/api/todos/${todo.id}`);await undo(todo.id);
+ releaseRecovery();await chip(todo.id,day(2)).waitFor();await page.unroute('**/api/calendar**');
+ pass('failed undo retry wins over a delayed failure-recovery GET and restores only work schedule');
  await page.route(`**/api/todos/${todo.id}`,route=>route.request().method()==='PATCH'?route.fulfill({status:500,body:'{}'}):route.continue());
  await drag(chip(todo.id,day(2)),cell(day(3)),todo.id);
  await page.getByRole('status').filter({hasText:'옮기지 못했습니다'}).waitFor();await page.unroute(`**/api/todos/${todo.id}`);
