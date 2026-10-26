@@ -4,7 +4,7 @@ import {installTestOwner} from '../src/server/auth.js';
 import {createTodo,setArchived} from '../src/server/todos.js';
 import type {CalendarView} from '../src/contracts/items.js';
 afterEach(()=>vi.useRealTimers());
-it('selects due or scheduled without fallback while default stays due first, and isolates owners/archive',async()=>{
+it('selects due or scheduled without fallback while default becomes scheduled first, and isolates owners/archive',async()=>{
  const id=crypto.randomUUID();installTestOwner(`basis-${id}`,{id});const headers={authorization:`Bearer basis-${id}`};
  const both=await createTodo(id,{area:'個人',title:'둘',dueAt:'2026-11-01',scheduledAt:'2026-10-18T00:00:00+09:00'});
  const due=await createTodo(id,{area:'個人',title:'마감',dueAt:'2026-10-18'});
@@ -13,9 +13,9 @@ it('selects due or scheduled without fallback while default stays due first, and
  const archived=await createTodo(id,{area:'個人',title:'보관',scheduledAt:'2026-10-18'});await setArchived(id,archived.id,true);
  await createTodo(crypto.randomUUID(),{area:'個人',title:'남',scheduledAt:'2026-10-18'});
  const get=async(basis='effective')=>{const r=await app.request(`/api/calendar?from=2026-10-18&to=2026-10-18&basis=${basis}`,{headers});expect(r.status).toBe(200);return await r.json() as CalendarView;};
- expect((await get()).todos.map(x=>x.id).sort()).toEqual([due.id,scheduled.id].sort());
+ expect((await get()).todos.map(x=>x.id).sort()).toEqual([both.id,due.id,scheduled.id].sort());
  expect((await get('due')).todos.map(x=>x.id)).toEqual([due.id]);
- const view=await get('scheduled');expect(view.todos.map(x=>x.id).sort()).toEqual([both.id,scheduled.id].sort());expect(view.undated.map(x=>x.id)).toEqual([undated.id]);
+ const view=await get('scheduled');expect(view.todos.map(x=>x.id).sort()).toEqual([both.id,scheduled.id].sort());expect(view.undated.map(x=>x.id).sort()).toEqual([due.id,undated.id].sort());
  expect(view.todos.find(x=>x.id===both.id)).toMatchObject({scheduledAllDay:false,dueAllDay:true});
  expect((await app.request('/api/calendar?from=2026-10-18&to=2026-10-18&basis=unknown',{headers})).status).toBe(400);
 });

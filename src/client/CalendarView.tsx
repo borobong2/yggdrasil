@@ -4,7 +4,7 @@ import { DndContext, DragOverlay, KeyboardCode, KeyboardSensor, MouseSensor, Tou
 import { ChevronDown, ChevronLeft, ChevronRight, Repeat, Undo2, X } from 'lucide-react';
 import type { CalendarDateBasis, CalendarGhost, CalendarView as Calendar, Priority, Todo } from '../contracts/items.js';
 import { addDays, calendarDateInput, dayOf, modes, monthGrid, moveKeepingTime, parseCalendarHash, rangeOf, seoulMinutes, shift, slotAt, today, type CalendarMode } from './calendar-dates.js';
-import { HoldBadge, isOverdue, PriorityBadge } from './format.js';
+import { formatDue, HoldBadge, isOverdue, PriorityBadge } from './format.js';
 import { CalendarCreate } from './CalendarCreate.js';
 import { TodoDetail } from './TodoDetail.js';
 
@@ -55,13 +55,15 @@ export function CalendarView({ token, onActivity }: { token: string; onActivity?
   const request = useRef(0);
   const [toast, setToast] = useState<Toast | null>(null);
   const [basis, setBasis] = useState<CalendarDateBasis>('effective');
-  const fieldOf = (todo: Todo) => basis === 'scheduled' ? 'scheduledAt' : basis === 'due' || todo.dueAt || !todo.scheduledAt ? 'dueAt' : 'scheduledAt';
+  const fieldOf = (todo: Todo) => basis === 'due' ? 'dueAt' : basis === 'scheduled' || todo.scheduledAt ? 'scheduledAt' : 'dueAt';
   const dateOf = (todo: Todo) => todo[fieldOf(todo)];
   const allDayOf = (todo: Todo) => fieldOf(todo) === 'dueAt' ? todo.dueAllDay : todo.scheduledAllDay;
   const [showDone, setShowDone] = useState(false);
   const [createAt, setCreateAt] = useState<string | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
   const [dragging, setDragging] = useState<Todo | null>(null);
+  const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
   const headers: Record<string, string> = token ? { authorization: `Bearer ${token}` } : {};
   const range = rangeOf(mode, day);
   const queryKey = JSON.stringify([token, range.from, range.to, showDone, basis]);
@@ -114,41 +116,46 @@ export function CalendarView({ token, onActivity }: { token: string; onActivity?
     const others = { todos: view.todos.filter((item) => item.id !== todo.id), undated: view.undated.filter((item) => item.id !== todo.id) };
     const date = dateOf(todo);
     if (todo.status === 'done' && !showDone) return { ...view, ...others };
-    if (!date) return { ...view, ...others, undated: todo.status === 'done' || todo.dueAt || todo.scheduledAt ? others.undated : [todo, ...others.undated] };
+    const undated = todo.status === 'done' || todo.scheduledAt ? others.undated : [todo, ...others.undated];
+    if (!date) return { ...view, ...others, undated };
     const inRange = dayOf(date) >= view.from && dayOf(date) <= view.to;
-    return { ...view, ...others, todos: inRange ? [...others.todos, todo] : others.todos };
+    return { ...view, ...others, undated, todos: inRange ? [...others.todos, todo] : others.todos };
   };
 
-  async function patch(todo: Todo, changes: Partial<Record<'dueAt' | 'scheduledAt', string | null>>, text?: string) {
+  async function patch(todo: Todo, changes: { scheduledAt: string | null }, text?: string, undoing = false) {
+    if (savingRef.current) return;
+    savingRef.current = true; setSaving(true); setToast(null);
+    request.current++; // Reads started before this mutation must not overwrite its result.
     const iso = (value: string | null) => value && new Date(/T/.test(value) ? value : `${value}T00:00:00+09:00`).toISOString();
-    const previous = Object.fromEntries(Object.keys(changes).map((key) => [key, calendarDateInput(todo[key as keyof typeof changes], key === 'dueAt' ? todo.dueAllDay : todo.scheduledAllDay)]));
-    setData((view) => view && place(view, { ...todo, ...Object.fromEntries(Object.entries(changes).flatMap(([key, value]) => [[key, iso(value ?? null)], [key === 'dueAt' ? 'dueAllDay' : 'scheduledAllDay', !!value && !value.includes('T')]])) }));
+    const previous = { scheduledAt: calendarDateInput(todo.scheduledAt, todo.scheduledAllDay) };
+    // Undo waits for authoritative data, since another explicit date edit may have happened since the move.
+    if (!undoing) setData((view) => view && place(view, { ...todo, scheduledAt: iso(changes.scheduledAt), scheduledAllDay: !!changes.scheduledAt && !changes.scheduledAt.includes('T') }));
     try {
       const response = await fetch(`/api/todos/${todo.id}`, { method: 'PATCH', headers: { ...headers, 'content-type': 'application/json' }, body: JSON.stringify(changes) });
       if (!response.ok) throw new Error();
       const saved: Todo = await response.json();
       setData((view) => view && place(view, saved));
-      if (saved.recurrence || latestKey.current !== queryKey) void reload.current(); // ghosts follow the open occurrence's new date
+      if (basis === 'due' && !undoing && latestKey.current === queryKey) setBasis('effective');
+      else void reload.current(); // Also refill a view cleared by an earlier failure-recovery load.
       onActivity?.();
-      if (text) setToast({ text, undo: () => { setToast(null); void patch(saved, previous); } });
+      if (text) setToast({ text, undo: () => { void patch(saved, previous, undefined, true); } });
     } catch {
-      if (latestKey.current !== queryKey) void reload.current();
-      else setData((view) => view && place(view, todo));
-      setToast({ text: `'${todo.title}'을(를) 옮기지 못해 원래 날짜로 되돌렸습니다.`, error: true });
-    }
+      void reload.current(); // Never roll back by replaying a stale full todo.
+      setToast(undoing
+        ? { text: '되돌리지 못했습니다. 다시 시도하세요.', error: true, undo: () => { void patch(todo, changes, undefined, true); } }
+        : { text: `'${todo.title}'을(를) 옮기지 못했습니다. 기존 작업 예정을 다시 불러옵니다.`, error: true });
+    } finally { savingRef.current = false; setSaving(false); }
   }
 
   function onDragEnd({ active, over }: DragEndEvent) {
     setDragging(null);
     const todo = active.data.current?.todo as Todo | undefined;
     const target = over?.data.current as Drop | undefined;
-    if (!todo || !target) return;
-    const field = fieldOf(todo);
-    const current = todo[field];
+    if (!todo || !target || savingRef.current) return;
+    const current = todo.scheduledAt;
     if (target.undated) {
       if (!current) return;
-      const changes = { ...(todo.dueAt ? { dueAt: null } : {}), ...(todo.scheduledAt ? { scheduledAt: null } : {}) };
-      return void patch(todo, changes, `'${todo.title}' 날짜를 지웠습니다.`);
+      return void patch(todo, { scheduledAt: null }, `'${todo.title}' 작업 예정을 해제했습니다. 마감·목표는 유지합니다.`);
     }
     let value: string;
     if (target.hour !== undefined) {
@@ -157,9 +164,9 @@ export function CalendarView({ token, onActivity }: { token: string; onActivity?
       const column = document.querySelector(`[data-day-column="${target.day}"]`)?.getBoundingClientRect();
       const raw = card && column ? (card.top - column.top) / HOUR * 60 : target.hour * 60;
       value = slotAt(target.day!, Math.min(Math.max(Math.round(raw / 15) * 15, 0), 24 * 60 - 15));
-    } else value = target.allDay || !current ? target.day! : moveKeepingTime(current, target.day!, allDayOf(todo));
-    if (current && new Date(/T/.test(value) ? value : `${value}T00:00:00+09:00`).getTime() === Date.parse(current) && allDayOf(todo) === !value.includes('T')) return;
-    void patch(todo, { [field]: value }, `'${todo.title}'을(를) ${target.label}(으)로 옮겼습니다.`);
+    } else value = target.allDay || !current ? target.day! : moveKeepingTime(current, target.day!, todo.scheduledAllDay);
+    if (current && new Date(/T/.test(value) ? value : `${value}T00:00:00+09:00`).getTime() === Date.parse(current) && todo.scheduledAllDay === !value.includes('T')) return;
+    void patch(todo, { scheduledAt: value }, `'${todo.title}' 작업 예정: ${target.label}. 마감·목표는 유지합니다.`);
   }
 
 
@@ -177,7 +184,7 @@ export function CalendarView({ token, onActivity }: { token: string; onActivity?
     onDragStart: ({ active }) => `${active.data.current?.todo.title} 일정을 들었습니다.`,
     // Silent while still over the card's own day, so the pick-up message is not overwritten at once.
     onDragOver: ({ active, over }) => { const todo: Todo = active.data.current?.todo; const drop = over?.data.current as Drop | undefined;
-      return drop && drop.hour === undefined && (drop.undated ? !dateOf(todo) : dateOf(todo) && drop.day === dayOf(dateOf(todo)!)) ? undefined : `${todo.title}: ${where(drop)}`; },
+      return drop && drop.hour === undefined && (drop.undated ? !todo.scheduledAt : dateOf(todo) && drop.day === dayOf(dateOf(todo)!)) ? undefined : `${todo.title}: ${where(drop)}`; },
     onDragEnd: ({ active, over }) => over ? `${active.data.current?.todo.title}을(를) ${where(over.data.current as Drop)}에 놓았습니다.` : '놓지 않았습니다.',
     onDragCancel: ({ active }) => `이동을 취소했습니다. ${active.data.current?.todo.title}은(는) 원래 날짜에 있습니다.`
   };
@@ -196,12 +203,14 @@ export function CalendarView({ token, onActivity }: { token: string; onActivity?
         {modes.map((item) => <button key={item} type="button" aria-pressed={item === mode} onClick={() => go(item, day)}
           className="h-[26px] flex-1 whitespace-nowrap rounded-[5px] px-2.5 text-sm font-medium text-muted aria-pressed:bg-surface aria-pressed:text-ink aria-pressed:shadow-card">{modeLabels[item]}</button>)}
       </div>
-      <label className="flex shrink-0 items-center gap-1 whitespace-nowrap text-sm text-muted">표시 기준<select aria-label="표시 기준" className="field" value={basis} onChange={(event) => setBasis(event.target.value as CalendarDateBasis)}><option value="effective">마감 우선</option><option value="due">마감일</option><option value="scheduled">예정일</option></select></label>
+      <label className="flex shrink-0 items-center gap-1 whitespace-nowrap text-sm text-muted">표시 기준<select aria-label="표시 기준" className="field" value={basis} onChange={(event) => setBasis(event.target.value as CalendarDateBasis)}><option value="effective">예정 우선</option><option value="due">마감일</option><option value="scheduled">예정일</option></select></label>
       <label className="flex items-center gap-1.5 text-sm text-muted"><input type="checkbox" className="accent-[var(--color-accent)]" checked={showDone} onChange={(event) => setShowDone(event.target.checked)} />완료 표시</label>
     </div>
+    <p className="text-xs text-muted">드래그는 작업 예정만 바꿉니다. 예정이 없으면 실제 마감 위치에 표시합니다.</p>
+    {saving && <p role="status" className="text-xs text-muted">작업 예정 저장 중…</p>}
     {error && <p role="alert" className="alert">{error} <button type="button" className="btn" onClick={() => void load()}>다시 시도</button></p>}
     {!data ? (!error && <p role="status" className="empty">캘린더를 불러오는 중…</p>) :
-      <DndContext sensors={sensors} collisionDetection={collision} onDragEnd={onDragEnd} onDragCancel={() => setDragging(null)}
+      <DndContext sensors={saving ? [] : sensors} collisionDetection={collision} onDragEnd={onDragEnd} onDragCancel={() => setDragging(null)}
         onDragStart={({ active }) => { setDragging(active.data.current?.todo ?? null); document.querySelectorAll<HTMLElement>('[popover]').forEach((element) => element.matches(':popover-open') && element.hidePopover()); }}
         accessibility={{ announcements, screenReaderInstructions: { draggable: '스페이스를 누르면 일정을 듭니다. 방향키로 날짜·시간을 옮기고 스페이스로 놓으며, Esc로 취소합니다. Enter는 상세를 엽니다.' } }}>
         <div className="md:grid md:grid-cols-[minmax(0,1fr)_224px] 2xl:grid-cols-[minmax(0,1fr)_280px] md:gap-4">
@@ -216,10 +225,10 @@ export function CalendarView({ token, onActivity }: { token: string; onActivity?
       </DndContext>}
     {toast && <div role="status" className="card fixed inset-x-4 bottom-[calc(7.5rem+env(safe-area-inset-bottom))] z-40 mx-auto flex max-w-xl items-center gap-2 px-3 py-2 shadow-pop md:bottom-6 md:left-[calc(208px+1.5rem)]">
       <span className={`min-w-0 flex-1 truncate text-sm ${toast.error ? 'text-danger' : ''}`}>{toast.text}</span>
-      {toast.undo && <button type="button" className="btn" onClick={toast.undo}><Undo2 />되돌리기</button>}
+      {toast.undo && <button type="button" className="btn" disabled={saving} onClick={toast.undo}><Undo2 />되돌리기</button>}
       <button type="button" className="btn btn-ghost size-7 p-0" aria-label="알림 닫기" onClick={() => setToast(null)}><X /></button>
     </div>}
-    {createAt && <CalendarCreate at={createAt} field={basis === 'scheduled' ? 'scheduledAt' : 'dueAt'} headers={headers} onClose={() => setCreateAt(null)} onSaved={() => { setCreateAt(null); void load(); onActivity?.(); }} />}
+    {createAt && <CalendarCreate at={createAt} field={basis === 'due' ? 'dueAt' : 'scheduledAt'} headers={headers} onClose={() => setCreateAt(null)} onSaved={() => { setCreateAt(null); void load(); onActivity?.(); }} />}
     {open && <TodoDetail key={open.id} issue={open} area={open.area} headers={headers} onClose={() => setOpenId(null)} onSaved={() => { void load(); onActivity?.(); }} />}
   </section>;
 }
@@ -286,7 +295,7 @@ function TimeGrid({ days, entries, now, onOpen, onCreate }: { days: string[] } &
 
 function AllDayCell({ day, list, now, onOpen, onCreate }: { day: string; list: Entry[]; now: string; onOpen: (id: string) => void; onCreate: (at: string) => void }) {
   const { setNodeRef, isOver } = useDroppable({ id: `allday:${day}`, data: { day, allDay: true, label: `${dayLabel(day)} 종일` } satisfies Drop });
-  return <ul ref={setNodeRef} onClick={(event) => { if (event.target === event.currentTarget) onCreate(day); }} aria-label={`${dayLabel(day)} 종일`} className={`max-h-28 min-h-8 min-w-0 space-y-0.5 overflow-y-auto border-l border-line p-0.5 ${isOver ? 'bg-accent-soft' : ''}`}>
+  return <ul ref={setNodeRef} data-allday={day} onClick={(event) => { if (event.target === event.currentTarget) onCreate(day); }} aria-label={`${dayLabel(day)} 종일`} className={`max-h-28 min-h-8 min-w-0 space-y-0.5 overflow-y-auto border-l border-line p-0.5 ${isOver ? 'bg-accent-soft' : ''}`}>
     <li><button type="button" className="text-xs text-faint" aria-label={`${dayLabel(day)} 종일 할 일 추가`} onClick={() => onCreate(day)}>+ 추가</button></li>
     {list.map((entry) => <li key={entry.kind === 'todo' ? entry.todo.id : entry.ghost.at + entry.ghost.recurrenceId}>
       {entry.kind === 'todo' ? <Chip todo={entry.todo} now={now} onOpen={onOpen} compact /> : <Ghost ghost={entry.ghost} compact />}</li>)}
@@ -334,17 +343,17 @@ function Agenda({ from, to, entries, now, onOpen }: { from: string; to: string }
 
 function Undated({ todos, onOpen }: { todos: Todo[]; onOpen: (id: string) => void }) {
   const [open, setOpen] = useState(() => !phone());
-  const { setNodeRef, isOver } = useDroppable({ id: 'undated', data: { undated: true, label: '날짜 없음' } satisfies Drop });
+  const { setNodeRef, isOver } = useDroppable({ id: 'undated', data: { undated: true, label: '작업 예정 없음' } satisfies Drop });
   // Desktop: right column. Phone: a bottom sheet above the tab bar; its header stays a drop target while collapsed.
-  return <aside ref={setNodeRef} aria-label="날짜 없음" data-undated
+  return <aside ref={setNodeRef} aria-label="작업 예정 없음" data-undated
     className={`card overflow-hidden transition-colors max-md:fixed max-md:inset-x-2 max-md:bottom-[calc(3.75rem+env(safe-area-inset-bottom))] max-md:z-20 max-md:shadow-pop md:sticky md:top-16 md:self-start ${isOver ? 'border-accent bg-accent-soft' : ''}`}>
     <button type="button" aria-expanded={open} onClick={() => setOpen(!open)} className="flex h-10 w-full items-center gap-2 px-3 text-left text-sm font-semibold">
-      <span className="flex-1">날짜 없음 <span className="font-normal tabular-nums text-faint">{todos.length}</span></span>
+      <span className="flex-1">작업 예정 없음 <span className="font-normal tabular-nums text-faint">{todos.length}</span></span>
       <ChevronDown className={`size-4 text-faint transition-transform ${open ? '' : '-rotate-90'}`} />
     </button>
     {open && <div className="max-h-[38dvh] overflow-y-auto border-t border-line p-2 md:max-h-[calc(100dvh-160px)]">
-      {todos.length ? <ul className="space-y-1">{todos.map((todo) => <li key={todo.id}><Chip todo={todo} now="" onOpen={onOpen} row /></li>)}</ul>
-        : <p className="py-4 text-center text-xs text-faint">여기로 끌어 놓으면 날짜가 지워집니다.</p>}
+      {todos.length ? <ul className="space-y-1">{todos.map((todo) => <li key={todo.id}><Chip todo={todo} now="" onOpen={onOpen} idPrefix="unscheduled:" row /></li>)}</ul>
+        : <p className="py-4 text-center text-xs text-faint">여기로 끌어 놓으면 작업 예정만 해제합니다. 마감·목표는 유지합니다.</p>}
     </div>}
   </aside>;
 }
@@ -365,7 +374,12 @@ function ChipFace({ todo, now, time, fill, row, lifted }: Omit<ChipProps, 'onOpe
     ${row ? 'items-center px-2.5 py-1.5 text-sm' : `px-1 text-2xs leading-4 md:text-xs ${fill ? 'h-full items-start py-0.5' : 'items-center py-px'}`}`}>
     <span className={`size-1.5 shrink-0 rounded-full ${priorityDots[todo.priority]} ${fill ? 'mt-[5px]' : ''}`} title={`우선순위 ${todo.priority.toUpperCase()}`} />
     {time !== undefined ? <span className={`shrink-0 tabular-nums text-muted ${row ? 'text-xs' : 'max-md:hidden'}`}>{hhmm(time)}</span> : null}
-    <span className={`min-w-0 flex-1 truncate ${todo.status === 'done' ? 'text-muted line-through' : ''}`}>{todo.title}</span>
+    <span className="min-w-0 flex-1">
+      <span className={`block truncate ${todo.status === 'done' ? 'text-muted line-through' : ''}`}>{todo.title}</span>
+      {(todo.dueAt || todo.targetAt) && <span className="block truncate text-2xs font-normal" title={[todo.dueAt && `실제 마감 ${formatDue(todo.dueAt, todo.dueAllDay)}`, todo.targetAt && `내부 목표 ${formatDue(todo.targetAt, todo.targetAllDay)}`].filter(Boolean).join(' · ')}>
+        {todo.dueAt && `실제 마감 ${formatDue(todo.dueAt, todo.dueAllDay)}`}{todo.dueAt && todo.targetAt && ' · '}{todo.targetAt && `내부 목표 ${formatDue(todo.targetAt, todo.targetAllDay)}`}
+      </span>}
+    </span>
     {row && <span className="shrink-0 max-sm:hidden"><PriorityBadge priority={todo.priority} /></span>}
     {todo.hold && !fill && <span className={`shrink-0 ${row ? '' : 'max-md:hidden'}`}><HoldBadge hold={todo.hold} reason={todo.holdReason} /></span>}
     {todo.hold && !row && <span title="보류" className={`size-1.5 shrink-0 rounded-full ${fill ? 'mt-[5px]' : 'self-center md:hidden'} ${todo.hold === 'blocked' ? 'bg-danger' : todo.hold === 'waiting' ? 'bg-warn' : 'bg-info'}`} />}

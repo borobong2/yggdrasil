@@ -2,7 +2,7 @@ import { and, eq, inArray, ne } from 'drizzle-orm';
 import { z } from 'zod';
 import type { BulkResult, Todo, TodoSnapshot, TodoVia } from '../contracts/items.js';
 import { appendActivity } from './activity.js';
-import { seoulDay } from '../contracts/dates.js';
+import { moveToSeoulDay, seoulDay } from '../contracts/dates.js';
 import { getDb } from './db.js';
 import { issues } from './schema.js';
 import { spawnNext } from './recurrences.js';
@@ -14,11 +14,11 @@ const ids = z.array(z.uuid()).min(1).max(200).refine((list) => new Set(list).siz
 export const bulkInput = z.discriminatedUnion('action', [
   z.object({ action: z.literal('complete'), ids }).strict(),
   z.object({ action: z.literal('backlog'), ids }).strict(),
-  // Sets the due date; todos on a 예정 hold shift their scheduled date instead.
+  // Scheduling changes only the work date; real deadline and internal target are preserved.
   z.object({ action: z.literal('snooze'), ids, until: z.iso.date() }).strict(),
   z.object({ action: z.literal('hold'), ids, hold: z.enum(['waiting', 'blocked']), holdReason: todoFields.holdReason.optional() }).strict(),
   // Undo: the `previous` snapshots returned by the last bulk call.
-  z.object({ action: z.literal('restore'), items: z.array(z.object({ id: z.uuid(), status: todoFields.status, dueAt: todoFields.dueAt, scheduledAt: todoFields.scheduledAt, hold: todoFields.hold, holdReason: todoFields.holdReason }).strict()).min(1).max(200)
+  z.object({ action: z.literal('restore'), items: z.array(z.object({ id: z.uuid(), status: todoFields.status, dueAt: todoFields.dueAt, scheduledAt: todoFields.scheduledAt, hold: todoFields.hold, holdReason: todoFields.holdReason }).partial().required({ id: true }).strict().refine(item => Object.keys(item).length > 1, 'No restore fields')).min(1).max(200)
     .refine((list) => new Set(list.map((item) => item.id)).size === list.length, 'Duplicate ids') }).strict()
 ]);
 export type BulkInput = z.infer<typeof bulkInput>;
@@ -43,7 +43,15 @@ export async function bulkUpdateTodos(ownerId: string, input: BulkInput, via: To
       await appendActivity(tx, ownerId, { kind: set.status === 'done' ? 'issue.completed' : 'issue.updated', subjectType: 'issue', subjectId: row.id, payload: { via, changes: changed, diff: todoDiff(row, issue(updated!), changed), bulk: input.action } });
       if (set.status === 'done') await spawnNext(tx, updated!, { via, bulk: input.action }); // YG-28: next occurrence of a recurring todo
     }
-    const previous = rows.filter((row) => !skipped.includes(row.id)).map(snapshot);
+    const previous = rows.filter((row) => !skipped.includes(row.id)).map((row) => {
+      const before = snapshot(row);
+      if (input.action === 'snooze') return { id: row.id, scheduledAt: before.scheduledAt };
+      if (input.action === 'restore') {
+        const { id: _, ...wanted } = input.items.find(item => item.id === row.id)!;
+        return { id: row.id, ...Object.fromEntries(Object.keys(wanted).map(key => [key, before[key as keyof TodoSnapshot]])) };
+      }
+      return before;
+    });
     return { todos: await todoRows(scope, tx), previous, skipped };
 
     async function openSibling(recurrenceId: string, id: string) {
@@ -56,14 +64,14 @@ function changesFor(input: BulkInput, todo: Todo): TodoChanges {
   switch (input.action) {
     case 'complete': return { status: 'done' };
     case 'backlog': return { status: 'backlog' };
-    case 'snooze': return todo.hold === 'scheduled' ? { scheduledAt: input.until } : { dueAt: input.until };
+    case 'snooze': return { scheduledAt: todo.scheduledAt ? moveToSeoulDay(todo.scheduledAt, input.until, todo.scheduledAllDay) : input.until };
     case 'hold': return { hold: input.hold, holdReason: input.holdReason ?? null };
     case 'restore': { const { id: _, ...item } = input.items.find((entry) => entry.id === todo.id)!; return item; }
   }
 }
 
 // All-day dates go out as 'YYYY-MM-DD' (YG-38) so a restore brings back the all-day flag too.
-function snapshot({ id, status, dueAt, dueAllDay, scheduledAt, scheduledAllDay, hold, holdReason }: Todo): TodoSnapshot {
+function snapshot({ id, status, dueAt, dueAllDay, scheduledAt, scheduledAllDay, hold, holdReason }: Todo): Required<TodoSnapshot> {
   return { id, status, dueAt: dueAt && (dueAllDay ? seoulDay(dueAt) : dueAt), scheduledAt: scheduledAt && (scheduledAllDay ? seoulDay(scheduledAt) : scheduledAt), hold, holdReason };
 }
 

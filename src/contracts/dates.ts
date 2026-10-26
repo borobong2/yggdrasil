@@ -22,3 +22,10 @@ export function formatDue(instant: string, allDay: boolean): string {
   const [, month, date] = seoulDay(instant).split('-').map(Number);
   return allDay ? `${month}/${date}` : `${month}/${date} ${seoulTime(instant)}`;
 }
+
+/** Move a planned instant to a Seoul day without borrowing another date's time or dropping precision. */
+export function moveToSeoulDay(instant: string, date: string, allDay: boolean): string {
+  if (allDay) return date;
+  const local = new Date(Date.parse(instant) + 9 * 60 * 60_000).toISOString().slice(11, 23).replace(/\.000$/, '');
+  return `${date}T${local}+09:00`;
+}

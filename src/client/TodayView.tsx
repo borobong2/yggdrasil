@@ -129,7 +129,7 @@ export function TodayView({ token, onActivity }: { token: string; onActivity?: (
         extra={counts.length > 0 && <span className="text-xs font-normal tabular-nums text-muted">{counts.map(([priority, count]) => `${priority.toUpperCase()} ${count}`).join(' · ')}</span>}>
         {todayList.length === 0 ? <p className="empty">오늘 챙길 일이 없습니다. 여유로운 하루예요.</p> :
           <ul>{todayList.map((todo) => <Row key={todo.id} todo={todo} {...rowProps}
-            onTomorrow={() => void apply([todo.id], { action: 'snooze', until: plusDays(view.date, 1) }, '내일로 미뤘습니다')} />)}</ul>}
+            onTomorrow={() => void apply([todo.id], { action: 'snooze', until: plusDays(view.date, 1) }, '작업 예정을 내일로 옮겼습니다')} />)}</ul>}
       </Panel>
       <div className="grid min-w-0 gap-3">
         <LatePanel late={late} className={hiddenOn('late')} onOpen={setOpenId}
@@ -235,7 +235,7 @@ function Timeline({ date, todos, ghosts, onOpen, className }: { date: string; to
   const [now, setNow] = useState(() => new Date());
   useEffect(() => { const timer = setInterval(() => setNow(new Date()), 60_000); return () => clearInterval(timer); }, []);
   const entries = [
-    ...todos.map((todo) => ({ id: todo.id, at: todo.dueAt && !todo.dueAllDay ? todo.dueAt : todo.scheduledAt!, title: todo.title, todo })),
+    ...todos.map((todo) => ({ id: todo.id, at: todo.scheduledAt ?? todo.dueAt!, title: todo.title, todo })),
     ...ghosts.map((ghost) => ({ id: `${ghost.recurrenceId}-${ghost.at}`, at: ghost.at, title: ghost.title, todo: null }))
   ].sort((a, b) => a.at.localeCompare(b.at));
   const isToday = seoulDay(now) === date;

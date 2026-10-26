@@ -57,10 +57,12 @@ export function TriageDialog({ items, date, headers, onDecided, onClose }: {
     const label = decisions.find((item) => item.id === decision)!.short;
     setAnnounce(`'${todo.title}' ${label}. ${next ? `다음 ${at + 2} / ${items.length}: ${next.title}` : '밀린 일을 모두 정리했습니다.'}`);
     try {
-      let undo = restore;
+      let undo: Step['undo'] = restore;
       if (decision === 'done') await post(`/api/todos/${todo.id}/complete`, onDueDate && todo.dueAt && todo.lateDays !== null ? { completedAt: seoulDay(todo.dueAt) } : {});
-      else if (decision === 'today') await bulk({ action: 'snooze', ids: [todo.id], until: date });
-      else if (decision === 'week') await bulk({ action: 'snooze', ids: [todo.id], until: nextMonday(date) });
+      else if (decision === 'today' || decision === 'week') {
+        const result = await bulk({ action: 'snooze', ids: [todo.id], until: decision === 'today' ? date : nextMonday(date) });
+        undo = () => bulk({ action: 'restore', items: result.previous });
+      }
       else if (decision === 'backlog') await bulk({ action: 'backlog', ids: [todo.id] });
       else if (decision === 'hold') await bulk({ action: 'hold', ids: [todo.id], hold: 'waiting', holdReason: reason.trim() || null });
       else { await post(`/api/todos/${todo.id}/archive`); undo = () => post(`/api/todos/${todo.id}/unarchive`); }

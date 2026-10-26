@@ -27,6 +27,7 @@ export type TodoVia = 'ui' | 'mcp' | 'import';
 /** YG-30: a future occurrence of an active series, computed for display only (no row). `todoId` is the series' open occurrence. */
 export type CalendarDateBasis = 'effective' | 'due' | 'scheduled';
 export type CalendarGhost = { recurrenceId: string; todoId: string; title: string; priority: Priority; at: string; allDay: boolean };
+/** undated is the unscheduled list; real deadlines/targets may still exist (YG-64). */
 export type CalendarView = { from: string; to: string; todos: Todo[]; undated: Todo[]; ghosts: CalendarGhost[] };
 /**
  * YG-34 밀린 일: one list replacing 마감 지남 + 방치 (no duplicates). Unheld todo/doing todos due before today (Asia/Seoul day), or stale (YG-41).
@@ -43,7 +44,7 @@ export type StaleView = { date: string; todos: StaleTodo[] };
 /** YG-36 settings row: every epic, its default prefix and that prefix's next number. */
 export type EpicPrefix = { epicId: string; area: string; epic: string; keyPrefix: string | null; nextNumber: number | null };
 /** Fields a bulk action can change (YG-26); sending them back with action 'restore' undoes it. All-day dates come back as 'YYYY-MM-DD'. */
-export type TodoSnapshot = Pick<Issue, 'id' | 'status' | 'dueAt' | 'scheduledAt' | 'hold' | 'holdReason'>;
+export type TodoSnapshot = Pick<Issue, 'id'> & Partial<Pick<Issue, 'status' | 'dueAt' | 'scheduledAt' | 'hold' | 'holdReason'>>;
 /** `skipped`: restore left these done because their recurring series already has a newer open occurrence (YG-28). */
 export type BulkResult = { todos: Todo[]; previous: TodoSnapshot[]; skipped: string[] };
 export type DeliveryPlanStatus = 'pending' | 'accepted' | 'dismissed';

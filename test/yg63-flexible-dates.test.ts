@@ -80,7 +80,7 @@ it('includes start/target arrivals once in today and future dates in upcoming wi
   expect(view.overdue).toHaveLength(0);
   const calendar = await calendarView(me.id, '2026-10-26', '2026-10-26');
   expect(calendar.undated.map(t => t.id)).toContain(target.id);
-  expect(calendar.todos.map(t => t.id)).not.toContain(start.id); // default calendar is still due-first
+  expect(calendar.todos.map(t => t.id)).toContain(start.id); // YG-64 defaults to scheduled-first without changing any stored dates
 });
 
 it('preserves internal target through existing snooze/restore and calendar/legacy writes', async () => {

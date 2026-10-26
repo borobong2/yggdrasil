@@ -16,23 +16,23 @@ const range = async (headers: Record<string, string>, query: string) => {
 };
 const titles = (list: { title: string }[]) => list.map((item) => item.title).sort();
 
-it('returns todos by dueAt (else scheduledAt) on Asia/Seoul day boundaries, plus undated open todos', async () => {
+it('returns todos by scheduledAt (else dueAt) on Seoul boundaries plus unscheduled open todos', async () => {
   const me = owner();
   // 2026-10-13 00:00 KST = 10-12T15:00Z; 23:59 KST on the 13th = 14:59Z.
   await createTodo(me.id, { area: '캘', title: '자정 직후', dueAt: '2026-10-13T00:00:00+09:00' });
   await createTodo(me.id, { area: '캘', title: '밤 늦게', dueAt: '2026-10-13T23:59:00+09:00' });
   await createTodo(me.id, { area: '캘', title: '전날 밤', dueAt: '2026-10-12T23:59:00+09:00' });
   await createTodo(me.id, { area: '캘', title: '예정만', scheduledAt: '2026-10-13' });
-  await createTodo(me.id, { area: '캘', title: '마감이 우선', dueAt: '2026-10-20', scheduledAt: '2026-10-13' });
+  await createTodo(me.id, { area: '캘', title: '예정이 우선', dueAt: '2026-10-20', scheduledAt: '2026-10-13' });
   await createTodo(me.id, { area: '캘', title: '날짜 없음' });
   const done = await createTodo(me.id, { area: '캘', title: '끝난 일', dueAt: '2026-10-13' });
   await completeTodo(me.id, done.id);
 
   const view = await range(me.headers, 'from=2026-10-13&to=2026-10-13');
-  expect(titles(view.todos)).toEqual(['밤 늦게', '예정만', '자정 직후']);
-  expect(titles(view.undated)).toEqual(['날짜 없음']);
-  expect(titles((await range(me.headers, 'from=2026-10-13&to=2026-10-13&done=1')).todos)).toEqual(['끝난 일', '밤 늦게', '예정만', '자정 직후']);
-  expect(titles((await range(me.headers, 'from=2026-10-12&to=2026-10-20')).todos)).toContain('마감이 우선');
+  expect(titles(view.todos)).toEqual(['밤 늦게', '예정만', '예정이 우선', '자정 직후'].sort());
+  expect(titles(view.undated)).toEqual(['날짜 없음', '밤 늦게', '자정 직후', '전날 밤'].sort());
+  expect(titles((await range(me.headers, 'from=2026-10-13&to=2026-10-13&done=1')).todos)).toEqual(['끝난 일', '밤 늦게', '예정만', '예정이 우선', '자정 직후'].sort());
+  expect(titles((await range(me.headers, 'from=2026-10-12&to=2026-10-20')).todos)).toContain('예정이 우선');
 });
 
 it('isolates owners and validates the range', async () => {

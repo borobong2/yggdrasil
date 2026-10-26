@@ -284,7 +284,7 @@ export async function todayView(ownerId: string, now = new Date()): Promise<Toda
     const age = lateDays ?? untouchedDays;
     late.set(todo.id, { ...plain, lateDays, untouchedDays, age, bucket: lateBucket(age) });
   }
-  const timed = (todo: Todo) => todo.dueAt ? !todo.dueAllDay : !todo.scheduledAllDay;
+  const timed = (todo: Todo) => todo.scheduledAt ? !todo.scheduledAllDay : !todo.dueAllDay;
   return {
     date, today, overdue, waiting, week: later.filter((todo) => !inToday.has(todo.id)),
     late: [...late.values()].sort((a, b) => b.age - a.age),
@@ -393,18 +393,18 @@ export function columns(input: TodoChanges): Partial<typeof issues.$inferInsert>
 }
 
 /**
- * YG-30 calendar range [from, to] (Asia/Seoul days, inclusive). Default calendar date is dueAt, else scheduledAt; due/scheduled select only that field.
- * `undated` = open todos with neither date. `ghosts` = upcoming occurrences of active series, computed with nextSlot
+ * YG-30 calendar range [from, to] (Asia/Seoul days, inclusive). Default calendar date is scheduledAt, else dueAt; due/scheduled select only that field.
+ * `undated` = open todos without a scheduledAt (deadline/target may still be present). `ghosts` = upcoming occurrences of active series, computed with nextSlot
  * from the same anchor spawnNext would use (max(now, open occurrence's date)) — preview only, never stored.
  */
 export async function calendarView(ownerId: string, from: string, to: string, withDone = false, now = new Date(), basis: CalendarDateBasis = 'effective'): Promise<CalendarView> {
-  const selected = basis === 'due' ? sql`${issues.dueAt}` : basis === 'scheduled' ? sql`${issues.scheduledAt}` : sql`coalesce(${issues.dueAt}, ${issues.scheduledAt})`;
+  const selected = basis === 'due' ? sql`${issues.dueAt}` : basis === 'scheduled' ? sql`${issues.scheduledAt}` : sql`coalesce(${issues.scheduledAt}, ${issues.dueAt})`;
   const date = sql`(${selected} AT TIME ZONE 'Asia/Seoul')::date`;
   const mine = and(eq(issues.ownerId, ownerId), active)!;
   const notDone = ne(issues.status, 'done');
   const [todos, undated, open] = await Promise.all([
     todoRows(and(mine, sql`${date} BETWEEN ${from}::date AND ${to}::date`, withDone ? undefined : notDone)!),
-    todoRows(and(mine, notDone, isNull(issues.dueAt), isNull(issues.scheduledAt))!),
+    todoRows(and(mine, notDone, isNull(issues.scheduledAt))!),
     // One open occurrence per active series (spawnNext keeps it that way).
     todoRows(and(mine, notDone, eq(recurrences.paused, false))!)
   ]);
@@ -413,7 +413,7 @@ export async function calendarView(ownerId: string, from: string, to: string, wi
   const ghosts: CalendarGhost[] = [];
   for (const todo of open) {
     const rule = todo.recurrence!;
-    const at = basis === 'due' ? todo.dueAt : basis === 'scheduled' ? todo.scheduledAt : todo.dueAt ?? todo.scheduledAt;
+    const at = basis === 'due' ? todo.dueAt : basis === 'scheduled' ? todo.scheduledAt : todo.scheduledAt ?? todo.dueAt;
     if (basis !== 'effective' && !at) continue;
     const anchor = new Date(at ?? now);
     // ponytail: 400 slots per series covers a daily rule over the 62-day range cap.

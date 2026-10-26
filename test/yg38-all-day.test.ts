@@ -78,20 +78,21 @@ it('makes occurrences of an untimed series all-day and of a timed series timed, 
   expect(Object.fromEntries(next.map((row) => [row.recurrence_id, row.due_all_day]))).toEqual({ [daily.recurrence!.id]: true, [timed.recurrence!.id]: false });
 });
 
-it('bulk snooze sets an all-day date and undo restores timed vs all-day exactly', async () => {
+it('bulk snooze adds an all-day schedule while preserving timed and all-day real deadlines', async () => {
   const me = owner();
   const timed = await createTodo(me.id, { area: '미루기', title: '시각 있음', dueAt: '2026-10-13T21:00:00+09:00' });
   const midnight = await createTodo(me.id, { area: '미루기', title: '자정 시각', dueAt: '2026-10-20T00:00:00+09:00' });
   const result = await bulkUpdateTodos(me.id, { action: 'snooze', ids: [timed.id, midnight.id], until: '2026-10-20' });
-  // A timed midnight snoozed to that same day still changes: it becomes all-day.
-  expect(result.todos.map((todo) => todo.dueAllDay)).toEqual([true, true]);
-  expect(result.previous.find((item) => item.id === timed.id)!.dueAt).toBe(kst('2026-10-13T21:00:00').toISOString());
+  // Unplanned todos acquire an all-day schedule; even timed midnight deadlines stay unchanged.
+  expect(result.todos.map((todo) => todo.dueAllDay)).toEqual([false, false]);
+  expect(result.todos.map((todo) => todo.scheduledAllDay)).toEqual([true, true]);
+  expect(result.previous.find((item) => item.id === timed.id)!.scheduledAt).toBeNull();
   await bulkUpdateTodos(me.id, { action: 'restore', items: result.previous });
   expect(await getTodo(me.id, timed.id)).toMatchObject({ dueAllDay: false, dueAt: kst('2026-10-13T21:00:00').toISOString() });
   expect(await getTodo(me.id, midnight.id)).toMatchObject({ dueAllDay: false, dueAt: kst('2026-10-20T00:00:00').toISOString() });
   const allDay = await createTodo(me.id, { area: '미루기', title: '종일', dueAt: '2026-10-15' });
   const again = await bulkUpdateTodos(me.id, { action: 'snooze', ids: [allDay.id], until: '2026-10-16' });
-  expect(again.previous[0]!.dueAt).toBe('2026-10-15');
+  expect(again.previous[0]!.scheduledAt).toBeNull();
   await bulkUpdateTodos(me.id, { action: 'restore', items: again.previous });
   expect(await getTodo(me.id, allDay.id)).toMatchObject({ dueAllDay: true, dueAt: kst('2026-10-15T00:00:00').toISOString() });
 });

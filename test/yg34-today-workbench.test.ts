@@ -105,13 +105,15 @@ it('정리 모드 decisions persist and each undo restores the todo (same calls 
   await undo(d.id);
   // T → 오늘, W → 다음 주 (월요일), all-day.
   const t = await make('T');
-  expect((await post('/api/todos/bulk', { action: 'snooze', ids: [t.id], until: '2026-10-14' })).status).toBe(200);
-  expect(await row(t.id)).toMatchObject({ due_at: new Date('2026-10-13T15:00:00Z') });
-  await undo(t.id);
+  const movedT = await (await post('/api/todos/bulk', { action: 'snooze', ids: [t.id], until: '2026-10-14' })).json();
+  expect(await row(t.id)).toMatchObject({ due_at: original.due_at, scheduled_at: new Date('2026-10-13T15:00:00Z') });
+  expect((await post('/api/todos/bulk', { action: 'restore', items: movedT.previous })).status).toBe(200);
+  expect(await row(t.id)).toMatchObject({ ...original, scheduled_at: null });
   const w = await make('W');
-  await post('/api/todos/bulk', { action: 'snooze', ids: [w.id], until: '2026-10-19' });
-  expect(await row(w.id)).toMatchObject({ due_at: new Date('2026-10-18T15:00:00Z') });
-  await undo(w.id);
+  const movedW = await (await post('/api/todos/bulk', { action: 'snooze', ids: [w.id], until: '2026-10-19' })).json();
+  expect(await row(w.id)).toMatchObject({ due_at: original.due_at, scheduled_at: new Date('2026-10-18T15:00:00Z') });
+  expect((await post('/api/todos/bulk', { action: 'restore', items: movedW.previous })).status).toBe(200);
+  expect(await row(w.id)).toMatchObject({ ...original, scheduled_at: null });
   // B → 백로그, H → 대기 + 사유.
   const b = await make('B');
   await post('/api/todos/bulk', { action: 'backlog', ids: [b.id] });

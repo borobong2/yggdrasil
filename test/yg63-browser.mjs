@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { mkdirSync } from 'node:fs';
 import { chromium } from 'playwright-core';
-const base = 'http://127.0.0.1:3063';
+const base = process.env.YG63_BASE ?? 'http://127.0.0.1:3063';
 const screens = process.argv[2] ?? '/tmp/yg63-screens';
 mkdirSync(screens, { recursive: true });
 const browser = await chromium.launch({ channel: 'chrome', headless: true });
@@ -87,7 +87,7 @@ try {
  await page.mouse.move(a.x+a.width/2,a.y+a.height/2); await page.mouse.down();
  await page.mouse.move(b.x+b.width/2,b.y+20,{steps:20}); await page.mouse.up(); await moved;
  await page.screenshot({path:`${screens}/drag-before-undo.png`});
- assert.equal((await read(page,dragTodo.id)).targetAt,dragTodo.targetAt);
+ const movedTodo=await read(page,dragTodo.id); assert.equal(movedTodo.targetAt,dragTodo.targetAt); assert.equal(movedTodo.dueAt,dragTodo.dueAt); assert.notEqual(movedTodo.scheduledAt,null);
  const undo = page.waitForResponse(r=>r.url().endsWith(`/api/todos/${dragTodo.id}`)&&r.request().method()==='PATCH');
  await page.getByRole('status').getByRole('button',{name:'되돌리기',exact:true}).click(); await undo;
  const restored=await read(page,dragTodo.id); assert.equal(restored.targetAt,dragTodo.targetAt); assert.equal(restored.dueAt,dragTodo.dueAt);
