@@ -19,11 +19,11 @@ const repeatOf = (issue: Issue): Repeat => {
 const recurrenceOf = (repeat: Repeat) => repeat.freq ? { freq: repeat.freq, ...(repeat.freq === 'weekly' ? { weekdays: weekdays.filter((day) => repeat.weekdays.includes(day)) } : {}),
   ...(repeat.freq === 'monthly' ? { monthDay: Number(repeat.monthDay) } : {}), time: repeat.time || null, paused: repeat.paused } : null;
 
-type Draft = { title: string; priority: Priority; hold: '' | Hold; holdReason: string; dueAt: string; dueTime: string; scheduledAt: string; estimateMinutes: string; actualMinutes: string; notes: string; repeat: Repeat; completedAt: string };
+type Draft = { title: string; priority: Priority; hold: '' | Hold; holdReason: string; dueAt: string; dueTime: string; scheduledAt: string; scheduledTime: string; targetAt: string; targetTime: string; estimateMinutes: string; actualMinutes: string; notes: string; repeat: Repeat; completedAt: string };
 const draftOf = (issue: Issue): Draft => ({ title: issue.title, priority: issue.priority, hold: issue.hold ?? '', holdReason: issue.holdReason ?? '', dueAt: seoulDay(issue.dueAt), dueTime: issue.dueAllDay ? '' : seoulTime(issue.dueAt),
-  scheduledAt: seoulDay(issue.scheduledAt), estimateMinutes: issue.estimateMinutes?.toString() ?? '', actualMinutes: issue.actualMinutes?.toString() ?? '', notes: issue.notes, repeat: repeatOf(issue), completedAt: seoulDay(issue.completedAt) });
+  scheduledAt: seoulDay(issue.scheduledAt), scheduledTime: issue.scheduledAllDay ? '' : seoulTime(issue.scheduledAt), targetAt: seoulDay(issue.targetAt), targetTime: issue.targetAllDay ? '' : seoulTime(issue.targetAt), estimateMinutes: issue.estimateMinutes?.toString() ?? '', actualMinutes: issue.actualMinutes?.toString() ?? '', notes: issue.notes, repeat: repeatOf(issue), completedAt: seoulDay(issue.completedAt) });
 const payloadOf = (draft: Draft) => ({ title: draft.title, priority: draft.priority, hold: draft.hold || null, holdReason: draft.hold && draft.holdReason.trim() ? draft.holdReason : null,
-  dueAt: draft.dueAt ? (draft.dueTime ? `${draft.dueAt}T${draft.dueTime}:00+09:00` : draft.dueAt) : null, scheduledAt: draft.scheduledAt || null, estimateMinutes: draft.estimateMinutes ? Number(draft.estimateMinutes) : null, actualMinutes: draft.actualMinutes ? Number(draft.actualMinutes) : null, notes: draft.notes, recurrence: recurrenceOf(draft.repeat),
+  dueAt: draft.dueAt ? (draft.dueTime ? `${draft.dueAt}T${draft.dueTime}:00+09:00` : draft.dueAt) : null, scheduledAt: draft.scheduledAt ? (draft.scheduledTime ? `${draft.scheduledAt}T${draft.scheduledTime}:00+09:00` : draft.scheduledAt) : null, targetAt: draft.targetAt ? (draft.targetTime ? `${draft.targetAt}T${draft.targetTime}:00+09:00` : draft.targetAt) : null, estimateMinutes: draft.estimateMinutes ? Number(draft.estimateMinutes) : null, actualMinutes: draft.actualMinutes ? Number(draft.actualMinutes) : null, notes: draft.notes, recurrence: recurrenceOf(draft.repeat),
   ...(draft.completedAt ? { completedAt: draft.completedAt } : {}) });
 
 export function TodoDetail({ issue, area, headers, onClose, onSaved }: { issue: Issue; area: string; headers: Record<string, string>; onClose: () => void; onSaved: (todo: Issue) => void }) {
@@ -101,12 +101,20 @@ export function TodoDetail({ issue, area, headers, onClose, onSaved }: { issue: 
         </div>
         {draft.hold && <label className="block"><span className="label">보류 사유</span>
           <input className="field" maxLength={500} value={draft.holdReason} placeholder="무엇을 기다리나요?" onChange={(event) => set({ holdReason: event.target.value })} /></label>}
-        <div className="grid grid-cols-2 gap-3">
-          <label className="block"><span className="label">마감일</span><input type="date" className="field" value={draft.dueAt} onChange={(event) => set({ dueAt: event.target.value })} /></label>
-          <label className="block"><span className="label">예정일</span><input type="date" className="field" value={draft.scheduledAt} onChange={(event) => set({ scheduledAt: event.target.value })} /></label>
-          {(draft.repeat.freq || draft.dueTime) && <label className="block"><span className="label">마감 시각</span>
-            <input type="time" className="field" value={draft.dueTime} disabled={!draft.dueAt} onChange={(event) => set({ dueTime: event.target.value })} /></label>}
-        </div>
+        <fieldset className="space-y-3 rounded-lg border border-line p-3">
+          <legend className="label px-1">일정 (선택 · 한국 시간)</legend>
+          {([
+            ['scheduledAt', 'scheduledTime', '시작/예정일', '시작/예정 시각'],
+            ['targetAt', 'targetTime', '내부 완료 목표일', '내부 완료 목표 시각'],
+            ['dueAt', 'dueTime', '마감일', '마감 시각']
+          ] as const).map(([day, time, dayLabel, timeLabel]) => <div key={day} className="grid grid-cols-2 gap-3">
+            <label className="block min-w-0"><span className="label">{dayLabel}</span>
+              <input type="date" className="field min-w-0" value={draft[day]} onChange={(event) => set({ [day]: event.target.value, ...(!event.target.value ? { [time]: '' } : {}) })} /></label>
+            <label className="block min-w-0"><span className="label">{timeLabel}</span>
+              <input type="time" className="field min-w-0" value={draft[time]} disabled={!draft[day]} onChange={(event) => set({ [time]: event.target.value })} /></label>
+          </div>)}
+          <p className="text-xs text-muted">날짜는 각각 지정하거나 지울 수 있습니다. 시각을 비우면 종일입니다.</p>
+        </fieldset>
         <fieldset className="space-y-2 rounded-lg border border-line p-3">
           <legend className="label px-1">반복</legend>
           <div className="grid grid-cols-2 gap-3">

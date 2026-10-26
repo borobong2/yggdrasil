@@ -9,17 +9,21 @@ import { TodoDetail } from './TodoDetail.js';
 import { BulkActions, SelectBox, plusDays, useSelection, type Selection } from './BulkActions.js';
 import { seoulMinutes } from './calendar-dates.js';
 import { TriageDialog } from './TriageDialog.js';
+import { TodoDates } from './TodoDates.js';
 
 // YG-34 오늘 작업대: 타임라인 | 오늘 할 일 | 밀린 일 레일. ≥1100px three columns, 720–1100 two (timeline on top), <720 segmented tabs.
 // Data is one GET /api/todos/today; 밀린 일 (server-merged 마감 지남 ∪ 방치) is shown only there, never twice.
 type Pane = 'today' | 'late' | 'plan';
 type Toast = { text: string; undo?: () => Promise<void>; error?: boolean };
-const weekdays = ['일', '월', '화', '수', '목', '금', '토'];
 const priorities: Priority[] = ['p1', 'p2', 'p3', 'p4'];
 
 export function TodayView({ token, onActivity }: { token: string; onActivity?: () => void }) {
   const [view, setView] = useState<Today | null>(null);
   const [error, setError] = useState('');
+  const [newTitle, setNewTitle] = useState('');
+  const [adding, setAdding] = useState(false);
+  const [addError, setAddError] = useState('');
+  const [recent, setRecent] = useState<Todo | null>(null);
   const [hidden, setHidden] = useState<Set<string>>(() => new Set()); // optimistically completed / moved
   const [openId, setOpenId] = useState<string | null>(null);
   // YG-43: 회고's `#/today/stale` link lands on 밀린 일 and opens 정리 모드 once.
@@ -53,13 +57,24 @@ export function TodayView({ token, onActivity }: { token: string; onActivity?: (
   const week = show(view.week);
   const late = view.late.filter((todo) => !hidden.has(todo.id));
   const order = [...todayList, ...waiting, ...week].map((todo) => todo.id);
-  const open = openId ? [...view.today, ...view.waiting, ...view.week, ...view.late, ...view.timeline.todos].find((todo) => todo.id === openId) : undefined;
+  const open = openId ? [...view.today, ...view.waiting, ...view.week, ...view.late, ...view.timeline.todos, ...(recent ? [recent] : [])].find((todo) => todo.id === openId) : undefined;
   const changed = () => { void load(); onActivity?.(); };
 
   async function post(url: string, body?: unknown) {
     const response = await fetch(url, { method: 'POST', headers: { ...headers, 'content-type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) });
     if (!response.ok) throw new Error();
     return response.json();
+  }
+
+  async function addTodo(event: React.FormEvent) {
+    event.preventDefault();
+    if (adding || !newTitle.trim()) return;
+    setAdding(true); setAddError('');
+    try {
+      const todo: Todo = await post('/api/todos', { title: newTitle.trim() });
+      setRecent(todo); setNewTitle(''); changed();
+    } catch { setAddError('할 일을 추가하지 못했습니다. 다시 시도하세요.'); }
+    finally { setAdding(false); }
   }
 
   async function complete(todo: Todo) {
@@ -90,6 +105,17 @@ export function TodayView({ token, onActivity }: { token: string; onActivity?: (
       <button type="button" className="btn btn-ghost" aria-pressed={selection.mode} onClick={() => selection.mode ? selection.clear() : selection.setMode(true)}>
         <ListChecks />{selection.mode ? '선택 끝내기' : '선택'}</button>
     </div>
+    <form onSubmit={(event) => void addTodo(event)} className="card space-y-2 p-3">
+      <div className="flex gap-2">
+        <input className="field min-w-0 flex-1" aria-label="새 할 일 제목" required maxLength={200} placeholder="할 일 추가 · 날짜는 나중에" value={newTitle} onChange={(event) => setNewTitle(event.target.value)} />
+        <button type="submit" className="btn shrink-0" aria-label="할 일 추가" disabled={adding || !newTitle.trim()}>{adding ? '추가 중…' : '추가'}</button>
+      </div>
+      {addError && <p role="alert" className="text-sm text-danger">{addError}</p>}
+      {recent && <div className="flex min-w-0 flex-wrap items-center gap-x-2 text-xs text-muted">
+        <span role="status" className="min-w-0 break-all">추가됨 · 개인 / 일반 · {recent.title}</span>
+        <button type="button" className="btn btn-ghost h-7 px-1.5 text-xs" onClick={() => setOpenId(recent.id)}>날짜/상세 설정</button>
+      </div>}
+    </form>
     <div role="tablist" aria-label="오늘 보기" className="grid grid-cols-3 gap-1 rounded-lg bg-sunken p-1 min-[720px]:hidden">
       {([['today', '오늘', todayList.length], ['late', '밀린 일', late.length], ['plan', '예정', waiting.length + week.length]] as const).map(([id, label, count]) =>
         <button key={id} type="button" role="tab" aria-selected={pane === id} onClick={() => setPane(id)}
@@ -123,7 +149,7 @@ export function TodayView({ token, onActivity }: { token: string; onActivity?: (
       {toast.undo && <button type="button" className="btn" onClick={() => { const undo = toast.undo!; setToast(null); undo().catch(() => setToast({ text: '되돌리지 못했습니다.', error: true })); }}><Undo2 />되돌리기</button>}
       <button type="button" className="btn btn-ghost size-7 p-0" aria-label="알림 닫기" onClick={() => setToast(null)}><X /></button>
     </div>}
-    {open && <TodoDetail key={open.id} issue={open} area={open.area} headers={headers} onClose={() => setOpenId(null)} onSaved={changed} />}
+    {open && <TodoDetail key={open.id} issue={open} area={open.area} headers={headers} onClose={() => setOpenId(null)} onSaved={(saved) => { if (recent?.id === saved.id) setRecent({ ...recent, ...saved }); changed(); }} />}
     {triage && <TriageDialog items={triage} date={view.date} headers={headers} onDecided={(id, on) => hide([id], on)} onClose={() => { setTriage(null); changed(); }} />}
   </section>;
 }
@@ -136,19 +162,6 @@ function Panel({ title, count, section, extra, className = '', children }: { tit
     </h2>
     {children}
   </section>;
-}
-
-/** Due (else scheduled) as a short badge: today → '오늘' or 'HH:mm' (red once past), other days → '금 10/16' or '수 20:00'. */
-function WhenBadge({ todo, date }: { todo: Todo; date: string }) {
-  const at = todo.dueAt ?? todo.scheduledAt;
-  if (!at) return null;
-  const allDay = todo.dueAt ? todo.dueAllDay : todo.scheduledAllDay;
-  const day = seoulDay(at);
-  const past = allDay ? day < date : Date.parse(at) < Date.now();
-  const text = day === date ? allDay ? '오늘' : seoulTime(at)
-    : `${weekdays[new Date(`${day}T00:00:00Z`).getUTCDay()]} ${allDay ? `${Number(day.slice(5, 7))}/${Number(day.slice(8))}` : seoulTime(at)}`;
-  const tone = past ? 'bg-danger-soft text-danger' : !allDay ? 'bg-accent-soft text-accent-ink' : '';
-  return <span className={`badge tabular-nums ${tone}`} data-overdue={past || undefined} title={todo.dueAt ? '마감' : '예정'}>{text}{past && !allDay ? ' 지남' : ''}</span>;
 }
 
 function Row({ todo, date, selection, order, onOpen, onComplete, onTomorrow }: {
@@ -169,9 +182,10 @@ function Row({ todo, date, selection, order, onOpen, onComplete, onTomorrow }: {
       : <Checkbox checked={false} aria-label={`${todo.title} 완료`} title="완료 처리"
           onCheckedChange={(checked) => { if (checked === true) onComplete(todo); }} />}
 
-    <button type="button" className="min-w-0 flex-1 select-none truncate py-2 text-left text-sm [-webkit-touch-callout:none]" onPointerDown={start} onPointerUp={cancel} onPointerLeave={cancel} onPointerCancel={cancel}
+    <button type="button" className="min-w-0 flex-1 select-none py-2 text-left text-sm [-webkit-touch-callout:none]" onPointerDown={start} onPointerUp={cancel} onPointerLeave={cancel} onPointerCancel={cancel}
       onClick={(event) => { if (press.current.fired) { press.current.fired = false; return; } if (selection.mode) toggle(event.shiftKey); else onOpen(todo.id); }}>
-      {todo.key && <span className="badge mr-1.5 font-mono font-medium">{todo.key}</span>}{todo.title}
+      <span className="block truncate">{todo.key && <span className="badge mr-1.5 font-mono font-medium">{todo.key}</span>}{todo.title}</span>
+      <TodoDates todo={todo} />
     </button>
     <span className="flex shrink-0 items-center gap-1">
       {onTomorrow && !selection.mode && <span className="hidden gap-1 md:group-focus-within:flex md:group-hover:flex">
@@ -180,7 +194,6 @@ function Row({ todo, date, selection, order, onOpen, onComplete, onTomorrow }: {
       </span>}
       <PriorityBadge priority={todo.priority} />
       {todo.hold && todo.hold !== 'scheduled' && <HoldBadge hold={todo.hold} reason={todo.holdReason} />}
-      <WhenBadge todo={todo} date={date} />
       {todo.recurrence && !todo.recurrence.paused && <Repeat className="size-3 text-faint" aria-label="반복" />}
       <span className="hidden max-w-20 truncate text-xs text-faint sm:inline">{todo.hold && todo.holdReason ? todo.holdReason : todo.area}</span>
     </span>
