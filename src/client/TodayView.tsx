@@ -20,6 +20,9 @@ const priorities: Priority[] = ['p1', 'p2', 'p3', 'p4'];
 export function TodayView({ token, onActivity }: { token: string; onActivity?: () => void }) {
   const [view, setView] = useState<Today | null>(null);
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const request = useRef(0);
+  const revision = useRef(0);
   const [newTitle, setNewTitle] = useState('');
   const [adding, setAdding] = useState(false);
   const [addError, setAddError] = useState('');
@@ -34,22 +37,36 @@ export function TodayView({ token, onActivity }: { token: string; onActivity?: (
   const headers: Record<string, string> = token ? { authorization: `Bearer ${token}` } : {};
 
   async function load() {
+    const id = ++request.current;
+    const before = revision.current;
+    setLoading(true);
     try {
       const response = await fetch('/api/todos/today', { headers });
       if (!response.ok) throw new Error();
       const next: Today = await response.json();
+      if (id !== request.current || before !== revision.current) return;
       setView(next); setHidden(new Set()); setError('');
       if (location.hash === '#/today/stale') { history.replaceState(null, '', '#/today'); if (next.late.length) setTriage(next.late); }
-    } catch { setError('오늘 할 일을 불러오지 못했습니다.'); }
+    } catch { if (id === request.current && before === revision.current) setError('오늘 할 일을 불러오지 못했습니다.'); }
+    finally { if (id === request.current) setLoading(false); }
   }
-  useEffect(() => { void load(); }, [token]);
+  useEffect(() => {
+    setView(null); setError(''); setRecent(null);
+    void load();
+    return () => { request.current++; };
+  }, [token]);
   useEffect(() => { if (!toast) return; const timer = setTimeout(() => setToast(null), 10_000); return () => clearTimeout(timer); }, [toast]);
   useEffect(() => { if (selection.active) setToast(null); }, [selection.active]);
 
-  if (error && !view) return <p role="alert" className="alert">{error}</p>;
+  const retry = <button type="button" className="btn" disabled={loading} onClick={() => void load()}>{loading ? '다시 불러오는 중…' : '다시 시도'}</button>;
+  const loadError = error && <div className="alert flex flex-wrap items-center gap-2"><p role="alert" className="min-w-0 flex-1">{view ? '최신 조회에 실패했습니다. 이전 내용을 표시합니다.' : error}</p>{retry}</div>;
+  if (error && !view) return loadError;
   if (!view) return <p role="status" className="empty">오늘 할 일을 불러오는 중…</p>;
 
-  const hide = (ids: string[], on = true) => setHidden((prev) => { const next = new Set(prev); for (const id of ids) if (on) next.add(id); else next.delete(id); return next; });
+  const hide = (ids: string[], on = true) => {
+    revision.current++;
+    setHidden((prev) => { const next = new Set(prev); for (const id of ids) if (on) next.add(id); else next.delete(id); return next; });
+  };
   const lateIds = new Set(view.late.map((todo) => todo.id));
   const show = (list: Todo[]) => list.filter((todo) => !hidden.has(todo.id) && !lateIds.has(todo.id));
   const todayList = show(view.today);
@@ -100,6 +117,8 @@ export function TodayView({ token, onActivity }: { token: string; onActivity?: (
   const rowProps = { selection, order, date: view.date, onOpen: setOpenId, onComplete: complete };
 
   return <section aria-label="오늘" className="space-y-3 pb-24 md:pb-6">
+    {loadError}
+    {loading && <p role="status" className="text-sm text-muted">최신 내용을 불러오는 중…</p>}
     <div className="flex items-center gap-2">
       <p className="flex-1 text-sm text-muted">{date}</p>
       <button type="button" className="btn btn-ghost" aria-pressed={selection.mode} onClick={() => selection.mode ? selection.clear() : selection.setMode(true)}>

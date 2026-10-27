@@ -24,3 +24,13 @@ Each branch starts from the previous verified local commit. No push, main merge 
 - Limits: synthetic fixtures, no physical touch hardware/Safari or production E2E. Typography intentionally deferred to YG-77. New worktree installed via lockfile and uses its own disposable DB.
 - Full suite: 62 files / 408 tests passed; coverage statements/lines 96.76%, branches 91.51%, functions 92.88% (90% gate unchanged).
 - Additional board browser self-check at all three widths passed: selection/title spacing, bulk toolbar viewport fit, menu target/dropdown spacing. It caught and corrected an over-broad padding selector affecting the checkbox button; final touch self-check rerun passed. Evidence `.local/yg74-board-{width}.png`, `.local/board.mjs`.
+
+## YG-75
+
+- Worktree: `/Users/bong/github/workspaces/yggdrasil/feat-yg-75-today-retry`
+- Branch: `borobong2/feat-yg-75-today-retry`; Orca explicit base/parent YG-74; starting HEAD `a00ffde` and ancestry verified.
+- Initial failure offers retry; refresh failure retains visible data and announces stale content. Pending retry is disabled and announced. Latest request wins; requests predating optimistic changes cannot clear hidden items or replace data. Token changes/unmount invalidate pending responses.
+- Red: all 3 added recovery/race tests failed on original code. Green: Today tests 12 passed, including initial retry/duplicate click, refresh failure/recovery, token response order and completion race. Existing completion/bulk/undo tests retained.
+- Typecheck/build/diff check passed. Chrome 390/320/1280: keyboard Enter retry, pending feedback, retained rows on refresh failure, stale completion response, successful recovery/error clearing, no document overflow passed. `.local/recovery.mjs` and `.local/yg75-{width}.png`; 320 image visually inspected.
+- Limits: fixtures and headless Chrome, no physical mobile/Safari or production E2E; an intentionally ignored response leaves prior data until next refresh. Exact lockfile install and separate disposable test DB used.
+- Full coverage: 62 files / 411 tests passed; statements/lines 96.77%, branches 91.53%, functions 92.89%.

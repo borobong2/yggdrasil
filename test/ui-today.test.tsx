@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { TodayView } from '../src/client/TodayView';
 import { todo, lateTodo } from './ui-fixtures';
 import type { TodayView as Today } from '../src/contracts/items';
@@ -56,4 +56,38 @@ it('selects rows, toggles mode and launches triage from the stale link', async (
   render(<TodayView token="" />); await screen.findByRole('dialog'); fireEvent.click(screen.getByLabelText('정리 모드 닫기'));
   fireEvent.click(screen.getByText('선택')); fireEvent.click(screen.getByLabelText('Write tests 선택')); expect(screen.getByRole('toolbar')).toBeTruthy(); fireEvent.click(screen.getByText('선택 끝내기'));
   fireEvent.click(screen.getByText('하나씩 정리')); await screen.findByRole('dialog');
+});
+
+it('retries initial failure, prevents duplicate retries and clears the error on success', async () => {
+  let finish!: (response: Response) => void;
+  const fetcher = vi.fn().mockResolvedValueOnce(json({}, 500)).mockImplementationOnce(() => new Promise<Response>(resolve => { finish = resolve; }));
+  vi.stubGlobal('fetch', fetcher); render(<TodayView token="" />);
+  const retry = await screen.findByRole('button', { name: '다시 시도' });
+  fireEvent.click(retry); fireEvent.click(retry);
+  expect((retry as HTMLButtonElement).disabled).toBe(true); expect(fetcher).toHaveBeenCalledTimes(2);
+  await act(async () => finish(json(view)));
+  expect(screen.getByText('Write tests')).toBeTruthy(); expect(screen.queryByRole('alert')).toBeNull();
+});
+it('keeps data on refresh failure and recovers through retry', async () => {
+  const fetcher = vi.fn(async (path: string, init?: RequestInit) => path === '/api/todos/today' ? json(view) : json(todo({ title: 'New' })));
+  vi.stubGlobal('fetch', fetcher); render(<TodayView token="" />); await screen.findByText('Write tests');
+  fetcher.mockImplementation(async (path: string) => path === '/api/todos/today' ? json({}, 500) : json(todo({ title: 'New' })));
+  fireEvent.change(screen.getByLabelText('새 할 일 제목'), { target: { value: 'New' } }); fireEvent.click(screen.getByLabelText('할 일 추가'));
+  const retry = await screen.findByRole('button', { name: '다시 시도' });
+  expect(screen.getByText('Write tests')).toBeTruthy(); expect(screen.getByRole('alert').textContent).toContain('최신');
+  fetcher.mockImplementation(async () => json({ ...view, today: [todo({ title: 'Fresh' })] }));
+  fireEvent.click(retry); await screen.findByText('Fresh'); expect(screen.queryByRole('alert')).toBeNull();
+});
+it('ignores older token responses and a refresh predating optimistic completion', async () => {
+  let old!: (response: Response) => void, refresh!: (response: Response) => void;
+  const fetcher = vi.fn().mockImplementationOnce(() => new Promise<Response>(resolve => { old = resolve; })).mockResolvedValueOnce(json(view));
+  vi.stubGlobal('fetch', fetcher); const { rerender } = render(<TodayView token="old" />);
+  rerender(<TodayView token="new" />); await screen.findByText('Write tests');
+  await act(async () => old(json({ ...view, today: [todo({ title: 'Old owner' })] })));
+  expect(screen.queryByText('Old owner')).toBeNull();
+  fetcher.mockImplementation((path: string) => path === '/api/todos/today' ? new Promise<Response>(resolve => { refresh = resolve; }) : Promise.resolve(json(todo({ title: 'New' }))));
+  fireEvent.change(screen.getByLabelText('새 할 일 제목'), { target: { value: 'New' } }); fireEvent.click(screen.getByLabelText('할 일 추가'));
+  await screen.findByText(/추가됨/); fireEvent.click(screen.getByLabelText('Write tests 완료'));
+  await act(async () => refresh(json(view)));
+  expect(screen.queryByText('Write tests')).toBeNull();
 });
