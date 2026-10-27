@@ -163,3 +163,12 @@ dialog::backdrop { background: oklch(0.2 0.01 150 / 0.28); }
   [data-issue-id] [role="group"] { top: 44px; }
   [role="group"][aria-label="상태 이동"] button { min-height: 44px; }
 }
+
+/* Mobile reading/form sizes; compact badges, calendar chips and desktop tokens stay independent. */
+@media (max-width: 767px) {
+  .field { font-size: 16px; }
+  .todo-title { font-size: 14px; line-height: 22px; white-space: normal; overflow-wrap: anywhere; }
+}
+@media (max-width: 383px) {
+  .todo-date-pair { grid-template-columns: minmax(0, 1fr); }
+}

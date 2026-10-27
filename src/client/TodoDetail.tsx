@@ -146,7 +146,7 @@ export function TodoDetail({ issue, area, headers, onClose, onSaved }: { issue: 
             ['scheduledAt', 'scheduledTime', '시작/예정일', '시작/예정 시각'],
             ['targetAt', 'targetTime', '내부 완료 목표일', '내부 완료 목표 시각'],
             ['dueAt', 'dueTime', '마감일', '마감 시각']
-          ] as const).map(([day, time, dayLabel, timeLabel]) => <div key={day} className="grid grid-cols-2 gap-3">
+          ] as const).map(([day, time, dayLabel, timeLabel]) => <div key={day} className="todo-date-pair grid grid-cols-2 gap-3">
             <label className="block min-w-0"><span className="label" id={`todo-label-${day}`}>{dayLabel}</span>
               <input type="date" className="field min-w-0" {...field(day, day)} value={draft[day]} onChange={(event) => set({ [day]: event.target.value, ...(!event.target.value ? { [time]: '' } : {}) })} />{fieldError(day)}</label>
             <label className="block min-w-0"><span className="label" id={`todo-label-${time}`}>{timeLabel}</span>

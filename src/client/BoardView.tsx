@@ -227,7 +227,7 @@ function SortableCard({ issue, onOpen, onMove, selection, order }: { issue: Issu
 
 function CardBody({ issue }: { issue: Issue }) {
   return <>
-    <strong className={`block break-words text-sm font-medium ${issue.status === 'done' ? 'text-muted line-through' : ''}`}>{issue.title}</strong>
+    <strong className={`todo-title block break-words text-sm font-medium ${issue.status === 'done' ? 'text-muted line-through' : ''}`}>{issue.title}</strong>
     <span className="mt-2 flex flex-wrap items-center gap-1">
       <PriorityBadge priority={issue.priority} />
       {issue.hold && <HoldBadge hold={issue.hold} reason={issue.holdReason} />}

@@ -140,7 +140,7 @@ function List({ todos, empty, meta, onOpen }: { todos: Todo[]; empty: string; me
   return <ul className="card divide-y divide-line">{todos.map((todo) => <li key={todo.id} data-todo-id={todo.id}>
     <button type="button" className="flex w-full flex-wrap items-center gap-x-2 gap-y-1 px-3 py-2.5 text-left hover:bg-sunken" onClick={() => onOpen(todo.id)}>
       <PriorityBadge priority={todo.priority} />
-      <strong className="min-w-0 flex-[1_1_12rem] truncate text-sm font-medium">{todo.key && <span className="mr-1.5 font-mono text-xs text-faint">{todo.key}</span>}{todo.title}</strong>
+      <strong className="todo-title min-w-0 flex-[1_1_12rem] truncate text-sm font-medium">{todo.key && <span className="mr-1.5 font-mono text-xs text-faint">{todo.key}</span>}{todo.title}</strong>
       <span className="flex items-center gap-2"><span className="text-xs text-faint">{todo.area}</span>{meta(todo)}</span>
     </button>
   </li>)}</ul>;
