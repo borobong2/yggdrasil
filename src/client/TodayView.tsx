@@ -14,6 +14,7 @@ import { TodoDates } from './TodoDates.js';
 // YG-34 오늘 작업대: 타임라인 | 오늘 할 일 | 밀린 일 레일. ≥1100px three columns, 720–1100 two (timeline on top), <720 segmented tabs.
 // Data is one GET /api/todos/today; 밀린 일 (server-merged 마감 지남 ∪ 방치) is shown only there, never twice.
 type Pane = 'today' | 'late' | 'plan';
+const panes: Pane[] = ['today', 'late', 'plan'];
 type Toast = { text: string; undo?: () => Promise<void>; error?: boolean };
 const priorities: Priority[] = ['p1', 'p2', 'p3', 'p4'];
 
@@ -30,6 +31,13 @@ export function TodayView({ token, onActivity }: { token: string; onActivity?: (
   const [hidden, setHidden] = useState<Set<string>>(() => new Set()); // optimistically completed / moved
   const [openId, setOpenId] = useState<string | null>(null);
   // YG-43: 회고's `#/today/stale` link lands on 밀린 일 and opens 정리 모드 once.
+  const [narrow, setNarrow] = useState(() => window.matchMedia('(max-width: 719px)').matches);
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 719px)');
+    const change = () => setNarrow(media.matches);
+    media.addEventListener('change', change);
+    return () => media.removeEventListener('change', change);
+  }, []);
   const [pane, setPane] = useState<Pane>(() => location.hash === '#/today/stale' ? 'late' : 'today');
   const [triage, setTriage] = useState<LateTodo[] | null>(null);
   const [toast, setToast] = useState<Toast | null>(null);
@@ -113,7 +121,8 @@ export function TodayView({ token, onActivity }: { token: string; onActivity?: (
 
   const date = new Date(`${view.date}T00:00:00+09:00`).toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'long', timeZone: 'Asia/Seoul' });
   const counts = priorities.map((priority) => [priority, todayList.filter((todo) => todo.priority === priority).length] as const).filter(([, count]) => count > 0);
-  const hiddenOn = (target: Pane) => pane === target ? '' : 'max-[719px]:hidden';
+  const panel = (target: Pane) => ({ id: `today-panel-${target}`, role: narrow ? 'tabpanel' : undefined,
+    'aria-labelledby': narrow ? `today-tab-${target}` : undefined, tabIndex: narrow ? 0 : undefined, hidden: narrow && pane !== target });
   const rowProps = { selection, order, date: view.date, onOpen: setOpenId, onComplete: complete };
 
   return <section aria-label="오늘" className="space-y-3 pb-24 md:pb-6">
@@ -135,31 +144,44 @@ export function TodayView({ token, onActivity }: { token: string; onActivity?: (
         <button type="button" className="btn btn-ghost h-7 px-1.5 text-xs" onClick={() => setOpenId(recent.id)}>날짜/상세 설정</button>
       </div>}
     </form>
-    <div role="tablist" aria-label="오늘 보기" className="grid grid-cols-3 gap-1 rounded-lg bg-sunken p-1 min-[720px]:hidden">
+    {narrow && <div role="tablist" aria-label="오늘 보기" className="grid grid-cols-3 gap-1 rounded-lg bg-sunken p-1">
       {([['today', '오늘', todayList.length], ['late', '밀린 일', late.length], ['plan', '예정', waiting.length + week.length]] as const).map(([id, label, count]) =>
-        <button key={id} type="button" role="tab" aria-selected={pane === id} onClick={() => setPane(id)}
+        <button key={id} id={`today-tab-${id}`} type="button" role="tab" aria-controls={`today-panel-${id}`} aria-selected={pane === id} tabIndex={pane === id ? 0 : -1}
+          onClick={(event) => { setPane(id); event.currentTarget.focus(); }} onFocus={() => setPane(id)} onKeyDown={(event) => {
+            const index = panes.indexOf(id);
+            const next = { ArrowRight: (index + 1) % 3, ArrowLeft: (index + 2) % 3, Home: 0, End: 2 }[event.key];
+            if (next === undefined) return;
+            event.preventDefault();
+            document.getElementById(`today-tab-${panes[next]}`)?.focus();
+          }}
           className="h-8 rounded-md text-sm font-medium text-muted aria-selected:bg-surface aria-selected:text-ink aria-selected:shadow-card">
           {label} <span className={`tabular-nums ${id === 'late' && count ? 'text-danger' : 'text-faint'}`}>{count}</span></button>)}
-    </div>
+    </div>}
     <div className="grid items-start gap-3 min-[720px]:grid-cols-2 min-[1100px]:grid-cols-[minmax(220px,1fr)_minmax(360px,1.6fr)_minmax(260px,1fr)]">
-      <Timeline className={`max-[719px]:order-last min-[720px]:col-span-2 min-[1100px]:col-span-1 ${hiddenOn('today')}`} date={view.date}
-        todos={view.timeline.todos.filter((todo) => !hidden.has(todo.id))} ghosts={view.timeline.ghosts} onOpen={setOpenId} />
-      <Panel title="오늘 할 일" count={todayList.length} section="today" className={hiddenOn('today')}
-        extra={counts.length > 0 && <span className="text-xs font-normal tabular-nums text-muted">{counts.map(([priority, count]) => `${priority.toUpperCase()} ${count}`).join(' · ')}</span>}>
-        {todayList.length === 0 ? <p className="empty">오늘 챙길 일이 없습니다. 여유로운 하루예요.</p> :
-          <ul>{todayList.map((todo) => <Row key={todo.id} todo={todo} {...rowProps}
-            onTomorrow={() => void apply([todo.id], { action: 'snooze', until: plusDays(view.date, 1) }, '작업 예정을 내일로 옮겼습니다')} />)}</ul>}
-      </Panel>
-      <div className="grid min-w-0 gap-3">
-        <LatePanel late={late} className={hiddenOn('late')} onOpen={setOpenId}
-          onBacklog={() => void apply(late.slice(0, 200).map((todo) => todo.id), { action: 'backlog' }, '백로그로 옮겼습니다')} // ponytail: bulk caps at 200 ids
-          onTriage={() => setTriage(late)} />
-        <Panel title="기다리는 중" count={waiting.length} section="waiting" className={hiddenOn('plan')}>
-          {waiting.length === 0 ? <p className="px-3 py-3 text-xs text-faint">기다리는 일이 없습니다.</p> : <ul>{waiting.map((todo) => <Row key={todo.id} todo={todo} {...rowProps} />)}</ul>}
+      <div {...panel('today')} className="grid min-w-0 gap-3 min-[720px]:contents">
+        <Timeline className="max-[719px]:order-last min-[720px]:col-span-2 min-[1100px]:col-span-1" date={view.date}
+          todos={view.timeline.todos.filter((todo) => !hidden.has(todo.id))} ghosts={view.timeline.ghosts} onOpen={setOpenId} />
+        <Panel title="오늘 할 일" count={todayList.length} section="today"
+          extra={counts.length > 0 && <span className="text-xs font-normal tabular-nums text-muted">{counts.map(([priority, count]) => `${priority.toUpperCase()} ${count}`).join(' · ')}</span>}>
+          {todayList.length === 0 ? <p className="empty">오늘 챙길 일이 없습니다. 여유로운 하루예요.</p> :
+            <ul>{todayList.map((todo) => <Row key={todo.id} todo={todo} {...rowProps}
+              onTomorrow={() => void apply([todo.id], { action: 'snooze', until: plusDays(view.date, 1) }, '작업 예정을 내일로 옮겼습니다')} />)}</ul>}
         </Panel>
-        <Panel title="이번 주 예정" count={week.length} section="week" className={hiddenOn('plan')}>
-          {week.length === 0 ? <p className="px-3 py-3 text-xs text-faint">이번 주에 예정된 일이 없습니다.</p> : <ul>{week.map((todo) => <Row key={todo.id} todo={todo} {...rowProps} />)}</ul>}
-        </Panel>
+      </div>
+      <div className="grid min-w-0 gap-3 max-[719px]:contents">
+        <div {...panel('late')}>
+          <LatePanel late={late} className="" onOpen={setOpenId}
+            onBacklog={() => void apply(late.slice(0, 200).map((todo) => todo.id), { action: 'backlog' }, '백로그로 옮겼습니다')} // ponytail: bulk caps at 200 ids
+            onTriage={() => setTriage(late)} />
+        </div>
+        <div {...panel('plan')} className="grid min-w-0 gap-3">
+          <Panel title="기다리는 중" count={waiting.length} section="waiting">
+            {waiting.length === 0 ? <p className="px-3 py-3 text-xs text-faint">기다리는 일이 없습니다.</p> : <ul>{waiting.map((todo) => <Row key={todo.id} todo={todo} {...rowProps} />)}</ul>}
+          </Panel>
+          <Panel title="이번 주 예정" count={week.length} section="week">
+            {week.length === 0 ? <p className="px-3 py-3 text-xs text-faint">이번 주에 예정된 일이 없습니다.</p> : <ul>{week.map((todo) => <Row key={todo.id} todo={todo} {...rowProps} />)}</ul>}
+          </Panel>
+        </div>
       </div>
     </div>
     <BulkActions selection={selection} headers={headers} onApplied={changed} />

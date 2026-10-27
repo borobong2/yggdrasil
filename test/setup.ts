@@ -13,3 +13,8 @@ installTestOwner('test-owner-two-token', { id: '00000000-0000-4000-8000-00000000
 if (typeof HTMLDialogElement !== 'undefined') {
   HTMLDialogElement.prototype.close = function () { this.open = false; };
 }
+// Layout-sensitive UI defaults to the narrow layout in jsdom; browser QA covers real widths.
+if (typeof window !== 'undefined' && !window.matchMedia) {
+  window.matchMedia = (media) => ({ matches: media === '(max-width: 719px)', media, onchange: null,
+    addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {}, dispatchEvent() { return true; } });
+}
