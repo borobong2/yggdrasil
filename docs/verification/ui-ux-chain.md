@@ -34,3 +34,13 @@ Each branch starts from the previous verified local commit. No push, main merge 
 - Typecheck/build/diff check passed. Chrome 390/320/1280: keyboard Enter retry, pending feedback, retained rows on refresh failure, stale completion response, successful recovery/error clearing, no document overflow passed. `.local/recovery.mjs` and `.local/yg75-{width}.png`; 320 image visually inspected.
 - Limits: fixtures and headless Chrome, no physical mobile/Safari or production E2E; an intentionally ignored response leaves prior data until next refresh. Exact lockfile install and separate disposable test DB used.
 - Full coverage: 62 files / 411 tests passed; statements/lines 96.77%, branches 91.53%, functions 92.89%.
+
+## YG-76
+
+- Worktree: `/Users/bong/github/workspaces/yggdrasil/feat-yg-76-field-errors`
+- Branch: `borobong2/feat-yg-76-field-errors`; explicit Orca base/parent YG-75; starting HEAD `15ec9b6` and ancestry verified.
+- Existing server Zod rules remain authoritative. PATCH 400 adds only validation path/message (no submitted values); title/time/recurrence messages clarified, recurrence refinement paths made precise. UI maps only paths with actual controls, connects inline errors with aria-invalid/describedby, gives fields stable label references, and focuses the first invalid control or the summary. Native browser constraints also produce inline errors. Unknown/network failures stay general; drafts and YG-73 guards retained.
+- Red: server error path, UI field/focus/recurrence/unknown summary and native-invalid tests failed before implementation. Related tests passed (including server no-write rejection). Typecheck/build/diff check passed.
+- Real Chrome 390/320/1280: native required/integer constraints, server title/weekdays errors, first-field/group focus, unknown/network summary focus, preserved memo and successful resubmit passed. `.local/validation.mjs`, `.local/yg76-{width}.png`; 320 image visually inspected with visible focused title/error.
+- Limits: native validation message language is browser-dependent; browser API fixtures, no physical mobile/Safari/production E2E. Fields not identified by the server intentionally use the summary. Lockfile install and worktree-specific disposable DB used.
+- Full coverage: 62 files / 415 tests passed; statements/lines 96.79%, branches 91.53%, functions 92.93%. Additional 3 server path cases (monthly bounds, missing weekly days, zero actual duration) passed afterward in the 45-test related run.

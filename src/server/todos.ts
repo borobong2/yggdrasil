@@ -18,7 +18,7 @@ export const DEFAULT_TODO_AREA = '개인';
 export class TodoValidationError extends Error {}
 
 // Shared input validation for every todo write surface (MCP tools, HTTP routes).
-export const todoName = z.string().trim().min(1).max(200);
+export const todoName = z.string().trim().min(1, '1~200자로 입력하세요.').max(200, '1~200자로 입력하세요.');
 const dateOnly = /^\d{4}-\d{2}-\d{2}$/;
 const day = z.union([z.iso.date(), z.iso.datetime({ offset: true })]).describe("'YYYY-MM-DD' (Asia/Seoul, all-day) or ISO timestamp with offset (timed)");
 /** YG-37: when it was done. Up to 5 minutes ahead is tolerated for clock skew. */
@@ -35,8 +35,8 @@ export const todoFields = {
   scheduledAt: day.nullable(),
   targetAt: day.nullable(),
   notes: z.string().max(20_000),
-  estimateMinutes: z.number().int().positive().max(100_000).nullable(),
-  actualMinutes: z.number().int().positive().max(100_000).nullable().describe('YG-43: minutes it really took'),
+  estimateMinutes: z.number().int('시간은 양의 정수(분)로 입력하세요.').positive('시간은 양의 정수(분)로 입력하세요.').max(100_000, '시간은 100000분 이하여야 합니다.').nullable(),
+  actualMinutes: z.number().int('시간은 양의 정수(분)로 입력하세요.').positive('시간은 양의 정수(분)로 입력하세요.').max(100_000, '시간은 100000분 이하여야 합니다.').nullable().describe('YG-43: minutes it really took'),
   recurrence: recurrenceInput.nullable(),
   links: issueLinks
 };

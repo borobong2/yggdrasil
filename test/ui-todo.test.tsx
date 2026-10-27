@@ -161,3 +161,33 @@ it('blocks closing, edits, promotion and duplicate submit during a delayed save;
   expect((screen.getByLabelText('제목') as HTMLInputElement).value).toBe('draft');
   expect(screen.getByRole('alert').textContent).toContain('저장하지');
 });
+
+it('connects server validation to fields, focuses the first error and preserves the draft through retry', async () => {
+  let valid = false;
+  vi.stubGlobal('fetch', vi.fn(async (path: string) => path.startsWith('/api/documents') ? json([]) : valid ? json(todo({ title: 'Fixed' })) : json({ error: 'Invalid todo', issues: [{ path: ['title'], message: '제목은 1~200자로 입력하세요.' }, { path: ['estimateMinutes'], message: '시간은 양의 정수로 입력하세요.' }] }, 400)));
+  const closed = vi.fn(); const { container } = render(<TodoDetail issue={todo()} area="Work" headers={{}} onClose={closed} onSaved={vi.fn()} />);
+  change('제목', ' '); change('메모', 'preserved'); fireEvent.submit(container.querySelector('form')!);
+  await screen.findByRole('alert'); const title = screen.getByLabelText('제목');
+  expect(title.getAttribute('aria-invalid')).toBe('true'); expect(document.activeElement).toBe(title);
+  expect(document.getElementById(title.getAttribute('aria-describedby')!)?.textContent).toContain('1~200');
+  expect(screen.getByLabelText('예상 시간 (분)').getAttribute('aria-invalid')).toBe('true');
+  expect((screen.getByLabelText('메모') as HTMLTextAreaElement).value).toBe('preserved');
+  valid = true; change('제목', 'Fixed'); fireEvent.submit(container.querySelector('form')!);
+  await waitFor(() => expect(closed).toHaveBeenCalledTimes(1));
+});
+it('focuses recurrence groups for server errors and the summary for unknown failures', async () => {
+  let issues = [{ path: ['recurrence', 'weekdays'], message: '요일을 선택하세요.' }];
+  vi.stubGlobal('fetch', vi.fn(async (path: string) => json(path.startsWith('/api/documents') ? [] : { issues }, path.startsWith('/api/documents') ? 200 : 400)));
+  const { container } = render(<TodoDetail issue={todo()} area="Work" headers={{}} onClose={vi.fn()} onSaved={vi.fn()} />);
+  change('반복 주기', 'weekly'); fireEvent.submit(container.querySelector('form')!); await screen.findByRole('alert');
+  const group = screen.getByRole('group', { name: '반복 요일' }); expect(group.getAttribute('aria-invalid')).toBe('true'); expect(document.activeElement).toBe(group);
+  issues = [{ path: ['unknown'], message: 'Unknown rule' }]; change('제목', 'Keep'); fireEvent.submit(container.querySelector('form')!);
+  await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('alert')));
+  expect(screen.getByLabelText('제목').getAttribute('aria-invalid')).toBeNull();
+});
+it('announces native input constraints inline without submitting', async () => {
+  vi.stubGlobal('fetch', vi.fn(async () => json([])));
+  render(<TodoDetail issue={todo()} area="Work" headers={{}} onClose={vi.fn()} onSaved={vi.fn()} />);
+  const title = screen.getByLabelText('제목'); change('제목', ''); fireEvent.invalid(title);
+  await screen.findByRole('alert'); expect(title.getAttribute('aria-invalid')).toBe('true'); expect(document.activeElement).toBe(title);
+});

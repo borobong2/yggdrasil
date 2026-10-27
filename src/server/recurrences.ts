@@ -12,13 +12,13 @@ const byUtcDay = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
 
 export const recurrenceInput = z.object({
   freq: z.enum(['daily', 'weekly', 'monthly']),
-  weekdays: z.array(z.enum(byUtcDay)).min(1).max(7).optional().describe("Weekly only: e.g. ['mon', 'wed']"),
-  monthDay: z.number().int().min(1).max(31).optional().describe('Monthly only: day 1-31; past month end means the last day'),
+  weekdays: z.array(z.enum(byUtcDay)).min(1, '반복 요일을 1개 이상 선택하세요.').max(7).optional().describe("Weekly only: e.g. ['mon', 'wed']"),
+  monthDay: z.number().int('반복 날짜는 1~31의 정수여야 합니다.').min(1, '반복 날짜는 1~31일입니다.').max(31, '반복 날짜는 1~31일입니다.').optional().describe('Monthly only: day 1-31; past month end means the last day'),
   time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).nullable().optional().describe("'HH:mm' Asia/Seoul; omit for all-day"),
   paused: z.boolean().optional().describe('Paused series stop creating next occurrences')
 }).strict()
-  .refine((rule) => (rule.freq === 'weekly') === (rule.weekdays !== undefined), 'weekdays is required for weekly and only allowed there')
-  .refine((rule) => (rule.freq === 'monthly') === (rule.monthDay !== undefined), 'monthDay is required for monthly and only allowed there')
+  .refine((rule) => (rule.freq === 'weekly') === (rule.weekdays !== undefined), { message: '매주 반복은 요일이 필요합니다.', path: ['weekdays'] })
+  .refine((rule) => (rule.freq === 'monthly') === (rule.monthDay !== undefined), { message: '매월 반복은 날짜가 필요합니다.', path: ['monthDay'] })
   .describe('Repeat rule (YG-28). Completing the open occurrence creates the next one. null ends the series.');
 export type RecurrenceInput = z.infer<typeof recurrenceInput>;
 type Rule = Omit<Recurrence, 'id' | 'paused'>;

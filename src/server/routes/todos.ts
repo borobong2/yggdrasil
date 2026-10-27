@@ -44,7 +44,7 @@ export function registerTodoRoutes(app: Hono<AppEnv>): void {
   app.patch('/api/todos/:id', async (c) => {
     const id = z.uuid().safeParse(c.req.param('id'));
     const changes = todoChanges.safeParse(await c.req.json().catch(() => undefined));
-    if (!id.success || !changes.success) return c.json({ error: 'Invalid todo' }, 400);
+    if (!id.success || !changes.success) return c.json({ error: 'Invalid todo', ...(!changes.success ? { issues: changes.error.issues.map(({ path, message }) => ({ path, message })) } : {}) }, 400);
     return run(c, () => updateTodo(c.get('user').id, id.data, changes.data, 'ui'));
   });
   // YG-39 보관 for the UI (YG-34 정리 모드): hides the todo; unarchive brings it back. Nothing is deleted.
