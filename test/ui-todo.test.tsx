@@ -6,7 +6,7 @@ import { TriageDialog, ageLabel } from '../src/client/TriageDialog';
 import { BulkActions, nextMonday, plusDays, SelectBox, useSelection } from '../src/client/BulkActions';
 import { todo, lateTodo } from './ui-fixtures';
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
-beforeEach(() => { HTMLDialogElement.prototype.showModal = function () { this.open = true; }; });
+beforeEach(() => { HTMLDialogElement.prototype.showModal = function () { this.open = true; }; HTMLDialogElement.prototype.close = function () { this.open = false; }; });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 const change = (label: string, value: string) => fireEvent.change(screen.getByLabelText(label), { target: { value } });
 
@@ -130,4 +130,34 @@ it('does not triage while typing or holding a modifier; handles an empty queue',
   const { unmount } = render(<TriageDialog items={[lateTodo()]} date="2026-10-26" headers={{}} onDecided={vi.fn()} onClose={closed} />);
   fireEvent.keyDown(screen.getByLabelText('대기 사유'), { code: 'KeyD' }); fireEvent.keyDown(document.body, { code: 'KeyD', ctrlKey: true }); expect(fetcher).not.toHaveBeenCalled(); unmount();
   render(<TriageDialog items={[]} date="2026-10-26" headers={{}} onDecided={vi.fn()} onClose={closed} />); fireEvent.click(screen.getByText('닫기')); expect(closed).toHaveBeenCalledTimes(1);
+});
+
+it.each(['close', 'cancel', 'backdrop', 'escape', 'complete'])('protects a changed draft on %s and preserves it when staying', async action => {
+  vi.stubGlobal('fetch', vi.fn(async () => json([])));
+  const confirm = vi.fn().mockReturnValue(false); vi.stubGlobal('confirm', confirm);
+  const closed = vi.fn();
+  const { container } = render(<TodoDetail issue={todo()} area="Work" headers={{}} onClose={closed} onSaved={vi.fn()} />);
+  change('메모', 'draft');
+  if (action === 'escape') fireEvent(container.querySelector('dialog')!, new Event('cancel', { cancelable: true }));
+  else if (action === 'backdrop') fireEvent.click(container.querySelector('dialog')!);
+  else fireEvent.click(screen.getByRole('button', { name: { close: '상세 닫기', cancel: '취소', complete: '완료 처리' }[action] }));
+  expect(confirm).toHaveBeenCalledTimes(1); expect(closed).not.toHaveBeenCalled();
+  expect((screen.getByLabelText('메모') as HTMLTextAreaElement).value).toBe('draft');
+  confirm.mockReturnValue(true); fireEvent.click(screen.getByLabelText('상세 닫기'));
+  expect(closed).toHaveBeenCalledTimes(1);
+});
+it('blocks closing, edits, promotion and duplicate submit during a delayed save; retains failed draft', async () => {
+  let finish!: (response: Response) => void;
+  const fetcher = vi.fn((path: string) => path.startsWith('/api/documents') ? Promise.resolve(json([])) : new Promise<Response>(resolve => { finish = resolve; }));
+  vi.stubGlobal('fetch', fetcher); const closed = vi.fn();
+  const { container } = render(<TodoDetail issue={todo()} area="Work" headers={{}} onClose={closed} onSaved={vi.fn()} />);
+  change('제목', 'draft');
+  expect((screen.getByText('티켓으로 승격') as HTMLButtonElement).disabled).toBe(true);
+  fireEvent.submit(container.querySelector('form')!); fireEvent.submit(container.querySelector('form')!);
+  fireEvent.click(screen.getByLabelText('상세 닫기')); fireEvent.click(container.querySelector('dialog')!);
+  fireEvent(container.querySelector('dialog')!, new Event('cancel', { cancelable: true }));
+  expect(closed).not.toHaveBeenCalled(); expect(fetcher).toHaveBeenCalledTimes(2);
+  await act(async () => finish(json({}, 500)));
+  expect((screen.getByLabelText('제목') as HTMLInputElement).value).toBe('draft');
+  expect(screen.getByRole('alert').textContent).toContain('저장하지');
 });

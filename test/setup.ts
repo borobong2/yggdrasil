@@ -8,3 +8,8 @@ assertTestDatabase(process.env.DATABASE_URL);
 
 installTestOwner('test-owner-token', { id: '00000000-0000-4000-8000-000000000001' });
 installTestOwner('test-owner-two-token', { id: '00000000-0000-4000-8000-000000000002' });
+
+// jsdom does not implement the native dialog lifecycle.
+if (typeof HTMLDialogElement !== 'undefined') {
+  HTMLDialogElement.prototype.close = function () { this.open = false; };
+}

@@ -29,15 +29,29 @@ const payloadOf = (draft: Draft) => ({ title: draft.title, priority: draft.prior
 export function TodoDetail({ issue, area, headers, onClose, onSaved }: { issue: Issue; area: string; headers: Record<string, string>; onClose: () => void; onSaved: (todo: Issue) => void }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const [draft, setDraft] = useState(() => draftOf(issue));
+  const initial = useRef(draft);
+  const dirty = JSON.stringify(draft) !== JSON.stringify(initial.current);
+  const saving = useRef(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const set = (changes: Partial<Draft>) => setDraft({ ...draft, ...changes });
   const setRepeat = (changes: Partial<Repeat>) => set({ repeat: { ...draft.repeat, ...changes } });
 
-  useEffect(() => { dialog.current?.showModal(); }, []);
+  useEffect(() => {
+    const opener = document.activeElement as HTMLElement | null;
+    const modal = dialog.current;
+    modal?.showModal();
+    return () => { modal?.close(); opener?.focus(); };
+  }, []);
+
+  function mayDiscard() {
+    return !saving.current && (!dirty || window.confirm('저장하지 않은 변경을 버릴까요? 취소하면 계속 편집합니다.'));
+  }
+  function close() { if (mayDiscard()) onClose(); }
 
   async function send(url: string, init: RequestInit) {
-    setBusy(true); setError('');
+    if (saving.current) return;
+    saving.current = true; setBusy(true); setError('');
     try {
       const response = await fetch(url, { ...init, headers: { ...headers, 'content-type': 'application/json' } });
       if (response.status === 400) throw new Error('입력값을 확인하세요. 제목은 1~200자, 예상·실제 시간은 양의 정수(분), 매주 반복은 요일 1개 이상, 매월은 1~31일입니다.');
@@ -45,32 +59,34 @@ export function TodoDetail({ issue, area, headers, onClose, onSaved }: { issue: 
       onSaved(await response.json());
       onClose();
     } catch (failure) { setError(failure instanceof Error ? failure.message : '저장하지 못했습니다.'); }
-    setBusy(false);
+    saving.current = false; setBusy(false);
   }
 
   // YG-36: keys are permanent, so there is promote but no remove. Empty prefix = the epic's default.
   const [prefix, setPrefix] = useState('');
   async function promote() {
-    setBusy(true); setError('');
+    if (saving.current) return;
+    saving.current = true; setBusy(true); setError('');
     try {
       const response = await fetch(`/api/todos/${issue.id}/promote`, { method: 'POST', headers: { ...headers, 'content-type': 'application/json' }, body: JSON.stringify(prefix.trim() ? { prefix: prefix.trim() } : {}) });
       if (response.status === 400) throw new Error(prefix.trim() ? '접두사는 영문으로 시작하는 1~10자(영문·숫자)입니다.' : '이 에픽에는 기본 접두사가 없습니다. 접두사를 입력하세요.');
       if (!response.ok) throw new Error('티켓으로 승격하지 못했습니다.');
       onSaved(await response.json());
     } catch (failure) { setError(failure instanceof Error ? failure.message : '티켓으로 승격하지 못했습니다.'); }
-    setBusy(false);
+    saving.current = false; setBusy(false);
   }
 
   function save(event: FormEvent) {
     event.preventDefault();
+    if (saving.current) return;
     const [before, after] = [payloadOf(draftOf(issue)), payloadOf(draft)];
     const changes = Object.fromEntries(Object.entries(after).filter(([key, value]) => JSON.stringify(before[key as keyof typeof before]) !== JSON.stringify(value)));
     if (!Object.keys(changes).length) return onClose();
     void send(`/api/todos/${issue.id}`, { method: 'PATCH', body: JSON.stringify(changes) });
   }
 
-  return <dialog ref={dialog} aria-labelledby="todo-detail-title" onCancel={(event) => { event.preventDefault(); onClose(); }}
-    onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}
+  return <dialog ref={dialog} aria-labelledby="todo-detail-title" onCancel={(event) => { event.preventDefault(); close(); }}
+    onClick={(event) => { if (event.target === event.currentTarget) close(); }}
     className="m-0 mt-auto max-h-[88dvh] w-full max-w-none overflow-y-auto rounded-t-xl border border-line bg-surface p-0 text-ink shadow-pop md:ml-auto md:mt-0 md:h-dvh md:max-h-none md:w-[420px] md:rounded-none md:rounded-l-xl">
     <form onSubmit={save} className="flex min-h-full flex-col">
       <header className="sticky top-0 z-10 flex items-center gap-2 border-b border-line bg-surface px-4 py-3">
@@ -78,16 +94,17 @@ export function TodoDetail({ issue, area, headers, onClose, onSaved }: { issue: 
           <p className="eyebrow truncate">{[issue.key, area, statusLabels[issue.status]].filter(Boolean).join(' · ')}</p>
           <h2 id="todo-detail-title" className="truncate font-semibold">{issue.title}</h2>
         </div>
-        <button type="button" className="btn btn-ghost size-8 p-0" aria-label="상세 닫기" onClick={onClose}><X /></button>
+        <button type="button" className="btn btn-ghost size-8 p-0" aria-label="상세 닫기" disabled={busy} onClick={close}><X /></button>
       </header>
-      <div className="flex-1 space-y-3 px-4 py-4">
+      <fieldset disabled={busy} className="min-w-0 flex-1 space-y-3 px-4 py-4">
         <label className="block"><span className="label">제목</span>
           <input className="field" required maxLength={200} value={draft.title} onChange={(event) => set({ title: event.target.value })} /></label>
         {!issue.key && <div className="flex items-end gap-2">
           <label className="block w-28"><span className="label">티켓 키</span>
             <input className="field font-mono uppercase" maxLength={10} placeholder="에픽 기본값" value={prefix} onChange={(event) => setPrefix(event.target.value)} /></label>
-          <button type="button" className="btn" disabled={busy} onClick={() => void promote()}>티켓으로 승격</button>
+          <button type="button" className="btn" disabled={busy || dirty} onClick={() => void promote()}>티켓으로 승격</button>
         </div>}
+        {!issue.key && dirty && <p className="text-xs text-muted">변경을 저장한 뒤 티켓으로 승격하세요.</p>}
         <TodoLinks issue={issue} headers={headers} />
         <div className="grid grid-cols-2 gap-3">
           <label className="block"><span className="label">우선순위</span>
@@ -148,11 +165,11 @@ export function TodoDetail({ issue, area, headers, onClose, onSaved }: { issue: 
         <label className="block"><span className="label">메모</span>
           <textarea className="field min-h-32" maxLength={20000} value={draft.notes} onChange={(event) => set({ notes: event.target.value })} /></label>
         {error && <p role="alert" className="alert">{error}</p>}
-      </div>
+      </fieldset>
       <footer className="sticky bottom-0 flex items-center gap-2 border-t border-line bg-surface px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-        {issue.status !== 'done' && <button type="button" className="btn" disabled={busy} onClick={() => void send(`/api/todos/${issue.id}/complete`, { method: 'POST' })}><Check />완료 처리</button>}
+        {issue.status !== 'done' && <button type="button" className="btn" disabled={busy} onClick={() => { if (mayDiscard()) void send(`/api/todos/${issue.id}/complete`, { method: 'POST' }); }}><Check />완료 처리</button>}
         <span className="flex-1" />
-        <button type="button" className="btn btn-ghost" onClick={onClose}>취소</button>
+        <button type="button" className="btn btn-ghost" disabled={busy} onClick={close}>취소</button>
         <button type="submit" className="btn btn-primary" disabled={busy}>저장</button>
       </footer>
     </form>
