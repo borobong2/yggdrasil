@@ -203,7 +203,7 @@ function Row({ todo, date, selection, order, onOpen, onComplete, onTomorrow }: {
 
     <button type="button" className="min-w-0 flex-1 select-none py-2 text-left text-sm [-webkit-touch-callout:none]" onPointerDown={start} onPointerUp={cancel} onPointerLeave={cancel} onPointerCancel={cancel}
       onClick={(event) => { if (press.current.fired) { press.current.fired = false; return; } if (selection.mode) toggle(event.shiftKey); else onOpen(todo.id); }}>
-      <span className="block truncate">{todo.key && <span className="badge mr-1.5 font-mono font-medium">{todo.key}</span>}{todo.title}</span>
+      <span className="todo-title block truncate">{todo.key && <span className="badge mr-1.5 font-mono font-medium">{todo.key}</span>}{todo.title}</span>
       <TodoDates todo={todo} />
     </button>
     <span className="flex shrink-0 items-center gap-1">
@@ -232,7 +232,7 @@ function LatePanel({ late, className, onOpen, onBacklog, onTriage }: { late: Lat
         <div className="my-1.5 h-1.5 overflow-hidden rounded-full bg-sunken" aria-hidden><span className="block h-full rounded-full bg-danger" style={{ width: `${Math.max(4, (items.length / late.length) * 100)}%` }} /></div>
         <ul>{(all ? items : items.slice(0, 3)).map((todo) => <li key={todo.id} data-todo-id={todo.id}>
           <button type="button" className="flex w-full items-center gap-2 rounded py-0.5 text-left text-sm hover:text-accent-ink" onClick={() => onOpen(todo.id)}>
-            <span className="min-w-0 flex-1 truncate">{todo.title}</span>
+            <span className="todo-title min-w-0 flex-1 truncate">{todo.title}</span>
             <span className={`shrink-0 text-xs tabular-nums ${todo.lateDays !== null ? 'text-danger' : 'text-warn'}`} title={todo.lateDays !== null ? `마감 ${todo.lateDays}일 지남` : `${todo.untouchedDays}일 동안 그대로`}>
               {todo.age}일{todo.lateDays === null ? ' 그대로' : ''}</span>
           </button>

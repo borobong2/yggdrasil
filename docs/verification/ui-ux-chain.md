@@ -44,3 +44,13 @@ Each branch starts from the previous verified local commit. No push, main merge 
 - Real Chrome 390/320/1280: native required/integer constraints, server title/weekdays errors, first-field/group focus, unknown/network summary focus, preserved memo and successful resubmit passed. `.local/validation.mjs`, `.local/yg76-{width}.png`; 320 image visually inspected with visible focused title/error.
 - Limits: native validation message language is browser-dependent; browser API fixtures, no physical mobile/Safari/production E2E. Fields not identified by the server intentionally use the summary. Lockfile install and worktree-specific disposable DB used.
 - Full coverage: 62 files / 415 tests passed; statements/lines 96.79%, branches 91.53%, functions 92.93%. Additional 3 server path cases (monthly bounds, missing weekly days, zero actual duration) passed afterward in the 45-test related run.
+
+## YG-77
+
+- Worktree: `/Users/bong/github/workspaces/yggdrasil/feat-yg-77-mobile-type`
+- Branch: `borobong2/feat-yg-77-mobile-type`; explicit Orca base/parent YG-76; starting HEAD `f06327c` and ancestry verified.
+- Mobile form fields 16px; Today/late/board/review primary titles 14px with 22px line-height and wrapping. Global text-sm, badges and calendar chips unchanged. At ≤383px detail date/time pairs stack to avoid native 16px date text/icon crowding found in the screenshot review.
+- Browser red: original input measured 13px instead of 16px. Chrome 390/320/1280 green: exact computed input/title/badge sizes, long Korean/unbroken ASCII wrapping, detail fields and keyboard, no document overflow. Mobile pinch zoom scale 2 verified through CDP; screenshots `.local/yg77-{width}.png`, `.local/yg77-detail-{width}.png`, `.local/yg77-zoom-{width}.png`, self-check `.local/typography.mjs`. List/detail 320 images visually inspected; filled date/time screenshot rechecked after stacking.
+- Related tests 70 passed. Typecheck/build/diff check passed. Lockfile install and separate disposable DB used.
+- Limits: zoom check is Chrome pinch zoom, not OS text enlargement or Safari input autozoom; no physical mobile/production E2E. 200-character mobile titles can increase row height intentionally to preserve readability.
+- Full coverage: 62 files / 418 tests passed; statements/lines 96.79%, branches 91.53%, functions 92.93% (final class/layout-only adjustment revalidated by browser/typecheck/build/diff check).
