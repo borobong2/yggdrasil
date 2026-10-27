@@ -148,3 +148,18 @@ dialog::backdrop { background: oklch(0.2 0.01 150 / 0.28); }
 .calendar-view .calendar-block-tall .calendar-time-chip { flex-wrap: wrap; }
 .calendar-view .calendar-time-head > .grid > span:first-child { position: sticky; left: 0; z-index: 2; background: var(--color-surface); }
 .calendar-view .calendar-time-chip[data-planned][data-late] { border-color: var(--color-danger); }
+
+/* Grow actual touch boxes, so adjacent controls cannot share an invisible hit area. */
+@media (pointer: coarse) {
+  .btn, .field, [role="tab"], [data-slot="checkbox"] { min-height: 44px; }
+  .btn, [data-slot="checkbox"] { min-width: 44px; }
+  [data-slot="checkbox"] { width: 44px; height: 44px; }
+  [data-todo-id] > button { min-height: 44px; }
+  [aria-label="반복 요일"] { flex-wrap: wrap; gap: 8px; }
+  [aria-label="반복 요일"] > button { flex: 0 0 44px; }
+  [data-issue-id] > [data-slot="checkbox"] { left: 4px; top: 4px; }
+  [data-issue-id]:has(> [data-slot="checkbox"]) > button:not([data-slot]) { padding-left: 56px; }
+  [data-issue-id] > button:not([data-slot]) { padding-right: 56px; }
+  [data-issue-id] [role="group"] { top: 44px; }
+  [role="group"][aria-label="상태 이동"] button { min-height: 44px; }
+}
