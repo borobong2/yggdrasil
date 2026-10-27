@@ -91,3 +91,30 @@ it('ignores older token responses and a refresh predating optimistic completion'
   await act(async () => refresh(json(view)));
   expect(screen.queryByText('Write tests')).toBeNull();
 });
+
+it('uses roving focus with arrows/Home/End and connects each tab to its panel', async () => {
+  vi.stubGlobal('fetch', vi.fn(async () => json(view))); render(<TodayView token="" />);
+  const tabs = await screen.findAllByRole('tab');
+  expect(tabs.map(tab => tab.tabIndex)).toEqual([0, -1, -1]);
+  for (const [key, index] of [['ArrowRight', 1], ['ArrowRight', 2], ['ArrowRight', 0], ['ArrowLeft', 2], ['Home', 0], ['End', 2]] as const) {
+    fireEvent.keyDown(tabs.find(tab => tab.tabIndex === 0)!, { key });
+    expect(document.activeElement).toBe(tabs[index]);
+    expect(tabs[index].getAttribute('aria-selected')).toBe('true');
+    const panel = document.getElementById(tabs[index].getAttribute('aria-controls')!);
+    expect(panel?.getAttribute('role')).toBe('tabpanel'); expect(panel?.getAttribute('aria-labelledby')).toBe(tabs[index].id);
+  }
+  fireEvent.click(tabs[1]); expect(tabs.map(tab => tab.tabIndex)).toEqual([-1, 0, -1]);
+});
+it('removes mobile tab semantics on wide screens and preserves selection on return', async () => {
+  let matches = true;
+  let change!: () => void;
+  const matchMedia = vi.spyOn(window, 'matchMedia').mockImplementation((media) => ({ get matches() { return matches; }, media, onchange: null, addEventListener(_type: string, listener: EventListenerOrEventListenerObject) { change = listener as () => void; }, removeEventListener() {}, addListener() {}, removeListener() {}, dispatchEvent() { return true; } }));
+  vi.stubGlobal('fetch', vi.fn(async () => json(view)));
+  const { container } = render(<TodayView token="" />); const tabs = await screen.findAllByRole('tab'); fireEvent.click(tabs[1]);
+  act(() => { matches = false; change(); });
+  expect(screen.queryByRole('tablist')).toBeNull(); expect(screen.queryByRole('tabpanel')).toBeNull();
+  expect(container.querySelector('[aria-labelledby^="today-tab-"]')).toBeNull();
+  act(() => { matches = true; change(); });
+  expect(screen.getByRole('tab', { name: /밀린 일/ }).getAttribute('aria-selected')).toBe('true');
+  matchMedia.mockRestore();
+});

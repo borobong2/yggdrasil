@@ -54,3 +54,23 @@ Each branch starts from the previous verified local commit. No push, main merge 
 - Related tests 70 passed. Typecheck/build/diff check passed. Lockfile install and separate disposable DB used.
 - Limits: zoom check is Chrome pinch zoom, not OS text enlargement or Safari input autozoom; no physical mobile/production E2E. 200-character mobile titles can increase row height intentionally to preserve readability.
 - Full coverage: 62 files / 418 tests passed; statements/lines 96.79%, branches 91.53%, functions 92.93% (final class/layout-only adjustment revalidated by browser/typecheck/build/diff check).
+
+## YG-78
+
+- Worktree: `/Users/bong/github/workspaces/yggdrasil/feat-yg-78-today-tabs`
+- Branch: `borobong2/feat-yg-78-today-tabs`; explicit Orca base/parent YG-77; starting HEAD `c5d009e` and ancestry verified.
+- Mobile tabs use one tab stop, automatic activation/focus with Left/Right wrap and Home/End, explicit tab/panel ids and bidirectional ARIA links. Each grouped panel has a keyboard entry. At 720px and wider tabs and tabpanel semantics are removed; desktop regions retain existing 2/3-column layout and mobile selection survives resize.
+- UI UX Pro Max keyboard guidance checked against [W3C APG tabs](https://www.w3.org/WAI/ARIA/apg/patterns/tabs/). No additional dependency.
+- Red: new roving/response-to-width tests failed before implementation. Green: Today tests 14; final Today + real-app navigation tests 15 passed without unhandled errors. The app media mock now registers/removes multiple listeners and waits for asynchronous React updates.
+- Typecheck/build/diff check passed. Chrome 390/320/1280 and additional 719/720/1100 boundaries passed keyboard cycle/Home/End, Tab panel entry, selected tab/panel links, one visible mobile panel, all desktop regions, no hidden-tab references, selection on resize, initial stale deep link + triage, original desktop column order and no document overflow. `.local/tabs.mjs`, `.local/breakpoints.mjs`, `.local/yg78-{width}.png`; 320 and desktop images visually inspected.
+- Limits: headless Chrome accessibility DOM/keyboard validation, no screen-reader or physical mobile/Safari testing. Deep link check is initial entry (as from review), not an additional same-view hash-navigation feature. Disposable DB only.
+
+## Final integrated regression
+
+- All six improvements are present in the last branch; no cherry-picks or merges. Orca creation used explicit previous base and parent each time, and each starting HEAD matched its verified parent commit.
+- Final full suite/coverage: **62 files, 420 tests passed**; statements/lines **96.80%**, branches **91.54%**, functions **92.96%**. The 90% gate and Husky pre-push hook are unchanged.
+- Browser self-checks rerun sequentially on the final code: guard, touch, board, recovery, validation, typography and tabs — all 7 × 3 widths (390/320/1280) passed. Extra breakpoint and calendar checks are recorded separately. Synthetic fixtures only; no user data changed by QA.
+- Final evidence: ignored `.local/coverage-final.log`, `.local/related-final.log`, `.local/browser-chain.log`, runnable `.local/*.mjs`, screenshot PNGs in this worktree; each earlier worktree also retains its fixture/screenshots and its own disposable DB credentials privately in ignored `.local/test-db.json`.
+- Local implementation commits before YG-78: YG-73 `6c7c9e6`, YG-74 `a00ffde`, YG-75 `15ec9b6`, YG-76 `f06327c`, YG-77 `c5d009e`. YG-78 is the commit containing this section (`git log -1`).
+- Shared limits: no main merge, remote push, deployment, physical-device/Safari/screen-reader or authenticated production E2E. Existing lockfile audit reported 18 vulnerabilities; dependency remediation was outside these tickets. All test thresholds retained.
+- Calendar Chrome regression at 390/320/1280 passed: page fit with internal grid scrolling, event→detail, mobile 16px field/desktop 13px field and opener focus restoration. `.local/calendar.mjs`, `.local/calendar-final.log`, `.local/chain-calendar-{width}.png`; 320 toolbar/grid screenshot visually inspected. No compact event class or text token was changed.
