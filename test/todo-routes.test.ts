@@ -57,3 +57,25 @@ it('persists a board move so a reload returns the new order', async () => {
   expect(doing.indexOf(b.id)).toBeLessThan(doing.indexOf(a.id));
   expect((await activities(b.id)).at(-1)).toMatchObject({ kind: 'issue.moved', payload: { from: 'doing', to: 'doing', position: 0 } });
 });
+
+it('returns validation paths without changing the todo', async () => {
+  const todo = await createTodo(owner, { area: `오류 ${crypto.randomUUID()}`, title: '유지' });
+  const response = await patch(todo.id, { title: ' ', estimateMinutes: 1.5, recurrence: { freq: 'weekly', weekdays: [] } });
+  expect(response.status).toBe(400);
+  const body = await response.json();
+  expect(body.issues).toEqual(expect.arrayContaining([
+    expect.objectContaining({ path: ['title'], message: expect.any(String) }),
+    expect.objectContaining({ path: ['estimateMinutes'], message: expect.any(String) }),
+    expect.objectContaining({ path: ['recurrence', 'weekdays'], message: expect.any(String) })
+  ]));
+  expect(await activities(todo.id)).toHaveLength(1);
+});
+it.each([
+  [{ recurrence: { freq: 'monthly', monthDay: 32 } }, ['recurrence', 'monthDay']],
+  [{ recurrence: { freq: 'weekly' } }, ['recurrence', 'weekdays']],
+  [{ actualMinutes: 0 }, ['actualMinutes']]
+])('identifies the rejected recurrence or duration field (%j)', async (body, path) => {
+  const response = await patch('00000000-0000-4000-8000-000000000003', body);
+  expect(response.status).toBe(400);
+  expect((await response.json()).issues).toEqual(expect.arrayContaining([expect.objectContaining({ path })]));
+});
