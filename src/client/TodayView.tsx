@@ -11,7 +11,7 @@ import { seoulMinutes } from './calendar-dates.js';
 import { TriageDialog } from './TriageDialog.js';
 import { TodoDates } from './TodoDates.js';
 
-// YG-34 오늘 작업대: 타임라인 | 오늘 할 일 | 밀린 일 레일. ≥1100px three columns, 720–1100 two (timeline on top), <720 segmented tabs.
+// YG-34 오늘 작업대: 타임라인 | 오늘 할 일 | 밀린 일 레일. ≥1200px three columns, 720–1199 two (timeline on top), <720 segmented tabs.
 // Data is one GET /api/todos/today; 밀린 일 (server-merged 마감 지남 ∪ 방치) is shown only there, never twice.
 type Pane = 'today' | 'late' | 'plan';
 const panes: Pane[] = ['today', 'late', 'plan'];
@@ -157,9 +157,9 @@ export function TodayView({ token, onActivity }: { token: string; onActivity?: (
           className="h-8 rounded-md text-sm font-medium text-muted aria-selected:bg-surface aria-selected:text-ink aria-selected:shadow-card">
           {label} <span className={`tabular-nums ${id === 'late' && count ? 'text-danger' : 'text-faint'}`}>{count}</span></button>)}
     </div>}
-    <div className="grid items-start gap-3 min-[720px]:grid-cols-2 min-[1100px]:grid-cols-[minmax(220px,1fr)_minmax(360px,1.6fr)_minmax(260px,1fr)]">
+    <div className="grid items-start gap-3 min-[720px]:grid-cols-2 min-[1200px]:grid-cols-[minmax(220px,1fr)_minmax(360px,1.6fr)_minmax(260px,1fr)]">
       <div {...panel('today')} className="grid min-w-0 gap-3 min-[720px]:contents">
-        <Timeline className="max-[719px]:order-last min-[720px]:col-span-2 min-[1100px]:col-span-1" date={view.date}
+        <Timeline className="max-[719px]:order-last min-[720px]:col-span-2 min-[1200px]:col-span-1" date={view.date}
           todos={view.timeline.todos.filter((todo) => !hidden.has(todo.id))} ghosts={view.timeline.ghosts} onOpen={setOpenId} />
         <Panel title="오늘 할 일" count={todayList.length} section="today"
           extra={counts.length > 0 && <span className="text-xs font-normal tabular-nums text-muted">{counts.map(([priority, count]) => `${priority.toUpperCase()} ${count}`).join(' · ')}</span>}>
@@ -169,7 +169,7 @@ export function TodayView({ token, onActivity }: { token: string; onActivity?: (
         </Panel>
       </div>
       <div className="grid min-w-0 gap-3 max-[719px]:contents">
-        <div {...panel('late')}>
+        <div {...panel('late')} className="min-w-0">
           <LatePanel late={late} className="" onOpen={setOpenId}
             onBacklog={() => void apply(late.slice(0, 200).map((todo) => todo.id), { action: 'backlog' }, '백로그로 옮겼습니다')} // ponytail: bulk caps at 200 ids
             onTriage={() => setTriage(late)} />
@@ -217,7 +217,7 @@ function Row({ todo, date, selection, order, onOpen, onComplete, onTomorrow }: {
     press.current = { timer: setTimeout(() => { press.current.fired = true; selection.setMode(true); if (!checked) toggle(false); navigator.vibrate?.(10); }, 450) };
   };
   const cancel = () => clearTimeout(press.current.timer);
-  return <li data-todo-id={todo.id} className={`group flex min-h-9 items-center gap-2 border-b border-line px-3 last:border-b-0 hover:bg-sunken/70 ${checked ? 'bg-accent-soft' : ''}`}>
+  return <li data-todo-id={todo.id} className={`group flex min-h-9 items-center gap-2 min-[720px]:max-[1023px]:flex-wrap border-b border-line px-3 last:border-b-0 hover:bg-sunken/70 ${checked ? 'bg-accent-soft' : ''}`}>
     {selection.mode
       ? <SelectBox label={todo.title} checked={checked} onToggle={toggle} />
       : <Checkbox checked={false} aria-label={`${todo.title} 완료`} title="완료 처리"
@@ -228,7 +228,7 @@ function Row({ todo, date, selection, order, onOpen, onComplete, onTomorrow }: {
       <span className="todo-title block truncate">{todo.key && <span className="badge mr-1.5 font-mono font-medium">{todo.key}</span>}{todo.title}</span>
       <TodoDates todo={todo} />
     </button>
-    <span className="flex shrink-0 items-center gap-1">
+    <span className="flex shrink-0 items-center gap-1 min-[720px]:max-[1023px]:w-full min-[720px]:max-[1023px]:justify-end">
       {onTomorrow && !selection.mode && <span className="hidden gap-1 md:group-focus-within:flex md:group-hover:flex">
         <button type="button" className="btn h-6 px-1.5 text-xs" onClick={onTomorrow}>내일</button>
         <button type="button" className="btn h-6 px-1.5 text-xs" onClick={() => onComplete(todo)}>완료</button>
@@ -289,7 +289,7 @@ function Timeline({ date, todos, ghosts, onOpen, className }: { date: string; to
   }, [entries.length > 0]);
   return <Panel title="타임라인" count={entries.length} section="timeline" className={className}>
     {entries.length === 0 ? <p className="px-3 py-4 text-center text-xs text-faint">오늘 시간이 정해진 일이 없습니다.<br />종일 할 일은 오늘 할 일 목록에 있습니다.</p> : <>
-      <div ref={box} className="relative max-h-[220px] overflow-y-auto min-[1100px]:max-h-[calc(100dvh-13rem)]">
+      <div ref={box} className="relative max-h-[220px] overflow-y-auto min-[1200px]:max-h-[calc(100dvh-13rem)]">
         {hours.map((hour) => <div key={hour} data-hour={hour} className="relative grid min-h-9 grid-cols-[40px_minmax(0,1fr)] border-b border-dashed border-line last:border-b-0">
           <span className="px-2 pt-1.5 text-right text-2xs tabular-nums text-faint">{String(hour).padStart(2, '0')}</span>
           <div className="space-y-1 py-1 pr-2">{entries.filter((entry) => Math.floor(seoulMinutes(entry.at) / 60) === hour).map((entry) => {
